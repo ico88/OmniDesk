@@ -1,0 +1,97 @@
+name: omnidesk
+x-api: &api
+  image: omnidesk-api:local
+  build:
+    context: .
+    dockerfile: src/OmniDesk.Api/Dockerfile
+  environment:
+    Database__Host: db
+    Database__PasswordFile: /run/secrets/db_password
+    DataProtection__Path: /keys
+  secrets:
+    - db_password
+  volumes:
+    - identity_keys:/keys
+  depends_on:
+    db:
+      condition: service_healthy
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: omnidesk
+      POSTGRES_USER: omnidesk
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    secrets:
+      - db_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U omnidesk -d omnidesk]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  # Initialize writable DataProtection volume for the unprivileged API user.
+  keys-init:
+    image: alpine:3.22
+    user: root
+    command: [sh, -c, 'chown 1654:1654 /keys && chmod 700 /keys']
+    volumes:
+      - identity_keys:/keys
+  migrate:
+    <<: *api
+    profiles: [tools]
+    command: [--migrate]
+  bootstrap:
+    <<: *api
+    profiles: [bootstrap]
+    environment:
+      Database__Host: db
+      Database__PasswordFile: /run/secrets/db_password
+      Bootstrap__Email: ${ADMIN_EMAIL:-}
+      Bootstrap__PasswordFile: /run/secrets/bootstrap_password
+    secrets:
+      - db_password
+      - bootstrap_password
+    command: [--bootstrap]
+  api:
+    <<: *api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      keys-init:
+        condition: service_completed_successfully
+  dashboard:
+    image: omnidesk-dashboard:local
+    build:
+      context: .
+      dockerfile: src/dashboard/Dockerfile
+    restart: unless-stopped
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      OMNIDESK_DOMAIN: ${OMNIDESK_DOMAIN:?Set OMNIDESK_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+      - dashboard
+secrets:
+  db_password:
+    file: ./.secrets/db_password
+  bootstrap_password:
+    file: ./.secrets/bootstrap_password
+volumes:
+  postgres_data:
+  identity_keys:
+  caddy_data:
+  caddy_config:

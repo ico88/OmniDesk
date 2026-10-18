@@ -1,0 +1,11 @@
+.git
+.agents
+.aws
+.codex
+.env*
+.secrets
+**/node_modules
+**/bin
+**/obj
+**/dist
+artifacts

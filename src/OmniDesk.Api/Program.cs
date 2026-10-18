@@ -1,0 +1,114 @@
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.Antiforgery;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+using Npgsql;
+using OmniDesk.Api.Data;
+using OmniDesk.Api.Endpoints;
+using OmniDesk.Api.Security;
+
+var builder = WebApplication.CreateBuilder(args);
+var connection = builder.Configuration.GetConnectionString("Database");
+if (string.IsNullOrWhiteSpace(connection))
+{
+    var secretPath = builder.Configuration["Database:PasswordFile"] ?? "/run/secrets/db_password";
+    var cs = new NpgsqlConnectionStringBuilder {
+        Host = builder.Configuration["Database:Host"] ?? "db", Database = "omnidesk", Username = "omnidesk",
+        Password = File.Exists(secretPath) ? File.ReadAllText(secretPath).Trim() : ""
+    };
+    connection = cs.ConnectionString;
+}
+builder.Services.AddDbContext<AppDbContext>(o => o.UseNpgsql(connection));
+builder.Services.AddIdentity<AppUser, IdentityRole>(o => {
+    o.User.RequireUniqueEmail = true;
+    o.Password.RequiredLength = 14;
+    o.Lockout.MaxFailedAccessAttempts = 5;
+    o.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
+}).AddEntityFrameworkStores<AppDbContext>().AddDefaultTokenProviders();
+builder.Services.ConfigureApplicationCookie(o => {
+    o.Cookie.Name = "__Host-OmniDesk.Session";
+    o.Cookie.HttpOnly = true;
+    o.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+    o.Cookie.SameSite = SameSiteMode.Strict;
+    o.ExpireTimeSpan = TimeSpan.FromHours(8);
+    o.SlidingExpiration = false;
+    o.Events.OnRedirectToLogin = c => { c.Response.StatusCode = 401; return Task.CompletedTask; };
+    o.Events.OnRedirectToAccessDenied = c => { c.Response.StatusCode = 403; return Task.CompletedTask; };
+});
+builder.Services.Configure<SecurityStampValidatorOptions>(o => o.ValidationInterval = TimeSpan.FromMinutes(1));
+builder.Services.AddAntiforgery(o => {
+    o.HeaderName = "X-CSRF-TOKEN";
+    o.Cookie.Name = "__Host-OmniDesk.Csrf";
+    o.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+    o.Cookie.SameSite = SameSiteMode.Strict;
+});
+var keysPath = builder.Configuration["DataProtection:Path"];
+if (!string.IsNullOrEmpty(keysPath))
+    builder.Services.AddDataProtection().SetApplicationName("OmniDesk").PersistKeysToFileSystem(new DirectoryInfo(keysPath));
+builder.Services.AddScoped<PermissionService>();
+builder.Services.AddAuthorization();
+builder.Services.AddRateLimiter(o => {
+    o.RejectionStatusCode = 429;
+    o.AddPolicy("login", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = 20, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+});
+var app = builder.Build();
+if (args.Contains("--migrate"))
+{
+    using var scope = app.Services.CreateScope();
+    await scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.MigrateAsync();
+    return;
+}
+if (args.Contains("--bootstrap"))
+{
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    if (await db.Users.AnyAsync()) throw new InvalidOperationException("Bootstrap refused: users already exist.");
+    var email = builder.Configuration["Bootstrap:Email"] ?? throw new InvalidOperationException("Bootstrap email required.");
+    var file = builder.Configuration["Bootstrap:PasswordFile"] ?? "/run/secrets/bootstrap_password";
+    var password = (await File.ReadAllTextAsync(file)).Trim();
+    var users = scope.ServiceProvider.GetRequiredService<UserManager<AppUser>>();
+    await using var tx = await db.Database.BeginTransactionAsync();
+    var user = new AppUser { UserName = email, Email = email };
+    var result = await users.CreateAsync(user, password);
+    if (!result.Succeeded) throw new InvalidOperationException(string.Join("; ", result.Errors.Select(x => x.Code)));
+    result = await users.AddToRoleAsync(user, "Administrator");
+    if (!result.Succeeded) throw new InvalidOperationException("Cannot assign administrator.");
+    db.AuditEvents.Add(new AuditEvent { ActorId = user.Id, Action = "user.bootstrap", Target = user.Id });
+    await db.SaveChangesAsync();
+    await tx.CommitAsync();
+    Console.WriteLine("Administrator created. Remove bootstrap secret file.");
+    return;
+}
+app.UseExceptionHandler(handler => handler.Run(async c => {
+    c.Response.StatusCode = 500;
+    await c.Response.WriteAsJsonAsync(new { error = "Internal error", traceId = c.TraceIdentifier });
+}));
+app.Use(async (c, next) => {
+    c.Response.Headers.CacheControl = "no-store";
+    c.Response.Headers.XContentTypeOptions = "nosniff";
+    await next();
+});
+app.UseRateLimiter();
+app.UseAuthentication();
+app.UseAuthorization();
+app.Use(async (c, next) => {
+    if (c.Request.Method is not ("GET" or "HEAD" or "OPTIONS"))
+    {
+        try { await c.RequestServices.GetRequiredService<IAntiforgery>().ValidateRequestAsync(c); }
+        catch (AntiforgeryValidationException) { c.Response.StatusCode = 400; await c.Response.WriteAsJsonAsync(new { error = "Invalid CSRF token" }); return; }
+    }
+    await next();
+});
+app.MapGet("/api/health/live", () => Results.Ok(new { status = "live" }));
+app.MapGet("/api/health/ready", async (AppDbContext db) => {
+    try { return await db.Database.CanConnectAsync() && !(await db.Database.GetPendingMigrationsAsync()).Any()
+        ? Results.Ok(new { status = "ready" }) : Results.StatusCode(503); }
+    catch { return Results.StatusCode(503); }
+});
+app.MapAuthEndpoints();
+app.MapManagementEndpoints();
+app.Run();
+public partial class Program { }
