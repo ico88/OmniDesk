@@ -32,4 +32,5 @@ if (args.Length > 0 && args[0] == "enroll")
 var builder = Host.CreateApplicationBuilder(args);
 builder.Services.AddWindowsService(o => o.ServiceName = "OmniDeskAgent");
 builder.Services.AddHostedService<AgentWorker>();
+builder.Services.AddHostedService<UpdateWorker>();
 await builder.Build().RunAsync();

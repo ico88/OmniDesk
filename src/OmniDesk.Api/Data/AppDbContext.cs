@@ -48,9 +48,15 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
     public DbSet<DeviceInventory> DeviceInventories => Set<DeviceInventory>();
     public DbSet<MeshDeviceMapping> MeshDeviceMappings => Set<MeshDeviceMapping>();
     public DbSet<RemoteSession> RemoteSessions => Set<RemoteSession>();
+    public DbSet<UpdateJob> UpdateJobs => Set<UpdateJob>();
     protected override void OnModelCreating(ModelBuilder b)
     {
         base.OnModelCreating(b);
+        b.Entity<UpdateJob>().HasOne<Device>().WithMany().HasForeignKey(x => x.DeviceId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<UpdateJob>().HasIndex(x => new { x.DeviceId, x.RequestId }).IsUnique();
+        b.Entity<UpdateJob>().HasIndex(x => x.DeviceId).IsUnique().HasFilter("\"State\" IN ('queued','leased')");
+        b.Entity<UpdateJob>().Property(x => x.Payload).HasColumnType("jsonb");
+        b.Entity<UpdateJob>().Property(x => x.Result).HasColumnType("jsonb");
         b.Entity<MeshDeviceMapping>().HasKey(x => x.DeviceId);
         b.Entity<MeshDeviceMapping>().HasIndex(x => x.NodeId).IsUnique();
         b.Entity<MeshDeviceMapping>().HasOne<Device>().WithOne().HasForeignKey<MeshDeviceMapping>(x => x.DeviceId).OnDelete(DeleteBehavior.Cascade);

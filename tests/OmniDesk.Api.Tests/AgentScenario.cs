@@ -85,6 +85,7 @@ public static class AgentScenario
         Assert.True(status.GetProperty("online").GetBoolean());
         Assert.Equal(42.5, status.GetProperty("metrics").GetProperty("cpuPercent").GetDouble());
         Assert.Equal("Test app", status.GetProperty("inventory").GetProperty("software")[0].GetProperty("name").GetString());
+        await UpdateScenario.Run(admin, scoped, agent, () => Assertion(key), id);
         Assert.Equal(HttpStatusCode.NoContent, (await admin.PostAsync($"/api/admin/devices/{id}/revoke", null)).StatusCode);
         agent.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Assertion(key));
         Assert.Equal(HttpStatusCode.Unauthorized, (await agent.PostAsJsonAsync("/api/agent/metrics", metrics)).StatusCode);

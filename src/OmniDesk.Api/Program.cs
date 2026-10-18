@@ -129,5 +129,6 @@ app.MapAuthEndpoints();
 app.MapManagementEndpoints();
 app.MapAgentEndpoints();
 app.MapRemoteEndpoints();
+app.MapUpdateEndpoints();
 app.Run();
 public partial class Program { }
