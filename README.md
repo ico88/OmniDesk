@@ -67,3 +67,5 @@ Confermata la compatibilità e salvati i backup: fermare API durante la migrazio
 Dettagli milestone: [M2 agente](docs/milestone-2.md), [M3 remoto](docs/milestone-3.md), [M4 aggiornamenti](docs/milestone-4.md), [M5 console/2FA](docs/milestone-5.md).
 
 Documenti: [architettura](docs/architecture.md), [database](docs/database.md), [API](docs/api.md), [roadmap](docs/roadmap.md), [verifiche e limiti](docs/validation.md). Regole di sviluppo in [AGENTS.md](AGENTS.md).
+
+OmniDesk Service Desk è un modulo futuro, **solo progettato**: [specifiche e confini](docs/service-desk.md), [schema PostgreSQL proposto](docs/service-desk-data-model.md), [fasi e dipendenze](docs/roadmap.md#percorso-futuro-omnidesk-service-desk). Non è disponibile nell'interfaccia corrente e non modifica le milestone implementate.

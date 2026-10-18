@@ -29,3 +29,28 @@ Fonti tecniche: [.NET lifecycle](https://dotnet.microsoft.com/en-us/platform/sup
 Riferimenti deployment: [Docker su Ubuntu](https://docs.docker.com/engine/install/ubuntu/), [ASP.NET Core dietro proxy](https://learn.microsoft.com/en-us/aspnet/core/host-and-deploy/proxy-load-balancer?view=aspnetcore-10.0).
 
 Enrollment M2 (progettato): amministratore con permesso administration emette token casuale ad alta entropia, con ambito, TTL breve e singolo utilizzo. Il DB conserva soltanto hash del token; consumo atomico e generazione identità device in transazione. Agente verifica HTTPS, genera chiave locale protetta da Windows DPAPI/ACL e prova il possesso; credenziali dispositivo revocabili e ruotabili, distinte da sessioni umane. Niente password amministrative nell’MSI, credenziali in URL o bypass TLS. Rate limit e audit anche dei tentativi falliti. Il protocollo e il packaging saranno definiti/testati in M2.
+
+## Estensione proposta: OmniDesk Service Desk
+
+Questa sezione è progettuale e non cambia il perimetro delle milestone esistenti. Lo stato effettivo M2–M5 è riportato in [validation.md](validation.md); il diagramma iniziale descrive la baseline M1.
+
+Il futuro modulo ASP.NET Core separato `OmniDesk.ServiceDesk` sarà ospitato inizialmente nell'API attuale, con dominio, servizi applicativi, adapter e DbContext propri nello schema PostgreSQL `service_desk`. Dashboard React e portale self-service useranno contratti distinti. Identity, autorizzazione e audit restano condivisi; nessuna duplicazione delle identità o accesso diretto alle credenziali dei motori remoti.
+
+```mermaid
+flowchart LR
+ IT[Area React Service Desk proposta] --> SD[Modulo ASP.NET Core Service Desk proposto]
+ Portal[Portale self-service proposto] --> SD
+ Intake[Ingressi agente ed email proposti] --> SD
+ SD --> Store[(Schema PostgreSQL service_desk proposto)]
+ SD --> Auth[Identity e autorizzazione comuni]
+ SD --> RMM[Servizi RMM esistenti via adapter autorizzati]
+ SD --> Sites[Registro sedi da implementare]
+ Alerts[Motore allarmi da implementare] --> Events[Outbox e inbox proposte]
+ Events --> SD
+ SD --> Workers[Worker SLA e notifiche proposti]
+ SD -. proposte senza esecuzione .-> AI[Porta AI futura]
+```
+
+Ogni ticket avrà una sede e almeno un dispositivo; richieste incomplete rimarranno intake. Sedi e allarmi persistenti sono dipendenze future, non funzionalità già presenti. Il permesso sul ticket non concede capacità RMM: ogni azione esplicita ricontrolla la capacità sul dispositivo scelto. Automazioni e AI non eseguono comandi non autorizzati. Eventi versionati, outbox/inbox e worker con lease separano operazioni interattive e asincrone senza introdurre obbligatoriamente un broker o microservizi.
+
+Specifiche: [Service Desk](service-desk.md), [schema proposto](service-desk-data-model.md), [fasi e dipendenze](roadmap.md#percorso-futuro-omnidesk-service-desk). Nessun nuovo deployment o codice viene introdotto da questa progettazione.
