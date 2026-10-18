@@ -6,6 +6,8 @@ import './style.css';
 type User = { id: string; email: string; globalPermissions: string[]; twoFactorAvailable: boolean };
 type Branding = { name: string; logoUrl: string; primaryColor: string; theme: 'light' | 'dark' };
 type Device = { id: string; name: string; groupId: string | null };
+type Group = { id: string; name: string };
+type DeviceStatus = { name: string; online: boolean; revoked: boolean; lastSeen: string | null; metrics: {cpuPercent:number|null; totalMemoryBytes:number; availableMemoryBytes:number; networkReceivedBytes:number; networkSentBytes:number; uptimeSeconds:number; disks:{name:string;totalBytes:number;freeBytes:number}[]} | null; inventory: { operatingSystem:string; architecture:string; manufacturer:string|null; model:string|null; processor:string|null; logicalProcessors:number; software:{name:string;version:string|null;publisher:string|null}[]; warnings:string[]} | null };
 type Audit = { id: number; at: string; action: string; target: string; outcome: string };
 const defaults: Branding = { name: 'OmniDesk', logoUrl: '', primaryColor: '#2563eb', theme: 'dark' };
 
@@ -19,6 +21,9 @@ function App() {
   const [draft, setDraft] = useState(defaults);
   const [devices, setDevices] = useState<Device[]>([]);
   const [audit, setAudit] = useState<Audit[]>([]);
+  const [groups, setGroups] = useState<Group[]>([]);
+  const [enrollment, setEnrollment] = useState('');
+  const [status, setStatus] = useState<DeviceStatus | null>(null);
   const [tab, setTab] = useState('overview');
   const admin = user?.globalPermissions.includes('administration') ?? false;
 
@@ -27,7 +32,7 @@ function App() {
     setUser(me);
     const [brand, list] = await Promise.all([api<Branding>('/branding'), api<Device[]>('/devices')]);
     setBranding(brand); setDraft(brand); setDevices(list);
-    if (me.globalPermissions.includes('administration')) setAudit(await api<Audit[]>('/admin/audit'));
+    if (me.globalPermissions.includes('administration')) { setAudit(await api<Audit[]>('/admin/audit')); setGroups(await api<Group[]>('/admin/groups')); }
     await refreshCsrf();
   }
   useEffect(() => { load().catch(() => setUser(null)).finally(() => setLoading(false)); }, []);
@@ -54,12 +59,18 @@ function App() {
   return <div className="shell"><aside>
     <div className="brand">{branding.logoUrl ? <img src={branding.logoUrl} alt="Logo" referrerPolicy="no-referrer"/> : <span className="mark">O</span>}<strong>{branding.name}</strong></div>
     <small>CONSOLE IT</small>
-    <nav aria-label="Navigazione">{[['overview','Panoramica'],['devices','Dispositivi'],...(admin ? [['branding','Personalizzazione'],['users','Utenti'],['audit','Audit']] : [])].map(([id,label]) => <button key={id} className={tab === id ? 'active' : ''} onClick={() => { setTab(id); setError(''); setMessage(''); }}>{label}</button>)}</nav>
-    <div className="account"><small>{user.email}</small><button disabled={busy} onClick={() => void action(async () => { await api('/auth/logout', 'POST'); setUser(null); setBranding(defaults); setAudit([]); setDevices([]); setTab('overview'); await refreshCsrf(); })}>Esci</button></div>
+    <nav aria-label="Navigazione">{[['overview','Panoramica'],['devices','Dispositivi'],...(admin ? [['branding','Personalizzazione'],['users','Utenti'],['audit','Audit']] : [])].map(([id,label]) => <button key={id} className={tab === id ? 'active' : ''} onClick={() => { setTab(id); setEnrollment(''); setStatus(null); setError(''); setMessage(''); }}>{label}</button>)}</nav>
+    <div className="account"><small>{user.email}</small><button disabled={busy} onClick={() => void action(async () => { await api('/auth/logout', 'POST'); setUser(null); setEnrollment(''); setStatus(null); setGroups([]); setBranding(defaults); setAudit([]); setDevices([]); setTab('overview'); await refreshCsrf(); })}>Esci</button></div>
   </aside><main className="content"><header><div><small>OMNIDESK / MILESTONE 1</small><h1>{{overview:'Panoramica',devices:'Dispositivi',branding:'Personalizzazione',users:'Utenti',audit:'Audit amministrativo'}[tab]}</h1></div><span className="badge">Piano di gestione</span></header>
     {error && <p role="alert" className="error">{error}</p>}{message && <p role="status">{message}</p>}
-    {tab === 'overview' && <><div className="stats"><article className="panel"><small>Dispositivi visibili</small><h2>{devices.length}</h2><p>Autorizzati per il tuo account</p></article><article className="panel"><small>Permessi globali</small><h2>{user.globalPermissions.length}</h2><p>{user.globalPermissions.join(', ') || 'Solo concessioni locali'}</p></article><article className="panel"><small>Autenticazione</small><h2>Identity</h2><p>2FA predisposta · non attiva</p></article></div><section className="panel"><h2>La base della tua console IT</h2><p>Autenticazione, autorizzazioni e configurazione del marchio disponibili.</p><p>Monitoraggio, inventario, controllo remoto e Windows Update saranno disponibili nelle prossime milestone.</p></section></>}
-    {tab === 'devices' && <section className="panel"><h2>Parco macchine</h2>{devices.length === 0 ? <p>Nessun dispositivo visibile. L’enrollment dell’agente Windows è previsto nella milestone 2.</p> : <table><thead><tr><th>Nome</th><th>Identificativo</th></tr></thead><tbody>{devices.map(d => <tr key={d.id}><td>{d.name}</td><td>{d.id}</td></tr>)}</tbody></table>}</section>}
+    {tab === 'overview' && <><div className="stats"><article className="panel"><small>Dispositivi visibili</small><h2>{devices.length}</h2><p>Autorizzati per il tuo account</p></article><article className="panel"><small>Permessi globali</small><h2>{user.globalPermissions.length}</h2><p>{user.globalPermissions.join(', ') || 'Solo concessioni locali'}</p></article><article className="panel"><small>Autenticazione</small><h2>Identity</h2><p>2FA predisposta · non attiva</p></article></div><section className="panel"><h2>La base della tua console IT</h2><p>Autenticazione, autorizzazioni e configurazione del marchio disponibili.</p><p>Enrollment, snapshot di monitoraggio e inventario disponibili con il nuovo agente Windows. Controllo remoto e Windows Update sono nelle milestone successive.</p></section></>}
+    {tab === 'devices' && <><section className="panel"><h2>Parco macchine</h2><button disabled={busy} onClick={() => void action(async () => setDevices(await api<Device[]>('/devices')))}>Aggiorna</button>{devices.length === 0 ? <p>Nessun dispositivo visibile. Registra un agente Windows con un token di enrollment.</p> : <table><thead><tr><th>Nome</th><th>Identificativo</th><th>Stato</th></tr></thead><tbody>{devices.map(d => <tr key={d.id}><td>{d.name}</td><td>{d.id}</td><td><button disabled={busy} onClick={() => void action(async () => setStatus(await api<DeviceStatus>(`/devices/${d.id}/status`)))}>Apri</button></td></tr>)}</tbody></table>}</section>
+      {status && <section className="panel"><h2>{status.name}</h2><p>{status.revoked ? 'Identità revocata' : status.online ? 'Heartbeat recente' : 'Offline / nessun heartbeat'} · Ultimo contatto: {status.lastSeen ? new Date(status.lastSeen).toLocaleString('it-IT') : 'Mai'}</p>
+        {status.metrics && <><p>CPU: {status.metrics.cpuPercent === null ? 'Non disponibile' : status.metrics.cpuPercent.toFixed(1) + '%'} · RAM disponibile: {(status.metrics.availableMemoryBytes / 1073741824).toFixed(1)} / {(status.metrics.totalMemoryBytes / 1073741824).toFixed(1)} GiB · Uptime: {Math.floor(status.metrics.uptimeSeconds / 3600)} ore</p><p>Rete cumulativa: ricevuti {status.metrics.networkReceivedBytes.toLocaleString()} byte · inviati {status.metrics.networkSentBytes.toLocaleString()} byte</p>{status.metrics.disks.map(d => <p key={d.name}>{d.name} · {(d.freeBytes / 1073741824).toFixed(1)} / {(d.totalBytes / 1073741824).toFixed(1)} GiB liberi</p>)}</>}
+        {status.inventory && <><h2>Inventario</h2><p>{status.inventory.operatingSystem} · {status.inventory.architecture}</p><p>{status.inventory.manufacturer} {status.inventory.model} · {status.inventory.processor} · {status.inventory.logicalProcessors} CPU logiche</p>{status.inventory.warnings.map((w,i) => <p key={i}>{w}</p>)}<div className="table-wrap"><table><thead><tr><th>Software</th><th>Versione</th><th>Produttore</th></tr></thead><tbody>{status.inventory.software.map((x,i) => <tr key={i}><td>{x.name}</td><td>{x.version}</td><td>{x.publisher}</td></tr>)}</tbody></table></div></>}
+      </section>}
+      {admin && <form className="panel settings" onSubmit={e => { e.preventDefault(); const f = new FormData(e.currentTarget); setEnrollment(''); void action(async () => { const issued = await api<{token:string}>('/admin/enrollment-tokens','POST',{groupId:f.get('group') || null, expiresInMinutes:30}); setEnrollment(issued.token); }); }}><h2>Registra un dispositivo</h2><label>Gruppo<select name="group"><option value="">Senza gruppo</option>{groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}</select></label><button disabled={busy}>Genera token monouso (30 minuti)</button>{enrollment && <><p>Salva il token in un file riservato per il comando enroll dell’agente. Il token viene mostrato solo qui.</p><textarea aria-label="Token enrollment" readOnly value={enrollment} rows={3} style={{width:'100%'}}/><button type="button" onClick={() => setEnrollment('')}>Nascondi token</button></>}</form>}
+    </>}
     {tab === 'branding' && admin && <form className="panel settings" onSubmit={e => { e.preventDefault(); void action(async () => { const saved = await api<Branding>('/branding','PUT',draft); setBranding(saved); setMessage('Personalizzazione salvata'); }); }}>
       <h2>Identità della dashboard</h2><label>Nome<input required maxLength={100} value={draft.name} onChange={e => setDraft({...draft,name:e.target.value})}/></label>
       <label>Logo (URL HTTPS)<input type="url" maxLength={2048} value={draft.logoUrl} onChange={e => setDraft({...draft,logoUrl:e.target.value})}/></label>

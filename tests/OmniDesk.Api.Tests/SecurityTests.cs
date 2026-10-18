@@ -132,6 +132,7 @@ public sealed class SecurityTests : IClassFixture<ApiFactory>, IAsyncLifetime
         Assert.Contains(events!, x => x.Action == "branding.update");
         Assert.Contains(events!, x => x.Action == "grant.revoke");
         Assert.Contains(events!, x => x.Action == "auth.login" && x.Outcome == "denied");
+        await AgentScenario.Run(factory, admin, scoped, scopedId);
         // Logout is CSRF-protected and invalidates the current browser cookie.
         admin.DefaultRequestHeaders.Remove("X-CSRF-TOKEN");
         Assert.Equal(HttpStatusCode.BadRequest, (await admin.PostAsync("/api/auth/logout", null)).StatusCode);

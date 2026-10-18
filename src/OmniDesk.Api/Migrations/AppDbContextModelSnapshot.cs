@@ -339,6 +339,39 @@ namespace OmniDesk.Api.Migrations
                     b.ToTable("Devices");
                 });
 
+            modelBuilder.Entity("OmniDesk.Api.Data.DeviceAssertion", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExpiresAt");
+
+                    b.ToTable("DeviceAssertions");
+                });
+
+            modelBuilder.Entity("OmniDesk.Api.Data.DeviceCredential", b =>
+                {
+                    b.Property<Guid>("DeviceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("PublicKeyPem")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("DeviceId");
+
+                    b.ToTable("DeviceCredentials");
+                });
+
             modelBuilder.Entity("OmniDesk.Api.Data.DeviceGroup", b =>
                 {
                     b.Property<Guid>("Id")
@@ -353,6 +386,76 @@ namespace OmniDesk.Api.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("DeviceGroups");
+                });
+
+            modelBuilder.Entity("OmniDesk.Api.Data.DeviceInventory", b =>
+                {
+                    b.Property<Guid>("DeviceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Payload")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<DateTimeOffset>("ReceivedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("DeviceId");
+
+                    b.ToTable("DeviceInventories");
+                });
+
+            modelBuilder.Entity("OmniDesk.Api.Data.DeviceMetrics", b =>
+                {
+                    b.Property<Guid>("DeviceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Payload")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<DateTimeOffset>("ReceivedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("DeviceId");
+
+                    b.ToTable("DeviceMetrics");
+                });
+
+            modelBuilder.Entity("OmniDesk.Api.Data.EnrollmentToken", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("GroupId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("UsedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GroupId");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.ToTable("EnrollmentTokens");
                 });
 
             modelBuilder.Entity("OmniDesk.Api.Data.RolePermission", b =>
@@ -522,6 +625,41 @@ namespace OmniDesk.Api.Migrations
                 });
 
             modelBuilder.Entity("OmniDesk.Api.Data.Device", b =>
+                {
+                    b.HasOne("OmniDesk.Api.Data.DeviceGroup", null)
+                        .WithMany()
+                        .HasForeignKey("GroupId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("OmniDesk.Api.Data.DeviceCredential", b =>
+                {
+                    b.HasOne("OmniDesk.Api.Data.Device", null)
+                        .WithOne()
+                        .HasForeignKey("OmniDesk.Api.Data.DeviceCredential", "DeviceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("OmniDesk.Api.Data.DeviceInventory", b =>
+                {
+                    b.HasOne("OmniDesk.Api.Data.Device", null)
+                        .WithOne()
+                        .HasForeignKey("OmniDesk.Api.Data.DeviceInventory", "DeviceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("OmniDesk.Api.Data.DeviceMetrics", b =>
+                {
+                    b.HasOne("OmniDesk.Api.Data.Device", null)
+                        .WithOne()
+                        .HasForeignKey("OmniDesk.Api.Data.DeviceMetrics", "DeviceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("OmniDesk.Api.Data.EnrollmentToken", b =>
                 {
                     b.HasOne("OmniDesk.Api.Data.DeviceGroup", null)
                         .WithMany()

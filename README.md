@@ -2,9 +2,9 @@
 
 Piattaforma RMM self-hosted per Windows. **Milestone 1: piano di gestione iniziale**, non ancora un RMM operativo per endpoint.
 
-Implementati: API ASP.NET Core .NET 10, PostgreSQL con migrazioni, Identity multiutente, CSRF e lockout, ruoli personalizzati e permessi globali/gruppo/device, audit, dashboard React/TypeScript con nome/logo/colore/tema persistenti, Docker Compose e Caddy HTTPS. Il parco macchine resta vuoto fino all'enrollment M2.
+Implementati: API ASP.NET Core .NET 10, PostgreSQL con migrazioni, Identity multiutente, CSRF e lockout, ruoli personalizzati e permessi globali/gruppo/device, audit, dashboard React/TypeScript con nome/logo/colore/tema persistenti, Docker Compose e Caddy HTTPS. Il parco macchine è popolato solo da enrollment reali.
 
-Progettati: agente Windows e MSI unico, metriche/inventario, MeshCentral, Windows Update, console Windows e attivazione TOTP. Nessun controllo remoto è disponibile in questa versione.
+M2 aggiunge enrollment monouso, agente Windows .NET cross-compilato, snapshot metriche/inventario, gruppi e dashboard dispositivi. Sorgenti MSI e pipeline Windows presenti; MSI, servizio e raccolta reale su Windows ancora da collaudare. Progettati/in corso: MeshCentral, Windows Update, console Windows e attivazione TOTP. Nessun controllo remoto è disponibile in questa versione.
 
 ## Installazione Ubuntu Server
 
@@ -61,5 +61,7 @@ docker compose exec -T db pg_dump -U omnidesk -d omnidesk -Fc > omnidesk-backup.
 ```
 
 Confermata la compatibilità e salvati i backup: fermare API durante la migrazione, costruire le immagini, eseguire `docker compose run --rm migrate`, avviare API/dashboard/Caddy. Non cancellare volumi per aggiornare. Rollback schema non automatizzato. PostgreSQL M1 usa l'utente iniziale del container: separare utente migrazioni e runtime a privilegi minimi prima di produzione. Le chiavi DataProtection sono protette dai permessi del volume, non cifrate a riposo: usare storage cifrato e proteggere backup.
+
+Protocollo agente e istruzioni: [M2](docs/milestone-2.md).
 
 Documenti: [architettura](docs/architecture.md), [database](docs/database.md), [API](docs/api.md), [roadmap](docs/roadmap.md), [verifiche e limiti](docs/validation.md). Regole di sviluppo in [AGENTS.md](AGENTS.md).

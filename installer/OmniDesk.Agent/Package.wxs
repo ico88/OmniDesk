@@ -1,0 +1,16 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="OmniDesk Agent" Manufacturer="OmniDesk" Version="0.2.0" UpgradeCode="2B357D2E-F3D9-4BBD-B7E4-68E4E279FA82" Scope="perMachine">
+    <MajorUpgrade DowngradeErrorMessage="A newer OmniDesk Agent is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="OmniDesk Agent">
+        <Component Id="AgentService" Guid="9AF7FC11-4137-4B08-894A-CB42F6D22657">
+          <File Id="AgentExe" Source="$(var.AgentPublishDir)\OmniDesk.Agent.Windows.exe" KeyPath="yes" />
+          <ServiceInstall Id="InstallService" Name="OmniDeskAgent" DisplayName="OmniDesk Agent" Description="OmniDesk monitoring and inventory agent" Type="ownProcess" Start="auto" ErrorControl="normal" Account="LocalSystem" />
+          <ServiceControl Id="ControlService" Name="OmniDeskAgent" Start="install" Stop="both" Remove="uninstall" Wait="yes" />
+        </Component>
+      </Directory>
+    </StandardDirectory>
+    <Feature Id="Main" Title="OmniDesk Agent" Level="1"><ComponentRef Id="AgentService" /></Feature>
+  </Package>
+</Wix>

@@ -1,4 +1,5 @@
 using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
@@ -10,6 +11,7 @@ using OmniDesk.Api.Endpoints;
 using OmniDesk.Api.Security;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.WebHost.ConfigureKestrel(o => o.Limits.MaxRequestBodySize = 2 * 1024 * 1024);
 builder.Logging.AddFilter("Microsoft.EntityFrameworkCore.Database.Command", LogLevel.Warning);
 var connection = builder.Configuration.GetConnectionString("Database");
 if (string.IsNullOrWhiteSpace(connection))
@@ -49,6 +51,8 @@ var keysPath = builder.Configuration["DataProtection:Path"];
 if (!string.IsNullOrEmpty(keysPath))
     builder.Services.AddDataProtection().SetApplicationName("OmniDesk").PersistKeysToFileSystem(new DirectoryInfo(keysPath));
 builder.Services.AddScoped<PermissionService>();
+builder.Services.AddAuthentication().AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, DeviceAuthentication>(DeviceAuthentication.SchemeName, _ => {});
+builder.Services.AddHostedService<AssertionCleanup>();
 builder.Services.AddAuthorization();
 var trustedProxyNetwork = builder.Configuration["Proxy:Network"];
 if (!string.IsNullOrEmpty(trustedProxyNetwork))
@@ -59,6 +63,7 @@ if (!string.IsNullOrEmpty(trustedProxyNetwork))
     });
 builder.Services.AddRateLimiter(o => {
     o.RejectionStatusCode = 429;
+    o.AddFixedWindowLimiter("enrollment", options => { options.PermitLimit = 30; options.Window = TimeSpan.FromMinutes(1); options.QueueLimit = 0; });
     o.AddPolicy("login", context => RateLimitPartition.GetFixedWindowLimiter(
         context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
         _ => new FixedWindowRateLimiterOptions { PermitLimit = 20, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
@@ -105,7 +110,7 @@ app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 app.Use(async (c, next) => {
-    if (c.Request.Method is not ("GET" or "HEAD" or "OPTIONS"))
+    if (c.Request.Method is not ("GET" or "HEAD" or "OPTIONS") && c.GetEndpoint()?.Metadata.GetMetadata<MachineRequest>() is null)
     {
         try { await c.RequestServices.GetRequiredService<IAntiforgery>().ValidateRequestAsync(c); }
         catch (AntiforgeryValidationException) { c.Response.StatusCode = 400; await c.Response.WriteAsJsonAsync(new { error = "Invalid CSRF token" }); return; }
@@ -120,5 +125,6 @@ app.MapGet("/api/health/ready", async (AppDbContext db) => {
 });
 app.MapAuthEndpoints();
 app.MapManagementEndpoints();
+app.MapAgentEndpoints();
 app.Run();
 public partial class Program { }

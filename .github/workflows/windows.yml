@@ -1,0 +1,19 @@
+name: windows-agent-package
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  agent-msi:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - run: dotnet build src/OmniDesk.Agent.Windows -c Release
+      - run: dotnet publish src/OmniDesk.Agent.Windows -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o artifacts/agent-win-x64
+      - run: dotnet build installer/OmniDesk.Agent -c Release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: omnidesk-agent-unsigned
+          path: installer/OmniDesk.Agent/bin/**/OmniDesk.Agent.msi

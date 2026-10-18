@@ -41,9 +41,25 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
     public DbSet<ScopeGrant> ScopeGrants => Set<ScopeGrant>();
     public DbSet<Branding> Branding => Set<Branding>();
     public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
+    public DbSet<EnrollmentToken> EnrollmentTokens => Set<EnrollmentToken>();
+    public DbSet<DeviceCredential> DeviceCredentials => Set<DeviceCredential>();
+    public DbSet<DeviceAssertion> DeviceAssertions => Set<DeviceAssertion>();
+    public DbSet<DeviceMetrics> DeviceMetrics => Set<DeviceMetrics>();
+    public DbSet<DeviceInventory> DeviceInventories => Set<DeviceInventory>();
     protected override void OnModelCreating(ModelBuilder b)
     {
         base.OnModelCreating(b);
+        b.Entity<EnrollmentToken>().HasIndex(x => x.TokenHash).IsUnique();
+        b.Entity<EnrollmentToken>().HasOne<DeviceGroup>().WithMany().HasForeignKey(x => x.GroupId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<DeviceCredential>().HasKey(x => x.DeviceId);
+        b.Entity<DeviceCredential>().HasOne<Device>().WithOne().HasForeignKey<DeviceCredential>(x => x.DeviceId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<DeviceAssertion>().HasIndex(x => x.ExpiresAt);
+        b.Entity<DeviceMetrics>().HasKey(x => x.DeviceId);
+        b.Entity<DeviceMetrics>().Property(x => x.Payload).HasColumnType("jsonb");
+        b.Entity<DeviceMetrics>().HasOne<Device>().WithOne().HasForeignKey<DeviceMetrics>(x => x.DeviceId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<DeviceInventory>().HasKey(x => x.DeviceId);
+        b.Entity<DeviceInventory>().Property(x => x.Payload).HasColumnType("jsonb");
+        b.Entity<DeviceInventory>().HasOne<Device>().WithOne().HasForeignKey<DeviceInventory>(x => x.DeviceId).OnDelete(DeleteBehavior.Cascade);
         b.Entity<DeviceGroup>().Property(x => x.Name).HasMaxLength(200);
         b.Entity<Device>().Property(x => x.Name).HasMaxLength(200);
         b.Entity<Device>().HasOne<DeviceGroup>().WithMany().HasForeignKey(x => x.GroupId).OnDelete(DeleteBehavior.Restrict);

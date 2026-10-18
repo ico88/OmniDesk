@@ -1,2 +1,3 @@
-# Agente Windows — progettato (M2)
-.NET Worker Service, identità crittografica per dispositivo, traffico outbound HTTPS 443, metriche e inventario. MSI unico firmato include in M3 il Mesh agent, con servizi distinti e disinstallazione coordinata. Non è presente un agente eseguibile o MSI in M1.
+# Agente Windows — M2
+
+Implementazione in `src/OmniDesk.Agent.Windows`, contratti in `src/OmniDesk.Contracts`, MSI WiX in `installer/OmniDesk.Agent`. Vedi [protocollo e limiti](../../docs/milestone-2.md). Il binario win-x64 è stato cross-compilato; servizio, DPAPI e MSI devono ancora essere collaudati su Windows.
