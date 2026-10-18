@@ -1,0 +1,2 @@
+# MeshCentral — adapter progettato (M3)
+Primo motore remoto scelto: MeshCentral. Nessun server remoto viene esposto in M1. Serviranno versione fissata, configurazione TLS offload/trusted proxy/certUrl, account provisioning, mapping gruppi, permessi indipendenti e sessioni effimere. Non incorporare una console MeshCentral amministrativa come scorciatoia che aggiri OmniDesk. Verificare con due endpoint Windows su reti diverse prima di dichiarare funzionante.

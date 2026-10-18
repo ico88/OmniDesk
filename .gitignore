@@ -1,0 +1,12 @@
+.env
+.env.*
+!.env.example
+.secrets/
+**/bin/
+**/obj/
+**/node_modules/
+**/dist/
+**/TestResults/
+*.user
+*.log
+artifacts/
