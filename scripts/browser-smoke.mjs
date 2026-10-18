@@ -1,0 +1,42 @@
+import {chromium} from '/tmp/node_modules/playwright/index.mjs';
+import {readFileSync} from 'node:fs';
+import {randomBytes} from 'node:crypto';
+import assert from 'node:assert/strict';
+const browser=await chromium.launch({headless:true});
+try {
+ const context=await browser.newContext({ignoreHTTPSErrors:true}); // Test CA only; production clients must trust CA.
+ const page=await context.newPage(); const errors=[]; page.on('pageerror',e=>errors.push(e.message));
+ await page.goto('https://omnidesk.test');
+ await page.getByLabel('Email',{exact:true}).fill('admin@example.test');
+ await page.getByLabel('Password',{exact:true}).fill(readFileSync('/run/secrets/bootstrap_password','utf8').trim());
+ await page.getByRole('button',{name:'Accedi',exact:true}).click();
+ await page.getByRole('heading',{name:'Panoramica',exact:true}).waitFor();
+ await page.getByRole('button',{name:'Personalizzazione',exact:true}).click();
+ await page.getByLabel('Nome',{exact:true}).fill('Browser smoke');
+ await page.getByRole('button',{name:'Salva personalizzazione'}).click();
+ await page.getByText('Personalizzazione salvata',{exact:true}).waitFor();
+ await page.waitForFunction(()=>document.title==='Browser smoke');
+ await page.getByRole('button',{name:'Panoramica',exact:true}).click();
+ await page.getByText('Personalizza i tuoi riquadri',{exact:true}).click();
+ const layoutSaved=page.waitForResponse(r=>r.url().endsWith('/api/dashboard/layout') && r.request().method()==='PUT' && r.status()===204);
+ await page.getByLabel('Dispositivi',{exact:true}).uncheck(); await layoutSaved;
+ await page.waitForFunction(()=>document.querySelectorAll('.stats .panel').length===2);
+ await page.reload(); await page.getByRole('heading',{name:'Panoramica',exact:true}).waitFor();
+ assert.equal(await page.locator('.stats .panel').count(),2,'Layout persisted');
+ await page.getByRole('button',{name:'Utenti',exact:true}).click();
+ const viewer=`viewer-${randomBytes(6).toString('hex')}@example.test`; const password='Browser!9'+randomBytes(24).toString('hex');
+ await page.getByLabel('Email',{exact:true}).fill(viewer);
+ await page.getByLabel('Password iniziale',{exact:true}).fill(password);
+ await page.getByLabel('Ruolo globale',{exact:true}).selectOption('Viewer');
+ await page.getByRole('button',{name:'Crea utente',exact:true}).click(); await page.getByText('Utente creato',{exact:true}).waitFor();
+ await page.getByRole('button',{name:'Esci',exact:true}).click();
+ await page.getByRole('button',{name:'Accedi',exact:true}).waitFor();
+ await page.getByLabel('Email',{exact:true}).fill(viewer); await page.getByLabel('Password',{exact:true}).fill(password);
+ await page.getByRole('button',{name:'Accedi',exact:true}).click(); await page.getByRole('heading',{name:'Panoramica',exact:true}).waitFor();
+ assert.equal(await page.getByRole('button',{name:'Audit',exact:true}).count(),0);
+ assert.equal(await page.getByRole('button',{name:'Utenti',exact:true}).count(),0);
+ await page.waitForFunction(()=>document.querySelectorAll('.stats .panel').length===3);
+ assert.equal(await page.locator('.stats .panel').count(),3,'Viewer layout isolated');
+ assert.deepEqual(errors,[],'No browser JavaScript exceptions');
+ console.log('PASS: Chromium login/logout, branding, persisted per-user layout, account creation and viewer UI permissions');
+} finally {await browser.close();}

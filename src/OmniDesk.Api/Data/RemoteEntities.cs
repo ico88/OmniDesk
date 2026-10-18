@@ -4,6 +4,7 @@ public sealed class RemoteSession
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     public Guid DeviceId { get; set; }
+    public string NodeId { get; set; } = "";
     public string ActorId { get; set; } = "";
     public string Capability { get; set; } = "";
     public string State { get; set; } = "pending";

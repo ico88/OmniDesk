@@ -23,6 +23,7 @@ public sealed record AgentIdentity(string ServerUrl, Guid DeviceId, string Encry
     {
         var directory = Directory.CreateDirectory(Folder);
         var acl = new DirectorySecurity(); acl.SetAccessRuleProtection(true, false);
+        acl.SetOwner(new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null));
         foreach (var sid in new[] { WellKnownSidType.LocalSystemSid, WellKnownSidType.BuiltinAdministratorsSid })
             acl.AddAccessRule(new FileSystemAccessRule(new SecurityIdentifier(sid, null), FileSystemRights.FullControl,
                 InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow));

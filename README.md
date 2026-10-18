@@ -1,10 +1,10 @@
 # OmniDesk
 
-Piattaforma RMM self-hosted per Windows. **Milestone 1: piano di gestione iniziale**, non ancora un RMM operativo per endpoint.
+Piattaforma RMM self-hosted per Windows. Implementazione iniziale M1–M5, destinata a collaudo controllato; i gate di produzione e le verifiche Windows mancanti sono riportati in [validation.md](docs/validation.md).
 
-Implementati: API ASP.NET Core .NET 10, PostgreSQL con migrazioni, Identity multiutente, CSRF e lockout, ruoli personalizzati e permessi globali/gruppo/device, audit, dashboard React/TypeScript con nome/logo/colore/tema persistenti, Docker Compose e Caddy HTTPS. Il parco macchine è popolato solo da enrollment reali.
+Disponibili: API ASP.NET Core .NET 10, PostgreSQL con migrazioni, Identity multiutente, CSRF/lockout, ruoli granulari globali/gruppo/device e audit, dashboard React con branding e layout personali, enrollment monouso, agente Windows .NET con snapshot metriche/inventario, coda Windows Update e console Windows WebView2. TOTP con recovery code implementata e cifrata nel DB, **disattivata per default**. Cambio password dalla console.
 
-M2 aggiunge enrollment monouso, agente Windows .NET cross-compilato, snapshot metriche/inventario, gruppi e dashboard dispositivi. Sorgenti MSI e pipeline Windows presenti; MSI, servizio e raccolta reale su Windows ancora da collaudare. Progettati/in corso: MeshCentral, Windows Update, console Windows e attivazione TOTP. Nessun controllo remoto è disponibile in questa versione.
+Adapter MeshCentral con sessioni limitate e audit, motore Docker opzionale: non abilitato dal setup standard. Rimane un blocco audit node-forge e manca il collaudo desktop/terminale/file su Windows/NAT; non dichiarato operativo in produzione. Il singolo MSI attuale installa solo OmniDesk Agent: integrazione Mesh agent e firma restano aperte. MSI unsigned compilato dalla pipeline Windows; installazione/upgrade/uninstall ancora da verificare.
 
 ## Installazione Ubuntu Server
 
@@ -36,7 +36,7 @@ docker compose logs --tail=100 api caddy
 curl --cacert omnidesk-local-ca.crt --fail https://192.168.1.233:8085/api/health/ready
 ```
 
-Il successo di setup non certifica DNS/TLS: verificare l'endpoint HTTPS. Le credenziali non sono recuperabili dal repository. Cambio/reset password e gestione completa del ciclo di vita account sono ancora da implementare; M1 è destinata a collaudo controllato.
+Il successo di setup non certifica DNS/TLS: verificare l'endpoint HTTPS. Le credenziali non sono recuperabili dal repository. Cambio password disponibile in Account e sicurezza. Reset assistito, disabilitazione account e gestione completa del ciclo di vita restano da completare.
 
 ## Test e sviluppo
 
@@ -46,7 +46,7 @@ Non sono richiesti SDK host se si usa Docker:
 ./scripts/test.sh
 docker build -t omnidesk-api:local -f src/OmniDesk.Api/Dockerfile .
 docker build -t omnidesk-dashboard:local -f src/dashboard/Dockerfile .
-./scripts/smoke.sh
+./scripts/smoke.sh --browser
 ```
 
 Test PostgreSQL dedicato in tmpfs, senza porte host o segreti di produzione. Lo smoke test usa Caddy TLS interno e verifica i container reali; il probe non valida la CA locale e non prova Let's Encrypt. I secret temporanei smoke restano sotto `/tmp/omnidesk-smoke.*`, directory private, per ispezione; i container vengono arrestati a fine prova. Non lanciare gli stessi test contemporaneamente sullo stesso daemon (nomi progetto fissi).
@@ -64,6 +64,6 @@ docker compose exec -T db pg_dump -U omnidesk -d omnidesk -Fc > omnidesk-backup.
 
 Confermata la compatibilità e salvati i backup: fermare API durante la migrazione, costruire le immagini, eseguire `docker compose run --rm migrate`, avviare API/dashboard/Caddy. Non cancellare volumi per aggiornare. Rollback schema non automatizzato. PostgreSQL M1 usa l'utente iniziale del container: separare utente migrazioni e runtime a privilegi minimi prima di produzione. Le chiavi DataProtection sono protette dai permessi del volume, non cifrate a riposo: usare storage cifrato e proteggere backup.
 
-Protocollo agente e istruzioni: [M2](docs/milestone-2.md).
+Dettagli milestone: [M2 agente](docs/milestone-2.md), [M3 remoto](docs/milestone-3.md), [M4 aggiornamenti](docs/milestone-4.md), [M5 console/2FA](docs/milestone-5.md).
 
 Documenti: [architettura](docs/architecture.md), [database](docs/database.md), [API](docs/api.md), [roadmap](docs/roadmap.md), [verifiche e limiti](docs/validation.md). Regole di sviluppo in [AGENTS.md](AGENTS.md).

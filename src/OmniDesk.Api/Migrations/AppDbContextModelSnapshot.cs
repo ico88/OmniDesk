@@ -318,6 +318,20 @@ namespace OmniDesk.Api.Migrations
                         });
                 });
 
+            modelBuilder.Entity("OmniDesk.Api.Data.DashboardLayout", b =>
+                {
+                    b.Property<string>("UserId")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Widgets")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.HasKey("UserId");
+
+                    b.ToTable("DashboardLayouts");
+                });
+
             modelBuilder.Entity("OmniDesk.Api.Data.Device", b =>
                 {
                     b.Property<Guid>("Id")
@@ -497,6 +511,10 @@ namespace OmniDesk.Api.Migrations
 
                     b.Property<DateTimeOffset?>("ExpiresAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("NodeId")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.Property<string>("PublicId")
                         .HasColumnType("text");
@@ -729,6 +747,15 @@ namespace OmniDesk.Api.Migrations
                     b.HasOne("OmniDesk.Api.Data.AppUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("OmniDesk.Api.Data.DashboardLayout", b =>
+                {
+                    b.HasOne("OmniDesk.Api.Data.AppUser", null)
+                        .WithOne()
+                        .HasForeignKey("OmniDesk.Api.Data.DashboardLayout", "UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

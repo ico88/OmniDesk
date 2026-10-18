@@ -4,6 +4,7 @@ using OmniDesk.Agent.Windows;
 using OmniDesk.Contracts;
 
 if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException("OmniDesk Agent requires Windows.");
+if (args.Length == 1 && args[0] == "self-test") { await WindowsSelfTest.Run(); return; }
 if (args.Length > 0 && args[0] == "enroll")
 {
     string Option(string key) { var index = Array.IndexOf(args, key); return index >= 0 && index + 1 < args.Length ? args[index + 1] : throw new ArgumentException($"Missing {key}"); }
@@ -15,6 +16,7 @@ if (args.Length > 0 && args[0] == "enroll")
     // Establish ACLs before contacting server, so an unprivileged enrollment cannot consume a token.
     var directory = Directory.CreateDirectory(AgentIdentity.Folder);
     var acl = new System.Security.AccessControl.DirectorySecurity(); acl.SetAccessRuleProtection(true, false);
+    acl.SetOwner(new System.Security.Principal.SecurityIdentifier(System.Security.Principal.WellKnownSidType.BuiltinAdministratorsSid, null));
     foreach (var sid in new[] { System.Security.Principal.WellKnownSidType.LocalSystemSid, System.Security.Principal.WellKnownSidType.BuiltinAdministratorsSid })
         acl.AddAccessRule(new System.Security.AccessControl.FileSystemAccessRule(new System.Security.Principal.SecurityIdentifier(sid, null),
             System.Security.AccessControl.FileSystemRights.FullControl, System.Security.AccessControl.InheritanceFlags.ContainerInherit | System.Security.AccessControl.InheritanceFlags.ObjectInherit,

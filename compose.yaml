@@ -66,6 +66,7 @@ services:
       Database__PasswordFile: /run/secrets/db_password
       DataProtection__Path: /keys
       Proxy__Network: ${OMNIDESK_PROXY_SUBNET:-172.29.84.0/24}
+      Security__TotpEnabled: ${OMNIDESK_TOTP_ENABLED:-false}
     restart: unless-stopped
     depends_on:
       db:

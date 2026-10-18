@@ -59,6 +59,14 @@ services:
     secrets: [bootstrap_password]
     command: [node, /work/smoke.mjs]
     depends_on: [caddy]
+  browser:
+    image: mcr.microsoft.com/playwright:v1.58.2-noble
+    profiles: [browser]
+    volumes:
+      - ./scripts/browser-smoke.mjs:/work/browser-smoke.mjs:ro
+    secrets: [bootstrap_password]
+    command: [sh, -c, 'cd /tmp && npm install --no-audit --no-fund --ignore-scripts playwright@1.58.2 && node /work/browser-smoke.mjs']
+    depends_on: [caddy]
 secrets:
   db_password:
     file: ${SMOKE_SECRETS:?Set isolated secret directory}/db_password

@@ -28,6 +28,8 @@ msiexec /i OmniDesk.Agent.msi
 & 'C:\Program Files\OmniDesk Agent\OmniDesk.Agent.Windows.exe' enroll --server https://rmm.example.com --token-file C:\Secure\enrollment.txt
 ```
 
-Non eseguire questi comandi su endpoint reali finché firma e installazione/upgrade/uninstall non sono verificati. La pipeline Windows prepara un artefatto unsigned; firma Authenticode e aggiornamento automatico sicuro richiedono certificato/code signing e una milestone dedicata. Le modifiche ai servizi Windows sono operazioni di installazione, non sono state eseguite dall'agente di sviluppo sull'host.
+MSI unsigned compilato nella pipeline GitHub Actions Windows; non eseguire questi comandi su endpoint reali finché firma e installazione/upgrade/uninstall non sono verificati. La pipeline Windows prepara un artefatto unsigned; firma Authenticode e aggiornamento automatico sicuro richiedono certificato/code signing e una milestone dedicata. Le modifiche ai servizi Windows sono operazioni di installazione, non sono state eseguite dall'agente di sviluppo sull'host.
 
 Fonti: [Windows Service .NET](https://learn.microsoft.com/en-us/dotnet/core/extensions/windows-service), [WiX](https://docs.firegiant.com/wix/). Risultati effettivi di build/test in validation.md.
+
+Orologi server/device da sincronizzare: tolleranza asserzioni dieci secondi. Un 401 richiede verifica clock/revoca e riavvio controllato del worker; non implica sempre necessità di nuovo enrollment. MSI versione 0.5.0 per distinguere questo avanzamento dal primo 0.2.0.

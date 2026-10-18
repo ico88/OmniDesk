@@ -16,3 +16,5 @@ Questi comandi espongono il dominio remoto: eseguirli solo su un server configur
 Audit dipendenze: override espliciti compression 1.8.2 e qs 6.16.1 correggono gli avvisi per quei pacchetti. Rimane node-forge (upstream 1.4.0, advisory GHSA-86w9-cpqp-85rv senza versione corretta indicata nell'audit): blocco release del motore. Non applicato npm audit fix --force, che proponeva un downgrade MeshCentral. Nessun motore remoto viene avviato dalla configurazione standard.
 
 API M3: PUT /api/admin/devices/{id}/mesh {nodeId}, POST /api/devices/{id}/remote-sessions {capability}, GET stesso percorso senza URL bearer, DELETE /api/devices/{id}/remote-sessions/{sessionId}. Creazione richiede esattamente remote.control, terminal o files nel corretto ambito. Solo creatore o amministratore globale può revocare.
+
+Ogni sessione conserva il nodeId originale: cambiare mapping non sposta il bersaglio della revoca (test di regressione).

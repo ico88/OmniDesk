@@ -22,6 +22,8 @@ if (string.IsNullOrWhiteSpace(connection))
         Host = builder.Configuration["Database:Host"] ?? "db", Database = "omnidesk", Username = "omnidesk",
         Password = File.Exists(secretPath) ? File.ReadAllText(secretPath).Trim() : ""
     };
+    // Docker PostgreSQL uses password authentication, not optional Kerberos native libraries.
+    cs["GSS Encryption Mode"] = "Disable";
     connection = cs.ConnectionString;
 }
 builder.Services.AddDbContext<AppDbContext>(o => o.UseNpgsql(connection));
@@ -30,7 +32,7 @@ builder.Services.AddIdentity<AppUser, IdentityRole>(o => {
     o.Password.RequiredLength = 14;
     o.Lockout.MaxFailedAccessAttempts = 5;
     o.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
-}).AddEntityFrameworkStores<AppDbContext>().AddDefaultTokenProviders();
+}).AddEntityFrameworkStores<AppDbContext>().AddUserStore<ProtectedUserStore>().AddDefaultTokenProviders();
 builder.Services.ConfigureApplicationCookie(o => {
     o.Cookie.Name = "__Host-OmniDesk.Session";
     o.Cookie.HttpOnly = true;
@@ -130,5 +132,7 @@ app.MapManagementEndpoints();
 app.MapAgentEndpoints();
 app.MapRemoteEndpoints();
 app.MapUpdateEndpoints();
+app.MapAccountEndpoints();
+app.MapDashboardEndpoints();
 app.Run();
 public partial class Program { }

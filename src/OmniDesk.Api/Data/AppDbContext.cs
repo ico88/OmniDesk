@@ -49,9 +49,13 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
     public DbSet<MeshDeviceMapping> MeshDeviceMappings => Set<MeshDeviceMapping>();
     public DbSet<RemoteSession> RemoteSessions => Set<RemoteSession>();
     public DbSet<UpdateJob> UpdateJobs => Set<UpdateJob>();
+    public DbSet<DashboardLayout> DashboardLayouts => Set<DashboardLayout>();
     protected override void OnModelCreating(ModelBuilder b)
     {
         base.OnModelCreating(b);
+        b.Entity<DashboardLayout>().HasKey(x => x.UserId);
+        b.Entity<DashboardLayout>().HasOne<AppUser>().WithOne().HasForeignKey<DashboardLayout>(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<DashboardLayout>().Property(x => x.Widgets).HasColumnType("jsonb");
         b.Entity<UpdateJob>().HasOne<Device>().WithMany().HasForeignKey(x => x.DeviceId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<UpdateJob>().HasIndex(x => new { x.DeviceId, x.RequestId }).IsUnique();
         b.Entity<UpdateJob>().HasIndex(x => x.DeviceId).IsUnique().HasFilter("\"State\" IN ('queued','leased')");

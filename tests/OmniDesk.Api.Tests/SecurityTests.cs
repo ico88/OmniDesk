@@ -18,6 +18,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     public FakeMesh Mesh { get; } = new();
     protected override void ConfigureWebHost(IWebHostBuilder builder) => builder.ConfigureServices(s => s.AddSingleton<IMeshCentralClient>(Mesh)).ConfigureAppConfiguration((_, c) =>
         c.AddInMemoryCollection(new Dictionary<string, string?> {
+            ["Security:TotpEnabled"] = "true",
             ["ConnectionStrings:Database"] = Environment.GetEnvironmentVariable("TEST_DATABASE")
                 ?? throw new InvalidOperationException("TEST_DATABASE must point to an isolated PostgreSQL test database")
         }));
@@ -136,6 +137,7 @@ public sealed class SecurityTests : IClassFixture<ApiFactory>, IAsyncLifetime
         Assert.Contains(events!, x => x.Action == "auth.login" && x.Outcome == "denied");
         await RemoteScenario.Run(admin, viewer, scoped, device, factory.Mesh);
         await AgentScenario.Run(factory, admin, scoped, scopedId);
+        await AccountScenario.Run(factory, admin, viewer, Password);
         // Logout is CSRF-protected and invalidates the current browser cookie.
         admin.DefaultRequestHeaders.Remove("X-CSRF-TOKEN");
         Assert.Equal(HttpStatusCode.BadRequest, (await admin.PostAsync("/api/auth/logout", null)).StatusCode);
@@ -151,7 +153,7 @@ public sealed class SecurityTests : IClassFixture<ApiFactory>, IAsyncLifetime
         }
         using var totp = Client();
         await Csrf(totp);
-        Assert.Equal(HttpStatusCode.Unauthorized, (await totp.PostAsJsonAsync("/api/auth/login", new { email = "viewer@example.test", password = Password })).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await totp.PostAsJsonAsync("/api/auth/login", new { email = "viewer@example.test", password = Password + "New!" })).StatusCode);
         // Persistent Identity lockout after five failed attempts.
         using var locked = Client();
         await Csrf(locked);

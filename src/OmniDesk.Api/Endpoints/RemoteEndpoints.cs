@@ -13,7 +13,7 @@ public static class RemoteEndpoints
     {
         app.MapPut("/api/admin/devices/{id:guid}/mesh", async (Guid id, MeshMappingRequest r, HttpContext c, AppDbContext db, PermissionService p) => {
             if (!await p.Allows(c.User.UserId(), "administration")) return Results.Forbid();
-            if (r.NodeId is null || !Regex.IsMatch(r.NodeId, @"^node/[A-Za-z0-9_-]*/[A-Za-z0-9@$+=_-]{8,128}$") || !await db.Devices.AnyAsync(x => x.Id == id)) return Results.BadRequest();
+            if (r.NodeId is null || r.NodeId.Length > 128 || !Regex.IsMatch(r.NodeId, @"^node/[A-Za-z0-9_-]*/[A-Za-z0-9@$+=_-]{8,128}$") || !await db.Devices.AnyAsync(x => x.Id == id)) return Results.BadRequest();
             if (await db.MeshDeviceMappings.AnyAsync(x => x.NodeId == r.NodeId && x.DeviceId != id)) return Results.Conflict();
             var mapping = await db.MeshDeviceMappings.FindAsync(id);
             if (mapping is null) db.MeshDeviceMappings.Add(new MeshDeviceMapping { DeviceId = id, NodeId = r.NodeId }); else mapping.NodeId = r.NodeId;
@@ -31,7 +31,7 @@ public static class RemoteEndpoints
             if (!await db.Devices.AnyAsync(x => x.Id == id)) return Results.NotFound();
             var mapping = await db.MeshDeviceMappings.AsNoTracking().SingleOrDefaultAsync(x => x.DeviceId == id);
             if (!mesh.Configured || mapping is null) return Results.Problem("MeshCentral or device mapping unavailable", statusCode:503);
-            var session = new RemoteSession { DeviceId = id, ActorId = c.User.UserId(), Capability = r.Capability };
+            var session = new RemoteSession { DeviceId = id, NodeId = mapping.NodeId, ActorId = c.User.UserId(), Capability = r.Capability };
             db.RemoteSessions.Add(session); db.AuditEvents.Add(Event(c, "remote.request", session.Id)); await db.SaveChangesAsync();
             MeshSession? created = null;
             try
@@ -59,8 +59,9 @@ public static class RemoteEndpoints
             if (!await p.Allows(c.User.UserId(), "administration") && session.ActorId != c.User.UserId()) return Results.Forbid();
             if (session.State is "revoked" or "failed") return Results.NoContent();
             var mapping = await db.MeshDeviceMappings.AsNoTracking().SingleOrDefaultAsync(x => x.DeviceId == id);
-            if (mapping is null || session.PublicId is null) return Results.Conflict();
-            try { await mesh.Revoke(mapping.NodeId, session.PublicId, c.RequestAborted); }
+            var nodeId = string.IsNullOrEmpty(session.NodeId) ? mapping?.NodeId : session.NodeId;
+            if (nodeId is null || session.PublicId is null) return Results.Conflict();
+            try { await mesh.Revoke(nodeId, session.PublicId, c.RequestAborted); }
             catch { return Results.Problem("Remote revocation failed; session expires automatically", statusCode:503); }
             session.State = "revoked"; db.AuditEvents.Add(Event(c, "remote.revoke", session.Id)); await db.SaveChangesAsync(); return Results.NoContent();
         });

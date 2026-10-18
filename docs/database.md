@@ -17,3 +17,7 @@ Autorizzazione: grant globale tramite Identity UserRoles, grant locale tramite S
 Future migrazioni: EnrollmentTokens (hash, expires, used, revoked), DeviceCredentials (chiave pubblica, revoca, rotazione), Metrics (device/time, retention), HardwareInventory, SoftwareInventory, UpdateJobs, RemoteSessions, DashboardLayouts per utente. Telemetria ad alto volume separabile dal DB transazionale. TOTP secret da proteggere con cifratura applicativa e chiavi esterne prima di attivazione.
 
 Eseguire migrazioni con `docker compose run --rm migrate` prima di avviare API. L'API non modifica automaticamente lo schema. Backup coerente di PostgreSQL + volume DataProtection e Caddy; testare restore prima di aggiornare.
+
+## Migrazioni M2–M5
+
+DeviceEnrollment: EnrollmentTokens (hash univoco, gruppo FK, scadenza/consumo/revoca), DeviceCredentials (PK/FK DeviceId, chiave pubblica e revoca), DeviceAssertions (jti PK e scadenza indicizzata), DeviceMetrics e DeviceInventories (PK/FK DeviceId, receivedAt server, payload JSONB ultimo snapshot). MeshSessions: MeshDeviceMappings (DeviceId PK/FK, NodeId univoco), RemoteSessions (device FK, actor, capability, state, publicId non bearer, scadenza; URL bearer non salvato). UpdateJobs: device FK, RequestId univoco per device, indice parziale univoco su device per queued/leased, payload/result JSONB e lease. UserDashboardLayouts: UserId PK/FK, widgets JSONB. Token Identity cifrati via ProtectedUserStore senza modifica del tipo colonna; la chiave DataProtection deve essere preservata con i backup.

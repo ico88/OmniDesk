@@ -33,7 +33,7 @@ public sealed class AgentWorker(ILogger<AgentWorker> logger) : BackgroundService
                 }
                 delay = 60;
             }
-            catch (DeviceRevokedException) { logger.LogError("Device authentication rejected. Re-enrollment requires administrator action. Worker stopped."); return; }
+            catch (DeviceRevokedException) { logger.LogError("Device authentication rejected. Check clock synchronization and revocation; worker stopped until service restart."); return; }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { return; }
             catch (Exception e) { logger.LogWarning("Collection/upload failed ({Type}); retry with backoff.", e.GetType().Name); delay = Math.Min(delay * 2, 900); }
             try { await Task.Delay(TimeSpan.FromSeconds(delay + Random.Shared.Next(0, 10)), stoppingToken); }
