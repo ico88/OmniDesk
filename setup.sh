@@ -52,7 +52,7 @@ if not re.fullmatch(r'(?=.{1,253}$)(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9
 for value in (os.environ['ACME_INPUT'], os.environ['ADMIN_INPUT']):
     if not re.fullmatch(r'[A-Za-z0-9._+%-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}', value):
         raise SystemExit('Invalid email')
-Path('.env').write_text(f'OMNIDESK_DOMAIN={domain}\nACME_EMAIL={os.environ["ACME_INPUT"]}\nADMIN_EMAIL={os.environ["ADMIN_INPUT"]}\n')
+Path('.env').write_text(f'OMNIDESK_DOMAIN={domain}\nACME_EMAIL={os.environ["ACME_INPUT"]}\nADMIN_EMAIL={os.environ["ADMIN_INPUT"]}\nOMNIDESK_LAN_IP=192.168.1.233\nOMNIDESK_BIND_ADDRESS=192.168.1.233\nOMNIDESK_HTTPS_PORT=8085\n')
 PY
 fi
 mkdir -p .secrets
@@ -69,7 +69,7 @@ chmod 444 .secrets/db_password
 # Parent directory stays 0700; container users can read their individually mounted secret.
 docker compose config --quiet
 if ! $start; then
-  echo 'Configuration ready. No containers started. Review .env, DNS and ports 80/443, then run ./setup.sh --start.'
+  echo 'Configuration ready. No containers started. Review .env, LAN address 192.168.1.233 and HTTPS port 8085, then run ./setup.sh --start.'
   exit 0
 fi
 docker info >/dev/null
@@ -91,4 +91,4 @@ PY
   echo 'Initial password is in .secrets/bootstrap_password. Transfer it securely, then delete that file.'
 fi
 docker compose up -d api dashboard caddy
-echo 'Containers started. Check docker compose ps/logs and HTTPS readiness. No firewall rules were changed by this script.'
+echo 'Containers started. LAN URL: https://192.168.1.233:8085 (trust the Caddy local CA). Check compose ps/logs. Host ports 80/443 are not used; Nginx configuration is unchanged.'

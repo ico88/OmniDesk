@@ -14,3 +14,4 @@ artifacts/
 *.pfx
 *.key
 *.pem
+*.crt

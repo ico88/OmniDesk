@@ -1,8 +1,8 @@
 {
-    email {$ACME_EMAIL}
-    acme_ca https://acme-v02.api.letsencrypt.org/directory
+    auto_https disable_redirects
 }
-{$OMNIDESK_DOMAIN} {
+https://{$OMNIDESK_LAN_IP}, https://{$OMNIDESK_DOMAIN} {
+    tls internal
     encode zstd gzip
     header {
         Strict-Transport-Security "max-age=31536000"
@@ -18,7 +18,8 @@
         reverse_proxy dashboard:8080
     }
 }
-{$MESH_DOMAIN} {
+https://{$MESH_DOMAIN} {
+    tls internal
     header Referrer-Policy no-referrer
     header X-Content-Type-Options nosniff
     reverse_proxy meshcentral:8081

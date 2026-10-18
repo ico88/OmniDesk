@@ -1,8 +1,8 @@
 {
-    email {$ACME_EMAIL}
-    acme_ca https://acme-v02.api.letsencrypt.org/directory
+    auto_https disable_redirects
 }
-{$OMNIDESK_DOMAIN} {
+https://{$OMNIDESK_LAN_IP}, https://{$OMNIDESK_DOMAIN} {
+    tls internal
     encode zstd gzip
     header {
         Strict-Transport-Security "max-age=31536000"

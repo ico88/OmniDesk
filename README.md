@@ -8,7 +8,9 @@ M2 aggiunge enrollment monouso, agente Windows .NET cross-compilato, snapshot me
 
 ## Installazione Ubuntu Server
 
-La subnet proxy predefinita è `172.29.84.0/24`: modificarla tramite `OMNIDESK_PROXY_SUBNET` in `.env` se confligge con reti esistenti. Non collegare container estranei a questa rete. Servono DNS pubblico verso il server, porte TCP 80/443 raggiungibili dall'esterno, Docker Engine + Compose e Python 3. Non installare su un host con altri servizi sulle stesse porte senza pianificare il proxy.
+La configurazione predefinita usa **https://192.168.1.233:8085**, lasciando libere le porte host 80/443 per Nginx. Servono quell'indirizzo configurato sul server, Docker Compose e Python 3. Per fidarsi del certificato LAN importare la CA locale Caddy; istruzioni e vhost Nginx in [LAN e Nginx](docs/lan-nginx.md). Non usare HTTP: i cookie restano Secure.
+
+La subnet Docker proxy è `172.29.84.0/24`: modificarla tramite `OMNIDESK_PROXY_SUBNET` in `.env` se confligge con reti esistenti. Non collegarvi container estranei.
 
 ```bash
 ./setup.sh                     # prepara .env e secret, senza avviare container
@@ -26,12 +28,12 @@ L'opzione `--install-docker` configura il repository apt ufficiale e abilita il 
 
 L'amministratore iniziale viene creato solo con DB vuoto. La password casuale è nel file `.secrets/bootstrap_password`: trasferirla tramite un canale riservato, poi rimuovere il file. Nessun segreto viene stampato o salvato in Git. `.secrets` è 0700, file montati 0444 per permettere lettura al processo container non root; proteggere anche i backup. Conservare `.secrets/db_password`: cambiarlo senza ruotare la password PostgreSQL interrompe il servizio.
 
-Aprire `https://<dominio>`. Controllare:
+Aprire `https://192.168.1.233:8085` dopo aver importato la CA, oppure `https://<dominio>` dopo la configurazione autorizzata di Nginx. Controllare:
 
 ```bash
 docker compose ps
 docker compose logs --tail=100 api caddy
-curl --fail https://<dominio>/api/health/ready
+curl --cacert omnidesk-local-ca.crt --fail https://192.168.1.233:8085/api/health/ready
 ```
 
 Il successo di setup non certifica DNS/TLS: verificare l'endpoint HTTPS. Le credenziali non sono recuperabili dal repository. Cambio/reset password e gestione completa del ciclo di vita account sono ancora da implementare; M1 è destinata a collaudo controllato.
