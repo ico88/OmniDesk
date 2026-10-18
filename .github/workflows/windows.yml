@@ -12,7 +12,7 @@ jobs:
           dotnet-version: 10.0.x
       - run: dotnet build src/OmniDesk.Agent.Windows -c Release
       - run: dotnet publish src/OmniDesk.Agent.Windows -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o artifacts/agent-win-x64
-      - name: Read-only Windows collector and DPAPI checks
+      - name: Windows collector, DPAPI and temporary ACL checks
         run: '& .\artifacts\agent-win-x64\OmniDesk.Agent.Windows.exe self-test'
       - name: Parse Windows Update script without executing it
         shell: powershell

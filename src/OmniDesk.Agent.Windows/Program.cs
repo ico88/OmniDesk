@@ -14,14 +14,7 @@ if (args.Length > 0 && args[0] == "enroll")
     var token = (await File.ReadAllTextAsync(tokenPath)).Trim();
     if (token.Length != 64 || !token.All(Uri.IsHexDigit)) throw new ArgumentException("Invalid enrollment token file.");
     // Establish ACLs before contacting server, so an unprivileged enrollment cannot consume a token.
-    var directory = Directory.CreateDirectory(AgentIdentity.Folder);
-    var acl = new System.Security.AccessControl.DirectorySecurity(); acl.SetAccessRuleProtection(true, false);
-    acl.SetOwner(new System.Security.Principal.SecurityIdentifier(System.Security.Principal.WellKnownSidType.BuiltinAdministratorsSid, null));
-    foreach (var sid in new[] { System.Security.Principal.WellKnownSidType.LocalSystemSid, System.Security.Principal.WellKnownSidType.BuiltinAdministratorsSid })
-        acl.AddAccessRule(new System.Security.AccessControl.FileSystemAccessRule(new System.Security.Principal.SecurityIdentifier(sid, null),
-            System.Security.AccessControl.FileSystemRights.FullControl, System.Security.AccessControl.InheritanceFlags.ContainerInherit | System.Security.AccessControl.InheritanceFlags.ObjectInherit,
-            System.Security.AccessControl.PropagationFlags.None, System.Security.AccessControl.AccessControlType.Allow));
-    System.IO.FileSystemAclExtensions.SetAccessControl(directory, acl);
+    AgentIdentity.SecureDirectory(AgentIdentity.Folder);
     using var rsa = RSA.Create(3072);
     using var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false }) { Timeout = TimeSpan.FromSeconds(30) };
     using var response = await client.PostAsJsonAsync(new Uri(server, "api/agent/enroll"), new EnrollmentRequest(token, Environment.MachineName, rsa.ExportSubjectPublicKeyInfoPem()));

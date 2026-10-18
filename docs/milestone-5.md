@@ -1,6 +1,6 @@
 # M5 — console, layout personali e TOTP
 
-Console Windows WinForms/WebView2: stessa dashboard HTTPS e autorizzazioni server, origine obbligatoria `--server`, opzionale origine Mesh `--mesh` per link remoti nel browser esterno. Navigazioni interne limitate all'origine server; nessun bypass certificato, permessi browser negati, download dalla console principale disabilitati. Profilo WebView2 in LocalAppData, nessun segreto embedded. Richiede Evergreen WebView2 Runtime e fiducia CA LAN anche nel client Windows. Progetto e pipeline pubblicazione win-x64 presenti; esecuzione UI su Windows e firma ancora da collaudare.
+Console Windows WinForms/WebView2: stessa dashboard HTTPS e autorizzazioni server, origine obbligatoria `--server`, opzionale origine Mesh `--mesh` per link remoti nel browser esterno. Navigazioni interne limitate all'origine server; nessun bypass certificato, permessi browser negati, download dalla console principale disabilitati. Profilo WebView2 in LocalAppData, nessun segreto embedded. Richiede Evergreen WebView2 Runtime e fiducia CA LAN anche nel client Windows. Pubblicazione win-x64 riuscita anche sul runner Windows; esecuzione UI interattiva e firma ancora da collaudare.
 
 ```powershell
 .\OmniDesk.Console.Windows.exe --server https://192.168.1.233:8085

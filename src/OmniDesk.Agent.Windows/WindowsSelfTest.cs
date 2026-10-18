@@ -24,6 +24,19 @@ public static class WindowsSelfTest
             });
             if (!result.IsValid) throw new InvalidOperationException("DPAPI/JWT Windows round-trip failed");
         }
-        Console.WriteLine("PASS: Windows CPU/RAM/disks/network/uptime, inventory queries, DPAPI and consecutive device assertions. No services or updates modified.");
+        var directory = Path.Combine(Path.GetTempPath(), "omnidesk-acl-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            AgentIdentity.SecureDirectory(directory); var file = Path.Combine(directory, "fixture.json");
+            AgentIdentity.WriteTrusted(file, "{}"); AgentIdentity.AssertTrusted(new DirectoryInfo(directory)); AgentIdentity.AssertTrusted(new FileInfo(file));
+            var info = new DirectoryInfo(directory); var acl = System.IO.FileSystemAclExtensions.GetAccessControl(info);
+            acl.AddAccessRule(new System.Security.AccessControl.FileSystemAccessRule(new System.Security.Principal.SecurityIdentifier(System.Security.Principal.WellKnownSidType.WorldSid, null), System.Security.AccessControl.FileSystemRights.Read, System.Security.AccessControl.AccessControlType.Allow));
+            System.IO.FileSystemAclExtensions.SetAccessControl(info, acl);
+            var denied = false; try { AgentIdentity.AssertTrusted(info); } catch (UnauthorizedAccessException) { denied = true; }
+            if (!denied) throw new InvalidOperationException("Unsafe agent ACL was accepted");
+            AgentIdentity.SecureDirectory(directory);
+        }
+        finally { if (Directory.Exists(directory)) Directory.Delete(directory, recursive:true); }
+        Console.WriteLine("PASS: Windows CPU/RAM/disks/network/uptime, inventory queries, DPAPI, consecutive device assertions and trusted file ACLs. No services or updates modified.");
     }
 }

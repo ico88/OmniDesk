@@ -18,19 +18,54 @@ public sealed record AgentIdentity(string ServerUrl, Guid DeviceId, string Encry
             throw new ArgumentException("Server must be an HTTPS origin without credentials, path, query or fragment.");
         return uri;
     }
-    public static AgentIdentity? Load() => File.Exists(ConfigPath) ? JsonSerializer.Deserialize<AgentIdentity>(File.ReadAllText(ConfigPath)) : null;
+    public static AgentIdentity? Load()
+    {
+        if (!File.Exists(ConfigPath)) return null;
+        AssertTrusted(new DirectoryInfo(Folder)); AssertTrusted(new FileInfo(ConfigPath));
+        return JsonSerializer.Deserialize<AgentIdentity>(File.ReadAllText(ConfigPath));
+    }
     public void Save()
     {
-        var directory = Directory.CreateDirectory(Folder);
-        var acl = new DirectorySecurity(); acl.SetAccessRuleProtection(true, false);
-        acl.SetOwner(new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null));
-        foreach (var sid in new[] { WellKnownSidType.LocalSystemSid, WellKnownSidType.BuiltinAdministratorsSid })
-            acl.AddAccessRule(new FileSystemAccessRule(new SecurityIdentifier(sid, null), FileSystemRights.FullControl,
-                InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow));
-        directory.SetAccessControl(acl);
-        var temporary = ConfigPath + ".tmp";
-        File.WriteAllText(temporary, JsonSerializer.Serialize(this)); File.Move(temporary, ConfigPath, true);
+        SecureDirectory(Folder);
+        WriteTrusted(ConfigPath, JsonSerializer.Serialize(this));
     }
+    private static readonly SecurityIdentifier SystemSid = new(WellKnownSidType.LocalSystemSid, null);
+    private static readonly SecurityIdentifier AdminSid = new(WellKnownSidType.BuiltinAdministratorsSid, null);
+    internal static void SecureDirectory(string path)
+    {
+        var directory = Directory.CreateDirectory(path);
+        if ((directory.Attributes & FileAttributes.ReparsePoint) != 0) throw new UnauthorizedAccessException("Agent directory cannot be a reparse point");
+        var acl = new DirectorySecurity(); acl.SetAccessRuleProtection(true, false); acl.SetOwner(AdminSid);
+        foreach (var sid in new[] { SystemSid, AdminSid }) acl.AddAccessRule(new FileSystemAccessRule(sid, FileSystemRights.FullControl,
+            InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow));
+        directory.SetAccessControl(acl);
+    }
+    internal static void AssertTrusted(FileSystemInfo info)
+    {
+        if ((info.Attributes & FileAttributes.ReparsePoint) != 0) throw new UnauthorizedAccessException("Untrusted agent reparse point");
+        FileSystemSecurity acl = info is DirectoryInfo directory ? directory.GetAccessControl() : ((FileInfo)info).GetAccessControl();
+        var owner = acl.GetOwner(typeof(SecurityIdentifier));
+        if (!SystemSid.Equals(owner) && !AdminSid.Equals(owner)) throw new UnauthorizedAccessException("Untrusted agent file owner");
+        foreach (FileSystemAccessRule rule in acl.GetAccessRules(true, true, typeof(SecurityIdentifier)))
+            if (rule.AccessControlType == AccessControlType.Allow && !SystemSid.Equals(rule.IdentityReference) && !AdminSid.Equals(rule.IdentityReference))
+                throw new UnauthorizedAccessException("Untrusted agent file permissions");
+    }
+    internal static void WriteTrusted(string path, string content)
+    {
+        AssertTrusted(new DirectoryInfo(Path.GetDirectoryName(path)!));
+        var temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        try
+        {
+            using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            using (var writer = new StreamWriter(stream)) writer.Write(content);
+            var acl = new FileSecurity(); acl.SetAccessRuleProtection(true, false); acl.SetOwner(AdminSid);
+            foreach (var sid in new[] { SystemSid, AdminSid }) acl.AddAccessRule(new FileSystemAccessRule(sid, FileSystemRights.FullControl, AccessControlType.Allow));
+            new FileInfo(temporary).SetAccessControl(acl);
+            File.Move(temporary, path, true);
+        }
+        finally { if (File.Exists(temporary)) File.Delete(temporary); }
+    }
+
     public static AgentIdentity Create(string server, Guid id, RSA rsa) => new(ValidateServer(server).AbsoluteUri, id,
         Convert.ToBase64String(ProtectedData.Protect(Encoding.UTF8.GetBytes(rsa.ExportPkcs8PrivateKeyPem()), null, DataProtectionScope.LocalMachine)));
     public string Assertion()

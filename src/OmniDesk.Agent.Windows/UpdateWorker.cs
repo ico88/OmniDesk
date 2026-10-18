@@ -28,6 +28,7 @@ public sealed class UpdateWorker(ILogger<UpdateWorker> logger) : BackgroundServi
                         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", identity.Assertion());
                         return await client.SendAsync(request, stoppingToken);
                     }
+                    if (File.Exists(receiptPath)) AgentIdentity.AssertTrusted(new FileInfo(receiptPath));
                     Receipt? receipt = File.Exists(receiptPath) ? JsonSerializer.Deserialize<Receipt>(await File.ReadAllTextAsync(receiptPath, stoppingToken), Json) : null;
                     if (receipt is not null && receipt.Result is null)
                     {
@@ -63,13 +64,13 @@ public sealed class UpdateWorker(ILogger<UpdateWorker> logger) : BackgroundServi
         }
     }
     private static void Save(string path, Receipt value)
-    { var tmp = path + ".tmp"; File.WriteAllText(tmp, JsonSerializer.Serialize(value)); File.Move(tmp, path, true); }
+    { AgentIdentity.WriteTrusted(path, JsonSerializer.Serialize(value)); }
     private static async Task<UpdateResultRequest> Execute(UpdateLease job, CancellationToken ct)
     {
         var scriptPath = Path.Combine(AgentIdentity.Folder, "update-worker.ps1");
         using var resource = typeof(UpdateWorker).Assembly.GetManifestResourceStream("OmniDesk.Agent.Windows.update-worker.ps1") ?? throw new InvalidOperationException("Missing embedded update script");
-        using var reader = new StreamReader(resource); await File.WriteAllTextAsync(scriptPath, await reader.ReadToEndAsync(ct), ct);
-        var input = Path.Combine(AgentIdentity.Folder, "update-input.json"); await File.WriteAllTextAsync(input, JsonSerializer.Serialize(job), ct);
+        using var reader = new StreamReader(resource); AgentIdentity.WriteTrusted(scriptPath, await reader.ReadToEndAsync(ct));
+        var input = Path.Combine(AgentIdentity.Folder, "update-input.json"); AgentIdentity.WriteTrusted(input, JsonSerializer.Serialize(job));
         var exe = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
         var start = new ProcessStartInfo(exe) { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
         foreach (var arg in new[] { "-NoProfile", "-NonInteractive", "-File", scriptPath }) start.ArgumentList.Add(arg);
