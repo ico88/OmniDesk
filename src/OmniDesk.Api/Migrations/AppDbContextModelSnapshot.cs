@@ -458,6 +458,60 @@ namespace OmniDesk.Api.Migrations
                     b.ToTable("EnrollmentTokens");
                 });
 
+            modelBuilder.Entity("OmniDesk.Api.Data.MeshDeviceMapping", b =>
+                {
+                    b.Property<Guid>("DeviceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("NodeId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("DeviceId");
+
+                    b.HasIndex("NodeId")
+                        .IsUnique();
+
+                    b.ToTable("MeshDeviceMappings");
+                });
+
+            modelBuilder.Entity("OmniDesk.Api.Data.RemoteSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ActorId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Capability")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("DeviceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PublicId")
+                        .HasColumnType("text");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DeviceId", "CreatedAt");
+
+                    b.ToTable("RemoteSessions");
+                });
+
             modelBuilder.Entity("OmniDesk.Api.Data.RolePermission", b =>
                 {
                     b.Property<string>("RoleId")
@@ -665,6 +719,24 @@ namespace OmniDesk.Api.Migrations
                         .WithMany()
                         .HasForeignKey("GroupId")
                         .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("OmniDesk.Api.Data.MeshDeviceMapping", b =>
+                {
+                    b.HasOne("OmniDesk.Api.Data.Device", null)
+                        .WithOne()
+                        .HasForeignKey("OmniDesk.Api.Data.MeshDeviceMapping", "DeviceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("OmniDesk.Api.Data.RemoteSession", b =>
+                {
+                    b.HasOne("OmniDesk.Api.Data.Device", null)
+                        .WithMany()
+                        .HasForeignKey("DeviceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("OmniDesk.Api.Data.RolePermission", b =>

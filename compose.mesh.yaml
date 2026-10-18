@@ -1,0 +1,43 @@
+# Opt-in: requires a second public DNS name and a private generated password file.
+services:
+  mesh-init:
+    image: alpine:3.22
+    network_mode: none
+    user: root
+    volumes:
+      - mesh_data:/data
+      - mesh_files:/files
+    command: [sh, -c, 'chown 1000:1000 /data /files && chmod 700 /data /files']
+  meshcentral:
+    image: omnidesk-meshcentral:local
+    build:
+      context: .
+      dockerfile: modules/remote-meshcentral/Dockerfile
+    restart: unless-stopped
+    environment:
+      MESH_DOMAIN: ${MESH_DOMAIN:?Set MESH_DOMAIN}
+    secrets: [mesh_password]
+    volumes:
+      - mesh_data:/opt/meshcentral/meshcentral-data
+      - mesh_files:/opt/meshcentral/meshcentral-files
+    networks: [proxy]
+    depends_on:
+      mesh-init:
+        condition: service_completed_successfully
+  api:
+    environment:
+      MeshCentral__Origin: https://${MESH_DOMAIN:?Set MESH_DOMAIN}/
+      MeshCentral__Username: omnidesk-service
+      MeshCentral__PasswordFile: /run/secrets/mesh_password
+    secrets: [db_password, mesh_password]
+  caddy:
+    environment:
+      MESH_DOMAIN: ${MESH_DOMAIN:?Set MESH_DOMAIN}
+    volumes:
+      - ./deploy/mesh.Caddyfile:/etc/caddy/Caddyfile:ro
+secrets:
+  mesh_password:
+    file: ./.secrets/mesh_password
+volumes:
+  mesh_data:
+  mesh_files:

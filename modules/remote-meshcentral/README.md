@@ -1,2 +1,3 @@
-# MeshCentral — adapter progettato (M3)
-Primo motore remoto scelto: MeshCentral. Nessun server remoto viene esposto in M1. Serviranno versione fissata, configurazione TLS offload/trusted proxy/certUrl, account provisioning, mapping gruppi, permessi indipendenti e sessioni effimere. Non incorporare una console MeshCentral amministrativa come scorciatoia che aggiri OmniDesk. Verificare con due endpoint Windows su reti diverse prima di dichiarare funzionante.
+# MeshCentral — adapter M3
+
+Adapter WebSocket in `src/OmniDesk.Remote.MeshCentral`, endpoint autorizzati e audit in API, motore Docker opzionale con versione e lockfile. Vedi [M3](../../docs/milestone-3.md). Non ancora collaudato con agenti Windows reali. Audit del pacchetto upstream segnala node-forge senza fix: blocco alla release pubblica. Non avviare l’overlay su Internet finché il blocco non è risolto e il collaudo remoto non è concluso.

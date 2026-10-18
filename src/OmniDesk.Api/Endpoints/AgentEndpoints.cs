@@ -88,7 +88,9 @@ public static class AgentEndpoints
             var metrics = await db.DeviceMetrics.AsNoTracking().SingleOrDefaultAsync(x => x.DeviceId == id);
             var inventory = await db.DeviceInventories.AsNoTracking().SingleOrDefaultAsync(x => x.DeviceId == id);
             var revoked = await db.DeviceCredentials.AnyAsync(x => x.DeviceId == id && x.RevokedAt != null);
-            return Results.Ok(new { device.Id, device.Name, device.GroupId, revoked,
+            var capabilities = new List<string>();
+            foreach (var capability in Permissions.All) if (await p.Allows(c.User.UserId(), capability, id)) capabilities.Add(capability);
+            return Results.Ok(new { device.Id, device.Name, device.GroupId, revoked, capabilities,
                 lastSeen = metrics?.ReceivedAt, online = !revoked && metrics?.ReceivedAt > DateTimeOffset.UtcNow.AddMinutes(-3),
                 metrics = metrics is null ? null : JsonSerializer.Deserialize<MetricsRequest>(metrics.Payload),
                 inventoryAt = inventory?.ReceivedAt, inventory = inventory is null ? null : JsonSerializer.Deserialize<InventoryRequest>(inventory.Payload) });

@@ -46,9 +46,16 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
     public DbSet<DeviceAssertion> DeviceAssertions => Set<DeviceAssertion>();
     public DbSet<DeviceMetrics> DeviceMetrics => Set<DeviceMetrics>();
     public DbSet<DeviceInventory> DeviceInventories => Set<DeviceInventory>();
+    public DbSet<MeshDeviceMapping> MeshDeviceMappings => Set<MeshDeviceMapping>();
+    public DbSet<RemoteSession> RemoteSessions => Set<RemoteSession>();
     protected override void OnModelCreating(ModelBuilder b)
     {
         base.OnModelCreating(b);
+        b.Entity<MeshDeviceMapping>().HasKey(x => x.DeviceId);
+        b.Entity<MeshDeviceMapping>().HasIndex(x => x.NodeId).IsUnique();
+        b.Entity<MeshDeviceMapping>().HasOne<Device>().WithOne().HasForeignKey<MeshDeviceMapping>(x => x.DeviceId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<RemoteSession>().HasOne<Device>().WithMany().HasForeignKey(x => x.DeviceId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<RemoteSession>().HasIndex(x => new { x.DeviceId, x.CreatedAt });
         b.Entity<EnrollmentToken>().HasIndex(x => x.TokenHash).IsUnique();
         b.Entity<EnrollmentToken>().HasOne<DeviceGroup>().WithMany().HasForeignKey(x => x.GroupId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<DeviceCredential>().HasKey(x => x.DeviceId);

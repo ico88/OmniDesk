@@ -1,0 +1,25 @@
+{
+    email {$ACME_EMAIL}
+    acme_ca https://acme-v02.api.letsencrypt.org/directory
+}
+{$OMNIDESK_DOMAIN} {
+    encode zstd gzip
+    header {
+        Strict-Transport-Security "max-age=31536000"
+        X-Content-Type-Options nosniff
+        Referrer-Policy no-referrer
+        X-Frame-Options DENY
+        Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+    }
+    handle /api/* {
+        reverse_proxy api:8080
+    }
+    handle {
+        reverse_proxy dashboard:8080
+    }
+}
+{$MESH_DOMAIN} {
+    header Referrer-Policy no-referrer
+    header X-Content-Type-Options nosniff
+    reverse_proxy meshcentral:8081
+}

@@ -13,6 +13,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OmniDesk.Contracts", "src\O
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OmniDesk.Agent.Windows", "src\OmniDesk.Agent.Windows\OmniDesk.Agent.Windows.csproj", "{120A7D8C-C315-4ACC-A5BF-8E78FA57FDE1}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OmniDesk.Remote.MeshCentral", "src\OmniDesk.Remote.MeshCentral\OmniDesk.Remote.MeshCentral.csproj", "{790D66E6-A003-48DF-8068-1C8F8B597D58}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -71,6 +73,18 @@ Global
 		{120A7D8C-C315-4ACC-A5BF-8E78FA57FDE1}.Release|x64.Build.0 = Release|Any CPU
 		{120A7D8C-C315-4ACC-A5BF-8E78FA57FDE1}.Release|x86.ActiveCfg = Release|Any CPU
 		{120A7D8C-C315-4ACC-A5BF-8E78FA57FDE1}.Release|x86.Build.0 = Release|Any CPU
+		{790D66E6-A003-48DF-8068-1C8F8B597D58}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{790D66E6-A003-48DF-8068-1C8F8B597D58}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{790D66E6-A003-48DF-8068-1C8F8B597D58}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{790D66E6-A003-48DF-8068-1C8F8B597D58}.Debug|x64.Build.0 = Debug|Any CPU
+		{790D66E6-A003-48DF-8068-1C8F8B597D58}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{790D66E6-A003-48DF-8068-1C8F8B597D58}.Debug|x86.Build.0 = Debug|Any CPU
+		{790D66E6-A003-48DF-8068-1C8F8B597D58}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{790D66E6-A003-48DF-8068-1C8F8B597D58}.Release|Any CPU.Build.0 = Release|Any CPU
+		{790D66E6-A003-48DF-8068-1C8F8B597D58}.Release|x64.ActiveCfg = Release|Any CPU
+		{790D66E6-A003-48DF-8068-1C8F8B597D58}.Release|x64.Build.0 = Release|Any CPU
+		{790D66E6-A003-48DF-8068-1C8F8B597D58}.Release|x86.ActiveCfg = Release|Any CPU
+		{790D66E6-A003-48DF-8068-1C8F8B597D58}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -78,5 +92,6 @@ Global
 	GlobalSection(NestedProjects) = preSolution
 		{20E24B39-0F56-4A7D-99E9-A7625A72B82C} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{120A7D8C-C315-4ACC-A5BF-8E78FA57FDE1} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+		{790D66E6-A003-48DF-8068-1C8F8B597D58} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 	EndGlobalSection
 EndGlobal

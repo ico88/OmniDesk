@@ -9,6 +9,7 @@ using Npgsql;
 using OmniDesk.Api.Data;
 using OmniDesk.Api.Endpoints;
 using OmniDesk.Api.Security;
+using OmniDesk.Remote.MeshCentral;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.WebHost.ConfigureKestrel(o => o.Limits.MaxRequestBodySize = 2 * 1024 * 1024);
@@ -51,6 +52,7 @@ var keysPath = builder.Configuration["DataProtection:Path"];
 if (!string.IsNullOrEmpty(keysPath))
     builder.Services.AddDataProtection().SetApplicationName("OmniDesk").PersistKeysToFileSystem(new DirectoryInfo(keysPath));
 builder.Services.AddScoped<PermissionService>();
+builder.Services.AddSingleton<IMeshCentralClient>(new MeshCentralClient(new MeshCentralOptions(builder.Configuration["MeshCentral:Origin"], builder.Configuration["MeshCentral:Username"], builder.Configuration["MeshCentral:PasswordFile"])));
 builder.Services.AddAuthentication().AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, DeviceAuthentication>(DeviceAuthentication.SchemeName, _ => {});
 builder.Services.AddHostedService<AssertionCleanup>();
 builder.Services.AddAuthorization();
@@ -126,5 +128,6 @@ app.MapGet("/api/health/ready", async (AppDbContext db) => {
 app.MapAuthEndpoints();
 app.MapManagementEndpoints();
 app.MapAgentEndpoints();
+app.MapRemoteEndpoints();
 app.Run();
 public partial class Program { }

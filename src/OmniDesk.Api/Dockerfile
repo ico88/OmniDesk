@@ -1,10 +1,12 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /build
+COPY src/OmniDesk.Remote.MeshCentral/OmniDesk.Remote.MeshCentral.csproj src/OmniDesk.Remote.MeshCentral/
 COPY src/OmniDesk.Contracts/OmniDesk.Contracts.csproj src/OmniDesk.Contracts/
 COPY src/OmniDesk.Api/OmniDesk.Api.csproj src/OmniDesk.Api/
 RUN dotnet restore src/OmniDesk.Api/OmniDesk.Api.csproj
 COPY src/OmniDesk.Api/ src/OmniDesk.Api/
 COPY src/OmniDesk.Contracts/ src/OmniDesk.Contracts/
+COPY src/OmniDesk.Remote.MeshCentral/ src/OmniDesk.Remote.MeshCentral/
 RUN dotnet publish src/OmniDesk.Api/OmniDesk.Api.csproj -c Release --no-restore -o /out
 FROM mcr.microsoft.com/dotnet/aspnet:10.0
 WORKDIR /app
