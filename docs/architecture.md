@@ -54,3 +54,25 @@ flowchart LR
 Ogni ticket avrà una sede e almeno un dispositivo; richieste incomplete rimarranno intake. Sedi e allarmi persistenti sono dipendenze future, non funzionalità già presenti. Il permesso sul ticket non concede capacità RMM: ogni azione esplicita ricontrolla la capacità sul dispositivo scelto. Automazioni e AI non eseguono comandi non autorizzati. Eventi versionati, outbox/inbox e worker con lease separano operazioni interattive e asincrone senza introdurre obbligatoriamente un broker o microservizi.
 
 Specifiche: [Service Desk](service-desk.md), [schema proposto](service-desk-data-model.md), [fasi e dipendenze](roadmap.md#percorso-futuro-omnidesk-service-desk). Nessun nuovo deployment o codice viene introdotto da questa progettazione.
+
+## Estensione Windows proposta: Agent e Tray distinti
+
+[Specifica tecnica Agent/Tray](windows-agent-tray.md): servizio .NET automatico indipendente dal logon e processo Tray non elevato per ogni sessione utente, installati da un unico MSI per-machine futuro. La console IT Windows esistente è un'altra applicazione e non assume il ruolo della Tray.
+
+```mermaid
+flowchart LR
+ MSI[MSI unico futuro - installazione elevata] --> Agent[OmniDesk Agent - servizio Windows]
+ MSI --> Tray[OmniDesk Tray - sessione utente non elevata]
+ Tray -->|Named pipe locale con ACL e validazione| Agent
+ Agent -->|HTTPS e identità dispositivo| Backend[Backend RMM e futuro Service Desk]
+ Tray --> Capture[Screenshot locale solo con consenso esplicito]
+ Backend --> Auth[Permessi IT per dispositivo e capacità]
+ Auth --> Remote[Adapter controllo remoto]
+ Backend --> Consent[Consenso remoto legato a sessione e logon]
+```
+
+Il servizio possiede credenziali protette da ACL/DPAPI o futuro Certificate Store; la Tray riceve solo operazioni IPC allowlist e non può arrestare, modificare o disinstallare il servizio. Recovery SCM, heartbeat/offline con audit, dismissione elevata e revoca server sono requisiti da implementare/collaudare. Nessuna protezione assoluta contro amministratori locali o accesso fisico privilegiato è promessa.
+
+Richieste assistenza associate dal server al dispositivo dell'agente; lettura ticket vincolata anche all'utente verificato. Named pipe locale per logon con controllo dell'identità effettiva, protezione da server contraffatti e limiti sui messaggi, senza proxy privilegiato generico. Screenshot acquisiti nella sessione utente dopo anteprima/conferma. L'autorizzazione IT e il consenso utente remoto sono controlli distinti, entrambi correlati alla sessione; la chiusura della Tray non arresta il servizio né abilita automaticamente accesso non presidiato.
+
+Il MSI attuale installa solo l'Agent. Questa estensione non cambia codice, installer, porte o milestone corrente. Sequenza e gate: [percorso Windows WT](roadmap.md#percorso-futuro-windows-agent-e-tray).

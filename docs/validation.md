@@ -105,3 +105,7 @@ Caricamento configurazione vincolato a owner SYSTEM/Administrators, ACL senza al
 ## Progettazione Service Desk
 
 Aggiornamento esclusivamente documentale: specifiche, confini architetturali, schema logico PostgreSQL e fasi SD0–SD5. Nessun codice, migrazione, endpoint, dipendenza software o configurazione operativa Service Desk introdotto. Controlli su diff, riferimenti locali e distinzione proposto/implementato; nessun test funzionale Service Desk eseguibile. Le verifiche CI del codice precedente restano quelle riportate sopra; non equivalgono a un collaudo del modulo futuro.
+
+## Progettazione Agent/Tray Windows
+
+Modifica esclusivamente documentale: servizio e UI separati, recovery/ACL/credenziali, heartbeat e anomalie, protocollo named pipe, ticket/screenshot, autorizzazione e consenso remoto, MSI unico futuro e dismissione autorizzata. Diff e link locali verificati. Nessun codice, installer o servizio modificato; nessuna nuova prova runtime, installazione MSI o attestazione di sicurezza Windows. I criteri WT sono test futuri e non risultati CI esistenti.

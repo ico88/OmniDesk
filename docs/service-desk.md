@@ -71,3 +71,9 @@ Schema dettagliato: [modello dati proposto](service-desk-data-model.md). Ordine 
 ## Criteri di verifica futuri
 
 Non sono test eseguiti: isolamento sede/richiedente/team; ticket visibile senza privilegi RMM; nessuna fuga di note interne tramite ricerca/export/email/allegati; vincolo almeno un dispositivo e promozione intake concorrente; conflitti ETag; deduplicazione email/allarmi; replay agente; quarantena/download; calendari DST, pause, riaperture ed escalation una sola volta dopo crash; audit senza bearer; backup/restore DB/blob; prompt injection incapace di attivare comandi. A questi si aggiungono test API PostgreSQL, frontend, browser portale e integrazioni reali dei connettori prima di dichiararli operativi.
+
+## Ingresso Windows tramite Tray — estensione proposta
+
+La funzione utente “Richiedi assistenza” appartiene a **OmniDesk Tray**, processo non elevato distinto dal servizio Agent. La Tray comunica su named pipe locale con ACL per logon e validazione; il servizio associa la richiesta al proprio dispositivo, il server verifica sede e identità umana. Su computer condivisi la chiave macchina non permette di leggere ticket di altri utenti. Screenshot acquisiti dalla Tray soltanto dopo scelta, anteprima e consenso esplicito, poi sottoposti alle policy allegati. Nessuna operazione IPC consente arresto servizio o comandi arbitrari.
+
+Il futuro MSI unico installerà entrambi i componenti; il MSI attuale contiene solo Agent. Vedi [specifica Windows e consenso remoto](windows-agent-tray.md) e [dipendenze WT/SD](roadmap.md#percorso-futuro-windows-agent-e-tray). Questi flussi sono progettati, non implementati.

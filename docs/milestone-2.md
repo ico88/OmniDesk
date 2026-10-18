@@ -35,3 +35,7 @@ Fonti: [Windows Service .NET](https://learn.microsoft.com/en-us/dotnet/core/exte
 Orologi server/device da sincronizzare: tolleranza asserzioni dieci secondi. Un 401 richiede verifica clock/revoca e riavvio controllato del worker; non implica sempre necessità di nuovo enrollment. MSI versione 0.5.0 per distinguere questo avanzamento dal primo 0.2.0.
 
 Hardening identità locale: Load rifiuta file/directory reparse point, proprietari diversi da SYSTEM/Administrators e ACL Allow per altri SID. Le scritture di identità, script e ricevute usano file temporanei univoci CreateNew, owner/DACL espliciti e sostituzione atomica. Evita di affidarsi a cartelle/file precreati da utenti non privilegiati. Una configurazione legacy con ACL/owner diversi viene rifiutata: verificare il server/device e correggere i permessi con amministratore durante il collaudo upgrade, senza concedere fiducia automaticamente. Test ACL su directory temporanea del runner Windows; nessun servizio di sistema modificato. MSI 0.5.1 distingue questa correzione dalla 0.5.0.
+
+## Evoluzione documentale successiva, non parte dell'implementazione M2
+
+La [specifica Agent/Tray](windows-agent-tray.md) propone due componenti con privilegi separati e un unico MSI futuro: servizio indipendente dal logon, Tray non elevata, pipe locale protetta, recovery, dismissione/revoca e consenso remoto. Non modifica il pacchetto 0.5.1, che resta Agent-only; installazione, ACL servizio, recovery e lifecycle richiedono i nuovi collaudi WT e quelli M2 già aperti.

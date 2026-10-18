@@ -22,3 +22,17 @@ Gate produzione: revisione minacce, pen test autorizzazione/CSRF/enrollment, bui
 | SD5 — conoscenza avanzata e AI opzionale | Ricerca autorizzata, KB e storico avanzati; riepiloghi e bozze AI opt-in, eventuali approvazioni umane specifiche per future azioni | SD1–SD4 stabilizzati, policy dati/provider/budget e valutazioni prompt injection. AI senza credenziali o accesso diretto ai comandi; produzione subordinata a restore, carico e sicurezza |
 
 Le fasi non hanno date promesse. KB di base e storico non dipendono dall'AI. L'attivazione email, antivirus o provider AI richiederà configurazione operativa separata: nessun servizio esterno è stato collegato da questa documentazione. I test indicati nelle specifiche sono criteri futuri, non risultati già ottenuti.
+
+## Percorso futuro Windows Agent e Tray
+
+**Solo pianificato.** Non modifica M1–M5 né avvia lo sviluppo Service Desk. [Specifica tecnica](windows-agent-tray.md). Il MSI attuale resta Agent-only, unsigned; la Tray è distinta dalla console IT WebView2.
+
+| Fase | Consegna proposta | Dipendenze e criteri di accettazione |
+| --- | --- | --- |
+| WT0 — contratti e autorizzazione | Threat model IPC, matrice privilegi, identità utente/device, flusso consenso remoto e dismissione | Baseline Agent/Identity/RMM; stabilire versioni Windows supportate, service SID, payload e migrazioni. Nessuna fiducia nel solo SID dichiarato o ticket visibile |
+| WT1 — lifecycle servizio | ACL servizio/binari/credenziali, Service Recovery, heartbeat di salute e audit anomalie; revoca e procedura uninstall elevata | WT0 e gate install/upgrade M2. Test account standard, crash/riavvio, no login, offline e manutenzione. Allarmi server durevoli dipendono dal motore futuro SD4 |
+| WT2 — Tray e pipe | UI non elevata per logon, stato reale connessione, named pipe locale autenticata e metodi limitati; MSI unico Agent+Tray | WT0–WT1; test pipe squatting, ACL, input ostile, sessioni RDP, logoff e Tray chiusa con servizio attivo; firma MSI/binari e install/repair/upgrade/rollback/uninstall |
+| WT3 — assistenza e screenshot | Apertura ticket dal device, elenco ticket propri, pairing/login utente e allegati con anteprima/consenso | WT2 e SD0–SD3 per sedi, ticket, portale, intake macchina e allegati. Prima di tali dipendenze non dichiarare operativo il pulsante. Nessuna cattura background o cross-sessione |
+| WT4 — consenso remoto end-to-end | Grant breve per device/capacità/logon, indicatore/ritiro consenso, chiusura tunnel e policy unattended separata disabilitata di default | WT2 e gate motore reale M3; WT3 solo per ingresso dal ticket. Test revoca live, permesso perso, timeout/Tray assente, multi-sessione e reti NAT; nessuna escalation privilegi tramite IPC |
+
+WT3 e WT4 hanno dipendenze diverse: assistenza remota dalla console non deve attendere l'intero Service Desk; ticket e screenshot richiedono invece i servizi pertinenti. Nessuna nuova attestazione di protezione anti-admin o collaudo Windows deriva dall'aggiornamento documentale.
