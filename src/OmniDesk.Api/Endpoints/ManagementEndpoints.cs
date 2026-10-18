@@ -7,6 +7,7 @@ using OmniDesk.Api.Security;
 namespace OmniDesk.Api.Endpoints;
 public sealed record BrandingRequest(string Name, string LogoUrl, string PrimaryColor, string Theme);
 public sealed record CreateUserRequest(string Email, string Password, string? Role);
+public sealed record CreateRoleRequest(string Name, string[] Permissions);
 public sealed record GrantRequest(string UserId, string Role, Guid? GroupId, Guid? DeviceId);
 public static class ManagementEndpoints
 {
@@ -31,13 +32,30 @@ public static class ManagementEndpoints
             var p = ctx.HttpContext.RequestServices.GetRequiredService<PermissionService>();
             return await p.Allows(ctx.HttpContext.User.UserId(), "administration") ? await next(ctx) : Results.Forbid();
         });
+        admin.MapGet("/roles", async (AppDbContext db) => {
+            var roles = await db.Roles.AsNoTracking().ToListAsync();
+            var permissions = await db.RolePermissions.AsNoTracking().ToListAsync();
+            return Results.Ok(roles.Select(r => new { r.Id, r.Name, permissions = permissions.Where(p => p.RoleId == r.Id).Select(p => p.Permission) }));
+        });
+        admin.MapPost("/roles", async (CreateRoleRequest r, HttpContext c, AppDbContext db, RoleManager<IdentityRole> roles) => {
+            if (string.IsNullOrWhiteSpace(r.Name) || r.Name.Length > 80 || r.Permissions is null || r.Permissions.Length == 0 ||
+                r.Permissions.Any(p => !Permissions.All.Contains(p))) return Results.BadRequest();
+            await using var tx = await db.Database.BeginTransactionAsync();
+            var role = new IdentityRole(r.Name.Trim());
+            var result = await roles.CreateAsync(role);
+            if (!result.Succeeded) return Results.BadRequest(new { errors = result.Errors.Select(x => x.Code) });
+            db.RolePermissions.AddRange(r.Permissions.Distinct().Select(p => new RolePermission { RoleId = role.Id, Permission = p }));
+            db.AuditEvents.Add(Event(c, "role.create", role.Id));
+            await db.SaveChangesAsync(); await tx.CommitAsync();
+            return Results.Created($"/api/admin/roles/{role.Id}", new { role.Id, role.Name });
+        });
         admin.MapGet("/users", async (AppDbContext db) => {
             var users = await db.Users.AsNoTracking().Select(x => new { x.Id, x.Email }).ToListAsync();
-            var roles = await db.UserRoles.AsNoTracking().ToListAsync();
-            return Results.Ok(users.Select(u => new { u.Id, u.Email, roles = roles.Where(r => r.UserId == u.Id).Select(r => r.RoleId) }));
+            var roles = await (from ur in db.UserRoles join role in db.Roles on ur.RoleId equals role.Id select new { ur.UserId, role.Name }).ToListAsync();
+            return Results.Ok(users.Select(u => new { u.Id, u.Email, roles = roles.Where(r => r.UserId == u.Id).Select(r => r.Name) }));
         });
         admin.MapPost("/users", async (CreateUserRequest r, HttpContext c, AppDbContext db, UserManager<AppUser> users) => {
-            if ((r.Role is not null && !Permissions.Roles.Contains(r.Role)) || string.IsNullOrWhiteSpace(r.Email) || r.Email.Length > 254 || string.IsNullOrEmpty(r.Password) || r.Password.Length > 1024) return Results.BadRequest();
+            if ((r.Role is not null && !await db.Roles.AnyAsync(x => x.Name == r.Role)) || string.IsNullOrWhiteSpace(r.Email) || r.Email.Length > 254 || string.IsNullOrEmpty(r.Password) || r.Password.Length > 1024) return Results.BadRequest();
             await using var tx = await db.Database.BeginTransactionAsync();
             var user = new AppUser { UserName = r.Email, Email = r.Email };
             var result = await users.CreateAsync(user, r.Password);
@@ -53,12 +71,13 @@ public static class ManagementEndpoints
         });
         admin.MapGet("/grants", async (AppDbContext db) => Results.Ok(await db.ScopeGrants.AsNoTracking().ToListAsync()));
         admin.MapPost("/grants", async (GrantRequest r, HttpContext c, AppDbContext db) => {
-            if (!Permissions.Roles.Contains(r.Role) || (r.GroupId is null) == (r.DeviceId is null)) return Results.BadRequest();
+            var role = await db.Roles.SingleOrDefaultAsync(x => x.Name == r.Role);
+            if (role is null || (r.GroupId is null) == (r.DeviceId is null)) return Results.BadRequest();
             if (!await db.Users.AnyAsync(x => x.Id == r.UserId) ||
                 (r.GroupId is not null && !await db.DeviceGroups.AnyAsync(x => x.Id == r.GroupId)) ||
                 (r.DeviceId is not null && !await db.Devices.AnyAsync(x => x.Id == r.DeviceId))) return Results.BadRequest();
-            if (await db.ScopeGrants.AnyAsync(x => x.UserId == r.UserId && x.RoleId == r.Role && x.GroupId == r.GroupId && x.DeviceId == r.DeviceId)) return Results.Conflict();
-            var grant = new ScopeGrant { UserId = r.UserId, RoleId = r.Role, GroupId = r.GroupId, DeviceId = r.DeviceId };
+            if (await db.ScopeGrants.AnyAsync(x => x.UserId == r.UserId && x.RoleId == role.Id && x.GroupId == r.GroupId && x.DeviceId == r.DeviceId)) return Results.Conflict();
+            var grant = new ScopeGrant { UserId = r.UserId, RoleId = role.Id, GroupId = r.GroupId, DeviceId = r.DeviceId };
             db.ScopeGrants.Add(grant); db.AuditEvents.Add(Event(c, "grant.create", grant.Id.ToString()));
             try { await db.SaveChangesAsync(); }
             catch (DbUpdateException e) when (e.InnerException is Npgsql.PostgresException { SqlState: "23505" }) { return Results.Conflict(); }

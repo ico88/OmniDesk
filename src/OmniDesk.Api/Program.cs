@@ -2,6 +2,7 @@ using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using OmniDesk.Api.Data;
@@ -9,6 +10,7 @@ using OmniDesk.Api.Endpoints;
 using OmniDesk.Api.Security;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Logging.AddFilter("Microsoft.EntityFrameworkCore.Database.Command", LogLevel.Warning);
 var connection = builder.Configuration.GetConnectionString("Database");
 if (string.IsNullOrWhiteSpace(connection))
 {
@@ -48,6 +50,13 @@ if (!string.IsNullOrEmpty(keysPath))
     builder.Services.AddDataProtection().SetApplicationName("OmniDesk").PersistKeysToFileSystem(new DirectoryInfo(keysPath));
 builder.Services.AddScoped<PermissionService>();
 builder.Services.AddAuthorization();
+var trustedProxyNetwork = builder.Configuration["Proxy:Network"];
+if (!string.IsNullOrEmpty(trustedProxyNetwork))
+    builder.Services.Configure<ForwardedHeadersOptions>(o => {
+        o.ForwardedHeaders = ForwardedHeaders.XForwardedProto;
+        o.ForwardLimit = 1;
+        o.KnownIPNetworks.Add(System.Net.IPNetwork.Parse(trustedProxyNetwork));
+    });
 builder.Services.AddRateLimiter(o => {
     o.RejectionStatusCode = 429;
     o.AddPolicy("login", context => RateLimitPartition.GetFixedWindowLimiter(
@@ -91,6 +100,7 @@ app.Use(async (c, next) => {
     c.Response.Headers.XContentTypeOptions = "nosniff";
     await next();
 });
+if (!string.IsNullOrEmpty(trustedProxyNetwork)) app.UseForwardedHeaders();
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();

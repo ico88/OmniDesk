@@ -1,0 +1,15 @@
+name: build-and-test
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  milestone-one:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash -n setup.sh scripts/test.sh
+      - run: ./scripts/test.sh
+      - run: docker compose -f compose.test.yaml config --quiet
+      - run: docker build -t omnidesk-api:local -f src/OmniDesk.Api/Dockerfile .
+      - run: docker build -t omnidesk-dashboard:local -f src/dashboard/Dockerfile .
+      - run: ./scripts/smoke.sh

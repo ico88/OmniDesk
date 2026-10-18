@@ -14,8 +14,11 @@ JSON, stessa origine, cookie Identity. Errori 400/401/403/409/429; nessun redire
 | GET /api/branding | autenticato; name,logoUrl,primaryColor,theme |
 | PUT /api/branding | administration globale + CSRF; medesimi campi; logo URL HTTPS o vuoto, tema light/dark |
 | GET /api/admin/users | administration globale; id,email,roles |
-| POST /api/admin/users | administration globale + CSRF; {email,password,role} ruolo Viewer/Operator/Administrator; 201 |
-| POST /api/admin/grants | administration globale + CSRF; {userId,role,groupId?,deviceId?}; esattamente un ambito; 201 |
+| GET /api/admin/roles | administration globale; ruoli e permessi |
+| POST /api/admin/roles | administration globale + CSRF; {name,permissions[]}; permessi indipendenti, nomi univoci |
+| GET /api/admin/grants | administration globale; elenco concessioni |
+| POST /api/admin/users | administration globale + CSRF; {email,password,role} nome ruolo esistente oppure null (solo concessioni locali); 201 |
+| POST /api/admin/grants | administration globale + CSRF; {userId,role,groupId?,deviceId?}; ruolo esistente, esattamente un ambito; 201 |
 | DELETE /api/admin/grants/{id} | administration globale + CSRF; revoca; 204 |
 | GET /api/admin/audit | administration globale; ultimi 100 eventi decrescenti |
 

@@ -12,7 +12,7 @@ La migrazione EF Core iniziale è la fonte eseguibile dello schema.
 | Branding | Id=1, Name, LogoUrl, PrimaryColor, Theme; singleton persistente |
 | AuditEvents | bigint identity, At UTC, ActorId nullable testuale, Action, Target, Outcome; indice At; attore storico non cancellato con utente |
 
-Autorizzazione: grant globale tramite Identity UserRoles, grant locale tramite ScopeGrants. Viewer=view, Operator=view/remote.control/terminal/files/updates, Administrator=tutte inclusa administration. Solo amministratori globali gestiscono utenti, concessioni e branding. Gli utenti possono leggere solo dispositivi autorizzati. Nessun device demo preinserito.
+Autorizzazione: grant globale tramite Identity UserRoles, grant locale tramite ScopeGrants. Viewer=view, Operator=view/remote.control/terminal/files/updates, Administrator=tutte inclusa administration. Ruoli personalizzati creati tramite API combinano liberamente i sei permessi, senza implicazioni automatiche. Solo amministratori globali gestiscono utenti, concessioni e branding. Gli utenti possono leggere solo dispositivi autorizzati. Nessun device demo preinserito.
 
 Future migrazioni: EnrollmentTokens (hash, expires, used, revoked), DeviceCredentials (chiave pubblica, revoca, rotazione), Metrics (device/time, retention), HardwareInventory, SoftwareInventory, UpdateJobs, RemoteSessions, DashboardLayouts per utente. Telemetria ad alto volume separabile dal DB transazionale. TOTP secret da proteggere con cifratura applicativa e chiavi esterne prima di attivazione.
 

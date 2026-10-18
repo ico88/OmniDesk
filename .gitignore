@@ -10,3 +10,7 @@
 *.user
 *.log
 artifacts/
+*.dump
+*.pfx
+*.key
+*.pem

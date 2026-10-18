@@ -1,0 +1,35 @@
+name: omnidesk-tests
+services:
+  test-db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: omnidesk_tests
+      POSTGRES_USER: test
+      POSTGRES_HOST_AUTH_METHOD: trust
+    tmpfs:
+      - /var/lib/postgresql/data
+    networks: [tests]
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U test -d omnidesk_tests]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+  tests:
+    image: mcr.microsoft.com/dotnet/sdk:10.0
+    user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
+    working_dir: /work
+    environment:
+      HOME: /tmp
+      DOTNET_CLI_HOME: /tmp
+      NUGET_PACKAGES: /tmp/nuget
+      TEST_DATABASE: Host=test-db;Database=omnidesk_tests;Username=test
+      ConnectionStrings__Database: Host=test-db;Database=omnidesk_tests;Username=test
+    volumes:
+      - .:/work
+    command: [dotnet, test, tests/OmniDesk.Api.Tests, -c, Release, --logger, "console;verbosity=normal"]
+    depends_on:
+      test-db:
+        condition: service_healthy
+    networks: [tests]
+networks:
+  tests:

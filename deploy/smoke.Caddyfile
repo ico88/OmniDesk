@@ -1,0 +1,9 @@
+https://omnidesk.test {
+    tls internal
+    handle /api/* {
+        reverse_proxy api:8080
+    }
+    handle {
+        reverse_proxy dashboard:8080
+    }
+}

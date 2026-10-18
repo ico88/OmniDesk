@@ -1,0 +1,72 @@
+name: omnidesk-smoke
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: omnidesk
+      POSTGRES_USER: omnidesk
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    secrets: [db_password]
+    tmpfs: [/var/lib/postgresql/data]
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U omnidesk -d omnidesk]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+  migrate:
+    image: omnidesk-api:local
+    command: [--migrate]
+    secrets: [db_password]
+    depends_on:
+      db:
+        condition: service_healthy
+  bootstrap:
+    image: omnidesk-api:local
+    command: [--bootstrap]
+    environment:
+      Bootstrap__Email: admin@example.test
+    secrets: [db_password, bootstrap_password]
+    depends_on:
+      db:
+        condition: service_healthy
+  api:
+    image: omnidesk-api:local
+    environment:
+      DataProtection__Path: /keys
+      Proxy__Network: 172.29.85.0/24
+    secrets: [db_password]
+    tmpfs:
+      - /keys:uid=1654,gid=1654,mode=0700
+    depends_on:
+      db:
+        condition: service_healthy
+  dashboard:
+    image: omnidesk-dashboard:local
+  caddy:
+    image: caddy:2-alpine
+    volumes:
+      - ./deploy/smoke.Caddyfile:/etc/caddy/Caddyfile:ro
+    tmpfs: [/data, /config]
+    depends_on: [api, dashboard]
+    networks:
+      default:
+        aliases: [omnidesk.test]
+  probe:
+    image: node:22-alpine
+    working_dir: /work
+    volumes:
+      - ./scripts/smoke.mjs:/work/smoke.mjs:ro
+    secrets: [bootstrap_password]
+    command: [node, /work/smoke.mjs]
+    depends_on: [caddy]
+secrets:
+  db_password:
+    file: ${SMOKE_SECRETS:?Set isolated secret directory}/db_password
+  bootstrap_password:
+    file: ${SMOKE_SECRETS:?Set isolated secret directory}/bootstrap_password
+
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 172.29.85.0/24
