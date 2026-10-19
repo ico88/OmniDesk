@@ -165,6 +165,8 @@ try {
  assert.equal(membership.status(),204,'Administrator joined the notification fixture queue');
  const routing=await context.request.post('https://omnidesk.test/api/admin/support-routing',{headers:csrfHeaders,data:{siteId:null,category:'general',queueId:smokeQueue}});
  assert.equal(routing.status(),201,'Notification fixture routing created');
+ const slaPolicy=await context.request.post('https://omnidesk.test/api/admin/support-sla/policies',{headers:csrfHeaders,data:{name:'Browser smoke SLA',siteId:null,definition:{firstResponseMinutes:60,resolutionMinutes:480,calendar:{timeZoneId:'UTC',weeklyHours:{monday:[{start:'09:00',end:'17:00'}]},holidays:[]}}}});
+ assert.equal(slaPolicy.status(),201,'SLA policy fixture created');
  const chunk=(type,data)=>{const payload=Buffer.concat([Buffer.from(type),data]);let crc=0xffffffff;for(const b of payload){crc^=b;for(let i=0;i<8;i++)crc=(crc>>>1)^((crc&1)?0xedb88320:0);}const size=Buffer.alloc(4),sum=Buffer.alloc(4);size.writeUInt32BE(data.length);sum.writeUInt32BE((~crc)>>>0);return Buffer.concat([size,payload,sum]);};
  const pngHeader=Buffer.alloc(13);pngHeader.writeUInt32BE(1);pngHeader.writeUInt32BE(1,4);pngHeader[8]=8;pngHeader[9]=6;
  const screenshot=Buffer.concat([Buffer.from([137,80,78,71,13,10,26,10]),chunk('IHDR',pngHeader),chunk('IDAT',deflateSync(Buffer.from([0,128,128,128,255]))),chunk('IEND',Buffer.alloc(0))]).toString('base64');
@@ -233,6 +235,11 @@ try {
  const intake=await context.request.post('https://omnidesk.test/api/agent/support',{headers:{Authorization:'Bearer '+agentAssertion()},data:{requesterKey:'A'.repeat(64),ticket:{requestId:crypto.randomUUID(),subject:ticketSubject,description:'Isolated fixture, no live user data',screenshotBase64:screenshot,screenshotConsent:true}}});
  assert.equal(intake.status(),201,'Authenticated isolated ticket intake');
  const smokeTicketId=(await intake.json()).id;
+ const initialSlaResponse=await context.request.get(`https://omnidesk.test/api/support/${smokeTicketId}/sla`);
+ assert.equal(initialSlaResponse.status(),200,'Ticket SLA targets require authorized ticket view');
+ const initialSla=await initialSlaResponse.json();
+ assert.deepEqual(initialSla.map(target=>target.targetType).sort(),['first_response','resolution'],'Agent intake receives both SLA targets');
+ assert.equal(initialSla.every(target=>target.policyVersion===1&&target.completedAt===null),true,'Ticket preserves the published policy version');
  const participantRole='Smoke ticket reader '+randomBytes(5).toString('hex');
  const participantRoleResponse=await context.request.post('https://omnidesk.test/api/admin/roles',{headers:csrfHeaders,data:{name:participantRole,permissions:['tickets.view']}});
  assert.equal(participantRoleResponse.status(),201,'Read-only ticket collaborator role created');
@@ -268,6 +275,9 @@ try {
  assert.equal(supportRow.priority,'p3','New intake defaults to canonical P3');
  await page.getByRole('row').filter({has:page.getByRole('cell',{name:ticketSubject,exact:true})}).getByRole('button',{name:'Apri ticket',exact:true}).click();
  await page.locator('.ticket-interventions').waitFor();
+ const slaPanel=page.getByRole('region',{name:'Obiettivi SLA'});
+ await slaPanel.getByText('Primo riscontro',{exact:true}).waitFor();
+ await slaPanel.getByText('Risoluzione',{exact:true}).waitFor();
  assert.equal(await page.locator('.ticket-intervention-link').isVisible(),true,'Ticket manager receives the RMM correlation control');
  const participantsRegion=page.getByRole('region',{name:'Partecipanti al ticket'});
  await participantsRegion.getByLabel('Partecipante da aggiungere',{exact:true}).selectOption(participantUserId);
@@ -313,6 +323,9 @@ try {
  await page.getByLabel('Filtra stato richieste',{exact:true}).selectOption('');
  await page.getByRole('button',{name:'Invia risposta',exact:true}).click();
  await page.getByRole('row').filter({has:page.getByRole('cell',{name:ticketSubject,exact:true})}).getByRole('cell',{name:'Risolto',exact:true}).waitFor();
+ const completedSla=await (await context.request.get(`https://omnidesk.test/api/support/${smokeTicketId}/sla`)).json();
+ assert.equal(completedSla.every(target=>target.completedAt!==null),true,'First response and resolved state complete SLA targets');
+ await slaPanel.getByText('Completato',{exact:false}).first().waitFor();
  await page.getByRole('log').getByText('Risolto nel test isolato',{exact:true}).waitFor();
  await page.getByRole('button',{name:'Aggiorna messaggi',exact:true}).click();
  await page.getByRole('log').getByText('Risolto nel test isolato',{exact:true}).waitFor();
@@ -409,5 +422,5 @@ try {
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true,'No horizontal page overflow on mobile');
  await page.screenshot({path:'/previews/devices-mobile.png',fullPage:true});
  assert.deepEqual(errors,[],'No browser JavaScript exceptions');
- console.log('PASS: Chromium account/grant flows, favicon/shared brand mark, portal screenshot consent/chat/isolation/revocation, signed-heartbeat online badge, scoped ticket participants, ticket notifications and RMM intervention correlation, device management and viewer permissions');
+ console.log('PASS: Chromium account/grant flows, favicon/shared brand mark, portal screenshot consent/chat/isolation/revocation, signed-heartbeat online badge, scoped ticket participants, SLA target display/completion, ticket notifications and RMM intervention correlation, device management and viewer permissions');
 } finally {await browser.close();}

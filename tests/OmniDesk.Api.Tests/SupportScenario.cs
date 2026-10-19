@@ -170,6 +170,7 @@ public static class SupportScenario
         Auth(); Assert.Empty((await agent.GetFromJsonAsync<SupportTicketView[]>($"/api/agent/support/{other}"))!);
         Auth(); Assert.Single((await agent.GetFromJsonAsync<SupportTicketView[]>($"/api/agent/support/{owner}"))!);
         Assert.DoesNotContain((await scoped.GetFromJsonAsync<SupportTicketView[]>("/api/support"))!,t=>t.Id==ticket.Id);
+        Assert.Equal(HttpStatusCode.Forbidden, (await scoped.GetAsync($"/api/support/{ticket.Id}/sla")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden,(await scoped.GetAsync($"/api/support/{ticket.Id}/screenshot")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden,(await scoped.PutAsJsonAsync($"/api/support/{ticket.Id}",new SupportEdit(1,"resolved","Done"))).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden,(await scoped.PutAsJsonAsync("/api/support/bulk-queue",new { queueId=(Guid?)null,tickets=new[]{new{ticketId=ticket.Id,expectedVersion=1L}} })).StatusCode);
@@ -188,6 +189,10 @@ public static class SupportScenario
         Assert.Equal("p3",(await admin.GetFromJsonAsync<System.Text.Json.JsonElement[]>($"/api/support?deviceId={device}"))!.Single().GetProperty("priority").GetString());
         Assert.Equal(HttpStatusCode.Created,(await admin.PostAsJsonAsync("/api/admin/roles",new {name="Ticket technician",permissions=new[]{"tickets.view","tickets.manage"}})).StatusCode);
         Assert.Equal(HttpStatusCode.Created,(await admin.PostAsJsonAsync("/api/admin/grants",new {userId=scopedId,role="Ticket technician",groupId=group,deviceId=(Guid?)null})).StatusCode);
+        var slaRead = await scoped.GetAsync($"/api/support/{ticket.Id}/sla");
+        Assert.Equal(HttpStatusCode.OK, slaRead.StatusCode);
+        Assert.Equal("no-store", slaRead.Headers.CacheControl?.ToString());
+        Assert.Empty((await slaRead.Content.ReadFromJsonAsync<System.Text.Json.JsonElement[]>())!);
         Assert.Equal(HttpStatusCode.Conflict, (await admin.PostAsJsonAsync("/api/admin/support-queues", new { name = " rete " })).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await scoped.PostAsJsonAsync("/api/admin/support-queues", new { name = "No access" })).StatusCode);
         Assert.Contains((await scoped.GetFromJsonAsync<System.Text.Json.JsonElement[]>("/api/support/queues"))!, x => x.GetProperty("id").GetGuid() == queueId);
