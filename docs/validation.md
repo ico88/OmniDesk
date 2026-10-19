@@ -1314,8 +1314,13 @@ suite al database PostgreSQL temporaneo, non al database LAN.
 
 Verifica `./scripts/test.sh`: 64/64 xUnit/PostgreSQL e 5/5 Vitest; build
 TypeScript/Vite passata. `./scripts/smoke.sh --browser` passato su Compose
-isolato, incluso Chromium: account/grant, ticket, supporto, permessi Viewer e
-favicon coordinata; nessun deploy o test autenticato sul server LAN.
+isolato, incluso Chromium: account/grant, ticket, supporto, permessi Viewer,
+favicon e flusso portale autenticato. Il test browser crea l'account cliente,
+collega il dispositivo, verifica che l'invio resti disabilitato finché manca il
+consenso, invia un PNG, renderizza l'immagine, controlla risposta pubblica e
+assenza della nota interna, quindi revoca il link e verifica il 404 sullo
+screenshot. Lo stesso scenario controlla le notifiche e la console IT con i due
+ticket fixture; nessun deploy o test autenticato sul server LAN.
 `docker compose build api dashboard`, configurazione Compose standard/test e
 `git diff --check` passati. Il test del lockout verifica lo stato Identity
 persistito, evitando che il limite HTTP di 20 tentativi al minuto mascheri la
@@ -1352,7 +1357,17 @@ storage esterno, antivirus e retention non sono inclusi.
 `./scripts/test.sh` passato con 64/64 xUnit/PostgreSQL, build TypeScript/Vite e
 5/5 Vitest. `PortalScenario` verifica consenso assente, CSRF, PNG valido,
 idempotenza, lettura byte-for-byte, isolamento dell'altro account e revoca;
-Compose standard/test e `git diff --check` passati. `docker compose build api
-dashboard` passato. Immagini aggiornate solo localmente: nessun container,
-migrazione o dato LAN è stato avviato o aggiornato. Il portale non ha ancora un
-test browser autenticato dedicato né una verifica runtime sulla LAN.
+Chromium su Compose isolato verifica ora il flusso browser end-to-end descritto
+sopra. Compose standard/test e `git diff --check` passati.
+`docker compose build api dashboard` passato. Immagini aggiornate solo
+localmente: nessun container, migrazione o dato LAN è stato avviato o aggiornato.
+La verifica runtime sulla LAN resta aperta.
+
+Push del commit `cff9e0b842e054c028dd0a4a33f1da048e997852` sul branch
+`feature/windows-support-lan`: GitHub Actions [build-and-test
+39302068936](https://github.com/ico88/OmniDesk/actions/runs/39302068936) e
+[windows-agent-package
+39302068937](https://github.com/ico88/OmniDesk/actions/runs/39302068937) entrambi
+riusciti. Il runner Windows ha compilato Agent/Tray/MSI e superato installazione,
+recovery, disinstallazione e upgrade/repair/rollback; l'installer nativo è
+saltato come configurato. Nessun deploy sul server LAN.
