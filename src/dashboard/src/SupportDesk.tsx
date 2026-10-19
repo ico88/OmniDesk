@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from './api';
 import { Icon } from './Icon';
 
-type Ticket = { id:string; number:number; deviceId:string; siteId:string; deviceName:string|null; siteName:string|null; subject:string; description:string; state:string; priority:string; category:string; queueId:string|null; queueName:string|null; assigneeId:string|null; assigneeEmail:string|null; resolution:string|null; version:number; createdAt:string; hasScreenshot:boolean };
+type Ticket = { id:string; number:number; deviceId:string; siteId:string; deviceName:string|null; siteName:string|null; subject:string; description:string; state:string; priority:string; category:string; queueId:string|null; queueName:string|null; assigneeId:string|null; assigneeEmail:string|null; canManage:boolean; resolution:string|null; version:number; createdAt:string; hasScreenshot:boolean };
 type Assignee = { id:string; email:string };
 type Queue = { id:string; name:string };
 type Message = {id:number;kind:string;body:string;fromState:string|null;toState:string|null;createdAt:string;isImported:boolean};
@@ -14,6 +14,8 @@ const date=(value:string)=>new Date(value).toLocaleString('it-IT');
 export function SupportDesk({visibleDeviceIds,onOpenDevice,deviceId,sites=[]}:{visibleDeviceIds:string[];onOpenDevice:(id:string)=>Promise<void>;deviceId?:string;sites?:{id:string;name:string;isArchived?:boolean}[]}) {
   const [tickets,setTickets] = useState<Ticket[]>([]);
   const [queues,setQueues]=useState<Queue[]>([]);
+  const [selectedTicketIds,setSelectedTicketIds]=useState<string[]>([]);
+  const [bulkQueueId,setBulkQueueId]=useState('');
   const [error,setError] = useState('');
   const [busy,setBusy] = useState(false);
   const [selected,setSelected] = useState<Ticket|null>(null);
@@ -35,13 +37,19 @@ export function SupportDesk({visibleDeviceIds,onOpenDevice,deviceId,sites=[]}:{v
   const reply=useRef<HTMLTextAreaElement>(null);
   const preview=useRef<HTMLDialogElement>(null);
   const needsReply=(state==='resolved'||state==='closed')&&!selected?.resolution;
-  async function load() { const query=new URLSearchParams();if(filterState)query.set('state',filterState);if(search.trim())query.set('search',search.trim());if(deviceId)query.set('deviceId',deviceId);if(siteFilter)query.set('siteId',siteFilter);if(filterPriority)query.set('priority',filterPriority);if(filterCategory)query.set('category',filterCategory);if(filterQueue)query.set('queue',filterQueue);if(assigneeFilter.trim())query.set('assignee',assigneeFilter.trim());const rows=await api<Ticket[]>('/support?'+query.toString());setTickets(rows);setSelected(old=>old?rows.find(t=>t.id===old.id)??old:old); }
+  async function load() { const query=new URLSearchParams();if(filterState)query.set('state',filterState);if(search.trim())query.set('search',search.trim());if(deviceId)query.set('deviceId',deviceId);if(siteFilter)query.set('siteId',siteFilter);if(filterPriority)query.set('priority',filterPriority);if(filterCategory)query.set('category',filterCategory);if(filterQueue)query.set('queue',filterQueue);if(assigneeFilter.trim())query.set('assignee',assigneeFilter.trim());const rows=await api<Ticket[]>('/support?'+query.toString());setTickets(rows);setSelectedTicketIds([]);setSelected(old=>old?rows.find(t=>t.id===old.id)??old:old); }
   async function loadThread(ticket:Ticket,before?:number) {
     const data=await api<Thread>(`/support/${ticket.id}/messages${before?'?before='+before:''}`);
     if(before){setThread(old=>old?{...old,hasMore:data.hasMore,oldestId:data.oldestId,messages:[...data.messages,...old.messages]}:data);return;}
     setThread(data);setSelected(old=>old?.id===ticket.id?{...old,version:data.version,state:data.state,resolution:data.resolution}:old);setState(data.state);
   }
   async function loadAssignees(ticket:Ticket) { setAssignees(await api<Assignee[]>(`/support/${ticket.id}/assignees`)); }
+  async function assignQueueToSelected(queue:string) {
+    const selectedTickets=tickets.filter(t=>selectedTicketIds.includes(t.id)&&t.canManage);
+    if(!selectedTickets.length)return;
+    await api('/support/bulk-queue','PUT',{queueId:queue||null,tickets:selectedTickets.map(t=>({ticketId:t.id,expectedVersion:t.version}))});
+    setSelectedTicketIds([]);await load();
+  }
   async function work(action:()=>Promise<void>) {
     setBusy(true); setError('');
     try { await action(); } catch(e) { setError(e instanceof Error ? e.message : 'Operazione non riuscita'); }
@@ -63,8 +71,9 @@ export function SupportDesk({visibleDeviceIds,onOpenDevice,deviceId,sites=[]}:{v
       <button disabled={busy}><Icon name="search"/>Filtra</button>
       <button className="secondary" type="button" disabled={busy} onClick={()=>void work(load)}><Icon name="refresh"/>Aggiorna richieste</button>
     </form>
-    <div className="table-wrap"><table><thead><tr><th>Ticket</th><th>Data</th><th>Oggetto</th><th>Categoria</th><th>Coda</th><th>Stato</th><th>Priorità</th><th>Assegnatario</th><th>Dispositivo</th><th>Sede</th><th>Dettagli</th></tr></thead>
-      <tbody>{tickets.map(t=><tr key={t.id}><td>OD-{String(t.number).padStart(6,'0')}</td><td>{date(t.createdAt)}</td><td>{t.subject}</td><td>{categories[t.category]??t.category}</td><td>{t.queueName||'Senza coda'}</td><td><span className={`status-pill ${t.state==='resolved'||t.state==='closed'?'online':'offline'}`}>{labels[t.state]??t.state}</span></td><td><span className={`status-pill ${t.priority==='urgent'?'danger':t.priority==='high'?'offline':'online'}`}>{priorities[t.priority]??t.priority}</span></td><td>{t.assigneeEmail||'Non assegnato'}</td><td>{visibleDeviceIds.includes(t.deviceId)?<button className="device-link" title="Apri scheda dispositivo" disabled={busy} onClick={()=>void work(()=>onOpenDevice(t.deviceId))}><Icon name="devices" size={17}/>{t.deviceName||'Dispositivo non disponibile'}<Icon name="arrow" size={14}/></button>:<span className="device-name"><Icon name="devices" size={17}/>{t.deviceName||'Dispositivo non disponibile'}</span>}</td><td>{t.siteName||'Sede non disponibile'}</td><td><button disabled={busy} onClick={()=>{setSelected(t);setThread(null);setState(t.state);setResolution('');setPriority(t.priority);setQueueId(t.queueId??'');setAssigneeId(t.assigneeId??'');setAssignees([]);void work(async()=>{await Promise.all([loadThread(t),loadAssignees(t)]);});}}>Apri ticket</button></td></tr>)}</tbody></table></div>
+    {tickets.some(t=>t.canManage)&&<div className="conversation-toolbar"><span>{selectedTicketIds.length} ticket selezionati</span><label className="filter-field">Assegna coda<select aria-label="Coda assegnazione massiva" value={bulkQueueId} disabled={busy} onChange={e=>setBulkQueueId(e.target.value)}><option value="">Senza coda</option>{queues.map(q=><option key={q.id} value={q.id}>{q.name}</option>)}</select></label><button disabled={busy||!selectedTicketIds.length} onClick={()=>void work(()=>assignQueueToSelected(bulkQueueId))}>Applica coda ai selezionati</button></div>}
+    <div className="table-wrap"><table><thead><tr><th><input aria-label="Seleziona tutti i ticket gestibili" type="checkbox" checked={tickets.some(t=>t.canManage)&&tickets.filter(t=>t.canManage).every(t=>selectedTicketIds.includes(t.id))} onChange={e=>setSelectedTicketIds(e.target.checked?tickets.filter(t=>t.canManage).map(t=>t.id):[])} disabled={!tickets.some(t=>t.canManage)||busy}/></th><th>Ticket</th><th>Data</th><th>Oggetto</th><th>Categoria</th><th>Coda</th><th>Stato</th><th>Priorità</th><th>Assegnatario</th><th>Dispositivo</th><th>Sede</th><th>Dettagli</th></tr></thead>
+      <tbody>{tickets.map(t=><tr key={t.id}><td><input aria-label={`Seleziona OD-${String(t.number).padStart(6,'0')}`} type="checkbox" checked={selectedTicketIds.includes(t.id)} disabled={!t.canManage||busy} onChange={e=>setSelectedTicketIds(ids=>e.target.checked?[...ids,t.id]:ids.filter(id=>id!==t.id))}/></td><td>OD-{String(t.number).padStart(6,'0')}</td><td>{date(t.createdAt)}</td><td>{t.subject}</td><td>{categories[t.category]??t.category}</td><td>{t.queueName||'Senza coda'}</td><td><span className={`status-pill ${t.state==='resolved'||t.state==='closed'?'online':'offline'}`}>{labels[t.state]??t.state}</span></td><td><span className={`status-pill ${t.priority==='urgent'?'danger':t.priority==='high'?'offline':'online'}`}>{priorities[t.priority]??t.priority}</span></td><td>{t.assigneeEmail||'Non assegnato'}</td><td>{visibleDeviceIds.includes(t.deviceId)?<button className="device-link" title="Apri scheda dispositivo" disabled={busy} onClick={()=>void work(()=>onOpenDevice(t.deviceId))}><Icon name="devices" size={17}/>{t.deviceName||'Dispositivo non disponibile'}<Icon name="arrow" size={14}/></button>:<span className="device-name"><Icon name="devices" size={17}/>{t.deviceName||'Dispositivo non disponibile'}</span>}</td><td>{t.siteName||'Sede non disponibile'}</td><td><button disabled={busy} onClick={()=>{setSelected(t);setThread(null);setState(t.state);setResolution('');setPriority(t.priority);setQueueId(t.queueId??'');setAssigneeId(t.assigneeId??'');setAssignees([]);void work(async()=>{await Promise.all([loadThread(t),loadAssignees(t)]);});}}>Apri ticket</button></td></tr>)}</tbody></table></div>
     {!tickets.length&&<p>Nessuna richiesta corrisponde ai filtri o ai tuoi ambiti.</p>}
     {selected&&<section ref={panel} className="ticket-conversation" aria-label="Conversazione ticket">
       <div className="section-heading"><div><span className="eyebrow">CONVERSAZIONE · OD-{String(selected.number).padStart(6,'0')}</span><h3>{selected.subject}</h3><span className="device-name"><Icon name="devices" size={16}/>{selected.deviceName||'Dispositivo non disponibile'}</span></div><button className="secondary compact" type="button" disabled={busy} onClick={()=>{setSelected(null);setThread(null);setError('');}}><Icon name="close" size={15}/>Chiudi dettaglio</button></div>
