@@ -1071,3 +1071,24 @@ anonimo; il bundle HTTPS contiene «Rinnova sessione». Dopo il deploy i servizi
 sono running e sessioni/job attivi restano zero. Il test interattivo di
 riconnessione MeshCentral e la ripetizione del consenso sul PC pilota restano
 aperti.
+
+### Disconnessione desktop riutilizzabile e associazione multi-dispositivo ticket — sorgenti/test
+
+MeshCentral installato nel container LAN implementa `endDesktopMultiplex`: il
+server chiude i viewer desktop selezionati per identità proprietario e guest
+name, mantenendo il grant share distinto dalla revoca. L'adapter risolve tali
+valori dal record `deviceShares` usando il `publicid` conservato lato server e
+poi invia il comando; nessun ID Mesh è accettato dal client. La barra offre
+«Disconnetti operatore» con riconnessione manuale sul grant esistente e mantiene
+«Termina» per revocare il link. Verificato da build TypeScript/Vite e test API
+con adapter fake: autorizzazione negata al viewer, sessione resta attiva dopo la
+richiesta di disconnessione. Il comando MeshCentral reale non è stato ancora
+eseguito contro una sessione desktop interattiva; la chiusura usa protocollo
+interno della versione installata e richiede regressione dopo ogni upgrade.
+
+SD2 aggiunge migrazione con backfill del device primario, API link/unlink con
+permessi su ticket e dispositivo, versione concorrente, limite 10, lock,
+audit/outbox e UI ticket. Suite PostgreSQL isolata: 64/64 xUnit passati,
+includendo deny fuori ambito, link idempotente, rimozione del secondario e
+protezione del primario. Build dashboard e Vitest 5/5 passati. Nessuna migrazione
+o immagine è stata applicata al server LAN in questo incremento.

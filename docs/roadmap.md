@@ -331,6 +331,28 @@ build API e dashboard e Vitest passati. Deploy API LAN effettuato dopo backup
 verificato e migrazione applicata; readiness HTTPS/CA e rifiuto anonimo passati.
 Prova interattiva Processi/Servizi dal browser ancora da fare.
 
+### Sessione desktop — disconnessione riutilizzabile
+
+La barra distingue «Disconnetti operatore» da «Termina»: il primo invia a
+MeshCentral la chiusura degli stream desktop attivi per quel link e mantiene il
+grant temporaneo valido fino alla scadenza, quindi consente una riconnessione
+manuale. «Termina» revoca il link e impedisce nuovi accessi. L'endpoint server
+verifica l'utente proprietario o administration, `remote.control`, dispositivo,
+stato e policy prima di inviare l'azione. Il browser non riceve identità Mesh o
+credenziali. Build dashboard, Vitest 5/5 e API/PostgreSQL 64/64 passati. Resta
+da verificare il comando contro una sessione MeshCentral interattiva; nessun
+deploy LAN effettuato mentre sono presenti job update attivi.
+
+### SD2 — ticket associati a più dispositivi — sviluppo in verifica
+
+Il ticket conserva il dispositivo principale e supporta collegamenti espliciti
+ad altri dispositivi, con snapshot nome/sede, permessi `tickets.manage` su
+entrambi i lati, limite dieci, lock per dispositivo, versione attesa, audit e
+outbox. I ticket esistenti vengono migrati mantenendo il loro dispositivo
+primario. Build dashboard, Vitest 5/5 e API/PostgreSQL 64/64 passati. La
+migrazione non è applicata al server LAN e l'interazione browser non è ancora
+collaudata.
+
 
 ### SD1 — creazione manuale ticket dalla console — sorgenti e test verificati
 
