@@ -1553,5 +1553,7 @@ dalla UI. `git diff --check` passato.
 
 Nessuna migrazione o immagine è stata applicata al server LAN e nessun servizio
 live è stato riavviato. La migrazione e gli endpoint sono verificati sul database
-temporaneo; la CI del commit di questo incremento è ancora da avviare dopo il
-push. I test non attestano tempi reali di lavoro umano né runtime Windows/LAN.
+temporaneo; CI Linux `39322836205` passata su `c410f48`. Il gate Windows
+`39319355926` è ancora impegnato nella verifica upgrade/repair/rollback; il
+workflow Windows per `c410f48` è in coda. I test non attestano tempi reali di
+lavoro umano né runtime Windows/LAN.
