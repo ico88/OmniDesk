@@ -1632,3 +1632,23 @@ manifest SHA-256; questo ordinamento si basa sui blob immutabili (l'app non li
 cancella). Non è stato eseguito un backup o restore completo dei blob sul server.
 Nessun servizio LAN è stato riavviato o aggiornato; questa implementazione non è
 ancora pubblicata e non ha ancora esito CI sul nuovo commit.
+
+### SD1 follow-up — retry scansione e integrità restore blob — 2026-10-19
+
+L'operatore autorizzato con `tickets.manage` può riaccodare una scansione in
+stato terminale `scan_failed`; il server azzera tentativi, lease ed errore,
+registra audit e rimette il blob in quarantena. Lo stato `infected` e il download
+restano invariati. Il test PostgreSQL prova diniego al lettore scoped, retry
+autorizzato, reset a quarantena, nuova scansione pulita e accesso finale.
+
+Il verificatore backup ripristina il dump in PostgreSQL isolato e confronta ogni
+`SupportAttachments.StorageKey` con il relativo file nell'archivio; i checksum
+sono verificati prima del restore. Prova locale su dump PostgreSQL effimero:
+riferimenti validi accettati, blob mancante rifiutato. È un controllo DB/blob,
+non un avvio completo dell'API ripristinata.
+
+Verifiche follow-up: 82/82 test xUnit/PostgreSQL; build dashboard e 6/6 Vitest;
+backup verifier testato con PostgreSQL 17 temporaneo; `bash -n`, Compose standard,
+Compose smoke, Compose test e Compose backup-check config, `git diff --check`
+passati. Il codice follow-up non è ancora stato pubblicato né verificato in CI;
+nessun test o servizio LAN è stato interrotto.

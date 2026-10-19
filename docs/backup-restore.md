@@ -1,6 +1,6 @@
 # Backup e verifica ripristino
 
-Disponibili backup locale e prova di ripristino **del database** su PostgreSQL effimero. I nuovi backup includono anche i blob degli allegati e il relativo checksum. Non costituiscono ancora un disaster recovery completo: ripristino applicativo dei blob/chiavi Identity/CA, storage Mesh opzionale, cifratura dei backup, copia off-site, retention e tempi RPO/RTO restano da collaudare/configurare.
+Disponibili backup locale e prova di ripristino del database su PostgreSQL effimero con verifica incrociata dei riferimenti agli allegati. I nuovi backup includono anche i blob e i checksum. Non costituiscono ancora un disaster recovery completo: ripristino applicativo di blob/chiavi Identity/CA, storage Mesh opzionale, cifratura dei backup, copia off-site, retention e tempi RPO/RTO restano da collaudare/configurare.
 
 ## Backup dell'istanza standard
 
@@ -24,7 +24,7 @@ Il file `READY` è scritto solo a completamento riuscito; un dump parziale conse
 bash scripts/verify-backup.sh .backups/<directory-del-backup>
 ```
 
-Verifica checksum e importa il dump con `pg_restore --exit-on-error` in un container PostgreSQL 17 temporaneo: nome progetto univoco, rete disabilitata, nessuna porta host, dati su tmpfs e dump montato in sola lettura. Le password e i dati di produzione non vengono stampati; solo conteggi migrazioni/account/dispositivi. Il container viene rimosso alla fine. Non importa dati nel database di produzione e non avvia un'API sul database ripristinato.
+Verifica checksum e importa il dump con `pg_restore --exit-on-error` in un container PostgreSQL 17 temporaneo: nome progetto univoco, rete disabilitata, nessuna porta host, dati su tmpfs e dump montato in sola lettura. Per i backup con blob, interroga le chiavi dello snapshot ripristinato e verifica che ogni riga allegato punti a un file presente e con checksum valido nell'archivio. Le password e i dati di produzione non vengono stampati; solo conteggi migrazioni/account/dispositivi e chiavi opache degli allegati vengono confrontati localmente. Il container viene rimosso alla fine. Non importa dati nel database di produzione e non avvia un'API sul database ripristinato.
 
 ## Recupero completo — procedura da collaudare
 
