@@ -1409,4 +1409,13 @@ seleziona nella UI ticket e verifica il collegamento persistito. Compose smoke
 è isolato e rimosso al termine; nessuna istanza LAN è stata aggiornata. Le
 immagini locali riflettono questo sorgente, ma non sono state distribuite.
 `docker compose config -q`, Compose test config e `git diff --check` sono
-passati. CI sul commit di questo incremento ancora pendente.
+passati. A esecuzione CI completata, risultati registrati di seguito.
+
+CI GitHub Actions sul commit `c85c24f` conclusa con successo:
+[build-and-test 39310091486](https://github.com/ico88/OmniDesk/actions/runs/39310091486)
+ha completato build e smoke Linux; [windows-agent-package
+39310091476](https://github.com/ico88/OmniDesk/actions/runs/39310091476) ha
+completato publish Console Windows, build Agent/Tray/MSI, installazione,
+recovery, disinstallazione e verifica upgrade/repair/rollback contro la
+baseline storica. L'MSI è stato collaudato sul runner isolato, non sul PC LAN.
+Nessun deploy, riavvio o mutazione del server LAN.
