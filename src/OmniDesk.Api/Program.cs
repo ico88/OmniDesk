@@ -60,6 +60,7 @@ builder.Services.AddSingleton<IMeshProvisioningClient>(sp => (IMeshProvisioningC
 builder.Services.AddAuthentication().AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, DeviceAuthentication>(DeviceAuthentication.SchemeName, _ => {});
 builder.Services.AddHostedService<AssertionCleanup>();
 builder.Services.AddHostedService<RemoteSessionGuard>();
+builder.Services.AddHostedService<RemoteProvisioningGuard>();
 builder.Services.AddAuthorization();
 var trustedProxyNetwork = builder.Configuration["Proxy:Network"];
 if (!string.IsNullOrEmpty(trustedProxyNetwork))

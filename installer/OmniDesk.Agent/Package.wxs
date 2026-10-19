@@ -17,8 +17,8 @@
           <RegistryValue Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\Run" Name="OmniDeskTray" Value="&quot;[#TrayExe]&quot;" Type="string" />
         </Component>
         <Component Id="RemoteLicenses" Guid="714F8FE9-F2C0-44D5-8914-2708BDB3E454">
-          <File Source="..\licenses\Apache-2.0.txt" KeyPath="yes" />
-          <File Source="..\licenses\MeshAgent-NOTICE.txt" />
+          <File Source="$(var.LicenseDir)\Apache-2.0.txt" KeyPath="yes" />
+          <File Source="$(var.LicenseDir)\MeshAgent-NOTICE.txt" />
         </Component>
         <Directory Id="REMOTEFOLDER" Name="Remote">
           <Component Id="RemoteDataAcl" Guid="B31584A9-1513-44D3-B37E-55EF575FE6C4">

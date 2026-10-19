@@ -7,6 +7,8 @@ public interface IMeshProvisioningClient
 {
     bool Configured { get; }
     Task<MeshAgentProvisioning> Provision(Guid deviceId, CancellationToken ct);
+    Task CheckReady(CancellationToken ct);
+    Task RemoveGroup(string meshId,CancellationToken ct);
     Task<bool> ContainsNode(string meshId, string nodeId, CancellationToken ct);
 }
 public sealed partial class MeshCentralClient : IMeshProvisioningClient
@@ -39,6 +41,18 @@ public sealed partial class MeshCentralClient : IMeshProvisioningClient
         var origin = new UriBuilder(options.Origin!) { Scheme = "wss", Path = "/agent.ashx" }.Uri;
         var settings = $"MeshName={name}\r\nMeshType=2\r\nMeshID=0x{Convert.ToHexString(mesh)}\r\nServerID={Convert.ToHexString(certificate)}\r\nMeshServer={origin.AbsoluteUri}\r\nmeshServiceName=OmniDeskRemote\r\ndisableUpdate=1\r\nTag={deviceId:N}\r\n";
         return new(meshId,settings);
+    }
+    public async Task CheckReady(CancellationToken ct)
+    {
+        var reply=await Command(new(){["action"]="meshes"},ct);
+        if(!reply.TryGetProperty("meshes",out var groups)||groups.ValueKind!=JsonValueKind.Array)throw new InvalidOperationException("Engine control unavailable");
+    }
+    public async Task RemoveGroup(string meshId,CancellationToken ct)
+    {
+        var groups=await Command(new(){["action"]="meshes"},ct);
+        if(!groups.GetProperty("meshes").EnumerateArray().Any(g=>g.GetProperty("_id").GetString()==meshId))return;
+        var reply=await Command(new(){["action"]="deletemesh",["meshid"]=meshId},ct);
+        if(!reply.TryGetProperty("result",out var result)||!string.Equals(result.GetString(),"ok",StringComparison.OrdinalIgnoreCase))throw new InvalidOperationException("Engine group revocation rejected");
     }
     public async Task<bool> ContainsNode(string meshId, string nodeId, CancellationToken ct)
     {

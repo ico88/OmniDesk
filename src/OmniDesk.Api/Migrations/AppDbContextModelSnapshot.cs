@@ -503,6 +503,9 @@ namespace OmniDesk.Api.Migrations
                     b.Property<bool>("Enabled")
                         .HasColumnType("boolean");
 
+                    b.Property<bool>("GroupRemoved")
+                        .HasColumnType("boolean");
+
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 

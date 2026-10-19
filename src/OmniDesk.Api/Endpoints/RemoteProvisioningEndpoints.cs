@@ -12,6 +12,11 @@ public static class RemoteProvisioningEndpoints
 {
     public static void MapRemoteProvisioningEndpoints(this WebApplication app)
     {
+        app.MapGet("/api/admin/remote-engine/health",async(HttpContext c,PermissionService p,IMeshProvisioningClient mesh)=>{
+            if(!await p.Allows(c.User.UserId(),"administration"))return Results.Forbid();
+            try {await mesh.CheckReady(c.RequestAborted);return Results.Ok(new{controlReady=true});}
+            catch(Exception e)when(e is not OperationCanceledException){return Results.Problem("Remote engine unavailable",statusCode:503);}
+        }).RequireAuthorization();
         var admin = app.MapGroup("/api/admin/devices/{id:guid}/remote-provisioning").RequireAuthorization();
         admin.MapGet("", async (Guid id,HttpContext c,AppDbContext db,PermissionService p) => {
             if (!await p.Allows(c.User.UserId(),"administration")) return Results.Forbid();
@@ -31,7 +36,7 @@ public static class RemoteProvisioningEndpoints
                 var result=await mesh.Provision(id,c.RequestAborted);
                 var protector=protection.CreateProtector("OmniDesk.RemoteProvisioning.v1");
                 if(row is null) {row=new RemoteProvisioning {DeviceId=id};db.RemoteProvisionings.Add(row);} else row.Id=Guid.NewGuid();
-                row.ProtectedSettings=protector.Protect(result.Settings);row.ProtectedMeshId=protector.Protect(result.MeshId);row.Enabled=true;
+                row.ProtectedSettings=protector.Protect(result.Settings);row.ProtectedMeshId=protector.Protect(result.MeshId);row.Enabled=true;row.GroupRemoved=false;
                 db.AuditEvents.Add(new AuditEvent {ActorId=c.User.UserId(),Action="remote.provision.approve",Target=id.ToString()});
                 await db.SaveChangesAsync();await tx.CommitAsync();return Results.NoContent();
             }

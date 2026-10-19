@@ -112,9 +112,7 @@ public sealed class RemoteAgentWorker(ILogger<RemoteAgentWorker> logger) : Backg
             var output=process.StandardOutput.ReadToEndAsync(ct);var error=process.StandardError.ReadToEndAsync(ct);
             await process.WaitForExitAsync(ct);var text=(await output).Trim();_ = await error;
             if(process.ExitCode!=0||text.Length>128)throw new IOException();
-            text=text.Replace('+','@').Replace('/','$');
-            if(!Regex.IsMatch(text,@"\A[A-Za-z0-9@$=_-]{64}\z"))throw new InvalidDataException("Invalid native node identity");
-            return "node//"+text;
+            return RemoteAgentPackage.NormalizeNodeId(text);
         }
         finally {if(!process.HasExited)process.Kill();}
     }

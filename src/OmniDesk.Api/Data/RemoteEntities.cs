@@ -21,4 +21,5 @@ public sealed class RemoteProvisioning
     public string ProtectedMeshId { get; set; } = "";
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public bool Enabled { get; set; } = true;
+    public bool GroupRemoved { get; set; }
 }

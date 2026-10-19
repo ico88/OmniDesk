@@ -47,7 +47,7 @@ public sealed partial class MeshCentralClient(MeshCentralOptions options) : IMes
         socket.Options.SetRequestHeader("x-meshauth", Convert.ToBase64String(Encoding.UTF8.GetBytes(options.Username!)) + "," + Convert.ToBase64String(Encoding.UTF8.GetBytes(password)));
         var origin = new UriBuilder(options.Origin!) { Scheme = "wss", Path = "/control.ashx" };
         await socket.ConnectAsync(origin.Uri, timeout.Token); // Platform certificate validation stays enabled.
-        var responseId = Guid.NewGuid().ToString(); command["responseid"] = responseId;
+        var responseId = Guid.NewGuid().ToString(); command["responseid"] = responseId; command["tag"] = responseId;
         await socket.SendAsync(JsonSerializer.SerializeToUtf8Bytes(command), WebSocketMessageType.Text, true, timeout.Token);
         var buffer = new byte[8192];
         while (true)
@@ -61,6 +61,8 @@ public sealed partial class MeshCentralClient(MeshCentralOptions options) : IMes
             } while (!part.EndOfMessage);
             using var json = JsonDocument.Parse(bytes.ToArray());
             if (json.RootElement.TryGetProperty("action",out var action) && action.GetString() == "serverinfo" && json.RootElement.TryGetProperty("serverinfo",out var info)) serverInfo?.Invoke(info.Clone());
+            if (command["action"].ToString() == "meshes" && json.RootElement.TryGetProperty("action",out var kind) && kind.GetString() == "meshes" &&
+                json.RootElement.TryGetProperty("tag",out var tag) && tag.GetString() == responseId) return json.RootElement.Clone();
             if (json.RootElement.TryGetProperty("responseid", out var id) && id.GetString() == responseId) return json.RootElement.Clone();
         }
     }
