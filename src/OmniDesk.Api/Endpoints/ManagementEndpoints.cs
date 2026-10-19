@@ -23,8 +23,16 @@ public static class ManagementEndpoints
     public static void MapManagementEndpoints(this WebApplication app)
     {
         var api = app.MapGroup("/api").RequireAuthorization();
-        api.MapGet("/devices", async (HttpContext c, PermissionService p) =>
-            Results.Ok(await p.VisibleDevices(c.User.UserId()).AsNoTracking().Select(x => new { x.Id, x.Name, x.GroupId, x.SiteId }).ToListAsync()));
+        api.MapGet("/devices", async (HttpContext c, PermissionService p, AppDbContext db) => {
+            var cutoff = DateTimeOffset.UtcNow.AddMinutes(-3);
+            var visible = p.VisibleDevices(c.User.UserId()).AsNoTracking();
+            var devices = await visible.Select(x => new {
+                x.Id, x.Name, x.GroupId, x.SiteId,
+                lastSeen = db.DeviceMetrics.Where(m => m.DeviceId == x.Id).Select(m => (DateTimeOffset?)m.ReceivedAt).FirstOrDefault(),
+                revoked = db.DeviceCredentials.Any(cr => cr.DeviceId == x.Id && cr.RevokedAt != null)
+            }).ToListAsync();
+            return Results.Ok(devices.Select(x => new { x.Id, x.Name, x.GroupId, x.SiteId, x.lastSeen, x.revoked, online = !x.revoked && x.lastSeen > cutoff }));
+        });
         api.MapGet("/branding", async (AppDbContext db) => Results.Ok(await db.Branding.AsNoTracking().SingleAsync()));
         api.MapPut("/branding", async (BrandingRequest r, HttpContext c, AppDbContext db, PermissionService p) => {
             if (!await p.Allows(c.User.UserId(), "administration")) return Results.Forbid();

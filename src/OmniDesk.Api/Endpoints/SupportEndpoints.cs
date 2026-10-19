@@ -203,8 +203,8 @@ public static class SupportEndpoints
             var target = await (from d in db.Devices.AsNoTracking() join site in db.Sites.AsNoTracking() on d.SiteId equals site.Id
                 where d.Id == r.DeviceId select new { d.Id, d.Name, d.SiteId, SiteName = site.Name }).SingleOrDefaultAsync();
             if (target is null) return Results.NotFound();
-            if (target.SiteId != ticket.SiteId) return Results.BadRequest(new { error = "Tutti i dispositivi del ticket devono appartenere alla stessa sede." });
             if (!await p.Allows(userId, "tickets.manage", target.Id)) return Results.Forbid();
+            if (target.SiteId != ticket.SiteId) return Results.BadRequest(new { error = "Tutti i dispositivi del ticket devono appartenere alla stessa sede." });
             await using var tx = await db.Database.BeginTransactionAsync();
             foreach (var lockId in new[] { ticket.DeviceId, target.Id }.Distinct().Order())
                 await DeviceOperationLock.Acquire(db, lockId);

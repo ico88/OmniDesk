@@ -90,6 +90,10 @@ public static class AgentScenario
         Assert.Equal(HttpStatusCode.Created, (await admin.PostAsJsonAsync("/api/admin/grants", new { userId = scopedId, role = "Viewer", groupId = group, deviceId = (Guid?)null })).StatusCode);
         var status = await scoped.GetFromJsonAsync<JsonElement>($"/api/devices/{id}/status");
         Assert.True(status.GetProperty("online").GetBoolean());
+        var listed = (await scoped.GetFromJsonAsync<JsonElement[]>("/api/devices"))!.Single(x => x.GetProperty("id").GetGuid() == id);
+        Assert.True(listed.GetProperty("online").GetBoolean());
+        Assert.False(listed.GetProperty("revoked").GetBoolean());
+        Assert.True(listed.GetProperty("lastSeen").ValueKind != JsonValueKind.Null);
         Assert.Equal(42.5, status.GetProperty("metrics").GetProperty("cpuPercent").GetDouble());
         Assert.Equal("Test app", status.GetProperty("inventory").GetProperty("software")[0].GetProperty("name").GetString());
         await RemoteProvisioningScenario.Run(factory, admin, scoped, agent, () => Assertion(key), id);
@@ -101,6 +105,9 @@ public static class AgentScenario
         agent.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Assertion(key));
         Assert.Equal(HttpStatusCode.Unauthorized, (await agent.PostAsJsonAsync("/api/agent/metrics", metrics)).StatusCode);
         status = await scoped.GetFromJsonAsync<JsonElement>($"/api/devices/{id}/status");
+        listed = (await scoped.GetFromJsonAsync<JsonElement[]>("/api/devices"))!.Single(x => x.GetProperty("id").GetGuid() == id);
+        Assert.True(listed.GetProperty("revoked").GetBoolean());
+        Assert.False(listed.GetProperty("online").GetBoolean());
         agent.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Assertion(key));
         Assert.Equal(HttpStatusCode.Unauthorized, (await agent.GetAsync("/api/agent/support/" + new string('A',64))).StatusCode);
         Assert.True(status.GetProperty("revoked").GetBoolean()); Assert.False(status.GetProperty("online").GetBoolean());
