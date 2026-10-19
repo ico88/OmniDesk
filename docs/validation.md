@@ -1742,6 +1742,18 @@ locale di questa revisione è passato: `./scripts/smoke.sh --browser` ha eseguit
 browser Chromium, scansioni ClamAV clean/EICAR, backup con allegato e restore
 completo DB/blob/chiavi/CA con probe HTTPS/CSRF/anonimo. La suite completa passa
 83/83 API e 6/6 Vitest con build production. Il workflow Windows
-`39336034027` è terminato con successo, inclusi upgrade/repair/rollback MSI. La
-nuova CI Linux deve ancora verificare la correzione dopo il push.
-Nessun servizio LAN è stato modificato.
+`39336034027` è terminato con successo, inclusi upgrade/repair/rollback MSI.
+La CI Linux `39337297948` è terminata con successo sul commit `da91205`; CI
+Windows `39337297929` è ancora in esecuzione. Nessun servizio LAN è stato
+modificato.
+
+### Calendario lavorativo SLA — calcolo di base — 2026-10-19
+
+Implementato `BusinessCalendar.AddWorkingTime` come logica pura: finestre
+settimanali non sovrapposte, festività, fuso IANA, avanzamento degli orari locali
+inesistenti al primo minuto valido e scelta deterministica della prima/ultima
+occorrenza nell'ora autunnale ripetuta. I test mirati passano 4/4;
+`./scripts/test.sh` passa 87/87 test API, build production dashboard e 6/6
+Vitest. Il codice non è ancora integrato con policy versionate, ticket, API,
+pause, timer o escalation; nessuna UI SLA è disponibile. La CI che include
+questo incremento partirà dopo il push; nessun servizio LAN è stato modificato.
