@@ -109,3 +109,9 @@ Contratti macchina/Tray invariati; nessun nuovo enrollment o MSI richiesto.
 Si tratta del miglioramento del modulo ticket esistente: sedi, assegnazioni,
 SLA, email e cronologia collaborativa delle fasi SD restano incrementi distinti.
 Test PostgreSQL iniziali passati; build/browser/deploy da registrare sotto.
+
+Incremento Assistenza consegnato su LAN: nome PC al posto dell'UUID, ricerca,
+filtro e navigazione contestuale verificati con PostgreSQL/Vitest/Chromium;
+aggiornamento automatico elenco autorizzato dopo nuovi enrollment. Non completa
+le fasi SD0/SD1 estese. Restano separati i collaudi client Update/non presidiato,
+la revisione Microsoft del motore e i gate produzione gia elencati.

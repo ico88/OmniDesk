@@ -513,3 +513,17 @@ stati, wildcard percentuale letterale, input invalidi, ricerca scoped senza
 esposizione del dispositivo fuori ambito. Browser esteso a nome senza UUID,
 filtri, nome aggiornato dopo rinomina e apertura scheda contestuale; esito da
 registrare dopo esecuzione.
+
+Incremento Assistenza verificato e pubblicato: 43 xUnit e 3 Vitest passati;
+Compose build/config riusciti. Primo browser run fallito sul collegamento del PC
+appena registrato, per elenco dispositivi ancora in cache nel componente App;
+corretto refresh autorizzato entrando in Dispositivi/Assistenza. Secondo run
+Chromium passato: nome PC senza UUID nella tabella, ricerca case-insensitive,
+filtro stato, risoluzione, nome aggiornato dopo rinomina e apertura scheda PC,
+oltre ai controlli account/permessi/download preesistenti. Screenshot isolato
+artifacts/ui-preview/support-device-names.png ispezionato; non sono dati live.
+
+Backup predeploy .backups/20261019T081123Z.4mKM55; nessuna migrazione nuova. API e
+dashboard avviate con la modifica, readiness HTTPS/CA, pagina/asset e rifiuto
+anonimo passati. Contratti IPC e Agent invariati, nessun aggiornamento Windows
+richiesto. Non dichiarati eseguiti nuovi collaudi screenshot/Update/remoto sul PC.
