@@ -320,7 +320,9 @@ revoca quello precedente prima di sostituire l'iframe. Se la revoca resta in
 verifica, il guard server continua i tentativi. Per le sessioni presidiate
 MeshCentral può richiedere di nuovo il consenso locale; la funzione non aggira
 questa policy e non rinnova in background. Build dashboard e test Vitest passati;
-test API/PostgreSQL 64/64. Pubblicazione LAN e prova interattiva ancora da fare.
+test API/PostgreSQL 64/64. Il bundle LAN pubblicato contiene il rinnovo, verificato
+da smoke HTTPS/CA. Restano aperti il test di rinnovo/riconnessione su sessione
+MeshCentral reale e la ripetizione del consenso sul PC pilota.
 
 ### Diagnostica Windows — code indipendenti — sorgenti e test verificati
 
