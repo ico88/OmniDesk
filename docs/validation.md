@@ -305,3 +305,21 @@ read-only PostgreSQL alle 2026-10-19 06:37:07 UTC: dispositivo DESKTOP-EK7AD7M,
 ID bca1f63f-afde-4445-93ac-87829f422351, heartbeat ricevuto alle 06:36:53 UTC e
 inventario alle 06:36:53 UTC. Questo conferma la comunicazione Agent/server LAN;
 non dimostra ancora Tray, screenshot, consenso o sessione desktop remota.
+
+### Correzione pipe Tray 0.7.1
+
+PC reale: servizio Running e heartbeat recente ma nessuna pipe/evento utile.
+Individuato un difetto deterministico in InteractiveLogons e controllo client:
+WindowsIdentity.Groups esclude esplicitamente i gruppi SE_GROUP_LOGON_ID, quindi
+non puo essere usato per estrarre o verificare il SID logon. Fonte primaria:
+https://github.com/dotnet/runtime/blob/main/src/libraries/System.Security.Principal.Windows/src/System/Security/Principal/WindowsIdentity.cs
+
+Corretto usando GetTokenInformation(TokenLogonSid), controllo di un solo SID
+logon e relativi attributi, sia per enumerare sessioni sia per autenticare il
+client impersonato. ACL SYSTEM/logon, verifica utente, sessione e SCM preservate.
+Agent/Tray/MSI portati a 0.7.1; build Agent locale in SDK Docker passata senza
+warning. Self-test Windows esteso alla lettura nativa e regressione Groups.
+Attendere CI Windows e nuovo collaudo PC prima di dichiarare la Tray operativa.
+Run esteso 39209623222 bloccato nel test MSI aggiuntivo: richiesta cancellazione,
+non superato; aggiunto timeout per ogni msiexec test e rilascio view COM nel
+fixture rollback. Non usa il PC destinatario.

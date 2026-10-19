@@ -74,3 +74,5 @@ Kit 0.7 promosso dopo Windows run 39207328177: motore nativo realmente avviato s
 Installazione manuale semplificata: launcher LAN con parametri verificati e richiesta interattiva del token mascherata, senza creazione manuale del file. Modalita file preservata per automazioni. Parsing e test prompt Windows nel run 39209165420; pubblicazione del kit solo dopo esito verificato. Resta distinto dal futuro wizard grafico integrato nell'MSI.
 
 Distribuzione del launcher interattivo separata dal binario MSI: mantenuto l'MSI 0.7 verificato (run 39207328177), aggiornato solo lo script con prompt gia testato Windows. Provenienza dei due componenti esplicita nel manifest/LEGGIMI. Il collaudo esteso upgrade/repair/rollback rimane distinto e non viene dichiarato superato.
+
+Hotfix 0.7.1 Tray: lettura SID di logon dal token nativo per correggere mancata creazione pipe e autenticazione client. Build locale passata; self-test Windows esteso, aggiornamento del client e prova Tray reali da eseguire. Non richiede un nuovo enrollment dello stesso server.

@@ -86,7 +86,7 @@ public sealed class TrayPipeWorker(AgentRuntimeState state, ILogger<TrayPipeWork
                     var allowed = false;
                     pipe.RunAsClient(() => {
                         using var client = WindowsIdentity.GetCurrent(true);
-                        allowed = client is not null && client.User?.Value == logon.UserSid && client.Groups?.OfType<SecurityIdentifier>().Any(g => g.Value == logon.LogonSid) == true;
+                        allowed = client is not null && client.User?.Value == logon.UserSid && TokenLogonSid.Read(client.AccessToken).Value == logon.LogonSid;
                     });
                     if (!allowed || !InteractiveLogons.Read().Contains(logon)) throw new UnauthorizedAccessException("IPC logon no longer authorized.");
                     if (request.Method == TrayProtocol.StatusMethod)

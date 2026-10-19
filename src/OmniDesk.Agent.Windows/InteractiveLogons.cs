@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using OmniDesk.Windows.Ipc;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
 using Microsoft.Win32.SafeHandles;
@@ -22,7 +23,7 @@ internal static class InteractiveLogons
                 using (token)
                 using (var identity = new WindowsIdentity(token.DangerousGetHandle()))
                 {
-                    var sid = identity.Groups?.OfType<SecurityIdentifier>().SingleOrDefault(g => g.IsWellKnown(WellKnownSidType.LogonIdsSid));
+                    var sid = TokenLogonSid.Read(identity.AccessToken);
                     if (identity.User is not null && sid is not null) result.Add(new(info.Id, identity.User.Value, sid.Value));
                 }
             }

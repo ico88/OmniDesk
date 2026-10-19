@@ -7,6 +7,13 @@ public static class WindowsSelfTest
     // Read-only Windows checks. Does not install/start services or execute Windows Update.
     public static async Task Run()
     {
+        using (var windowsIdentity = System.Security.Principal.WindowsIdentity.GetCurrent())
+        {
+            var logonSid = OmniDesk.Windows.Ipc.TokenLogonSid.Read(windowsIdentity.AccessToken);
+            if (windowsIdentity.Groups?.Contains(logonSid) == true)
+                throw new InvalidOperationException("Expected Groups to filter the logon SID.");
+            Console.WriteLine("PASS: native token logon SID read; filtered WindowsIdentity.Groups is not used for session authorization.");
+        }
         var collector = new WindowsCollector(); _ = collector.Metrics(); await Task.Delay(1200);
         var metrics = collector.Metrics(); var inventory = collector.Inventory();
         if (metrics.CpuPercent is null || !double.IsFinite(metrics.CpuPercent.Value) || metrics.CpuPercent < 0 || metrics.CpuPercent > 100 ||
