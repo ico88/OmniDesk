@@ -35,6 +35,14 @@ try {
  await page.getByRole('button',{name:'Crea articolo',exact:true}).click();
  await page.getByRole('heading',{name:knowledgeTitle,exact:true}).waitFor();
  assert.equal(await page.locator('.knowledge-body').locator('script').count(),0,'Knowledge body is rendered as text, not executable HTML');
+ const kbSearch=await context.request.get('https://omnidesk.test/api/knowledge/search?q=segreti');
+ assert.equal(kbSearch.status(),200,'Authorized knowledge search is available');
+ const kbSearchMatches=await kbSearch.json();
+ assert.ok(kbSearchMatches.some(article=>article.title===knowledgeTitle),'Search matches article body text');
+ assert.ok(kbSearchMatches.every(article=>!Object.hasOwn(article,'body')),'Search results omit article bodies');
+ await page.getByLabel('Cerca articoli').fill('segreti');
+ await page.getByRole('button',{name:new RegExp(knowledgeTitle)}).waitFor();
+ await page.getByLabel('Cerca articoli').fill('');
  await page.getByRole('button',{name:'Modifica',exact:true}).click();
  await page.getByLabel('Descrizione breve',{exact:true}).fill('Guida aggiornata');
  await page.getByRole('button',{name:'Salva modifiche',exact:true}).click();

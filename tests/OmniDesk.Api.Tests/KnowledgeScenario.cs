@@ -12,6 +12,8 @@ public static class KnowledgeScenario
     {
         Assert.Equal(HttpStatusCode.Forbidden, (await viewer.GetAsync("/api/knowledge")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await viewer.GetAsync("/api/knowledge/scopes")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await viewer.GetAsync("/api/knowledge/search?q=credential")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await admin.GetAsync("/api/knowledge/search?q=x")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await viewer.PostAsJsonAsync("/api/knowledge", new { slug = "viewer", title = "Forbidden", summary = "", body = "no", isPublished = true })).StatusCode);
 
         var slug = "first-line-guide-" + Guid.NewGuid().ToString("N")[..8];
@@ -39,6 +41,9 @@ public static class KnowledgeScenario
         var visible = await operatorClient.GetFromJsonAsync<JsonElement[]>("/api/knowledge");
         Assert.Contains(visible!, x => x.GetProperty("id").GetGuid() == id);
         Assert.Equal("Read-only checks first.\nNever paste credentials.", (await operatorClient.GetFromJsonAsync<JsonElement>($"/api/knowledge/{id}")).GetProperty("body").GetString());
+        var searchMatches = await operatorClient.GetFromJsonAsync<JsonElement[]>("/api/knowledge/search?q=credentials");
+        Assert.Contains(searchMatches!, x => x.GetProperty("id").GetGuid() == id);
+        Assert.All(searchMatches!, x => Assert.False(x.TryGetProperty("body", out _), "Search results do not return article bodies."));
         Assert.Equal(HttpStatusCode.Forbidden, (await operatorClient.PutAsJsonAsync($"/api/knowledge/{id}", new { slug, title = "Hacked", summary = "", body = "no", isPublished = true, expectedVersion = 1 })).StatusCode);
 
         var siteResponse = await admin.PostAsJsonAsync("/api/admin/sites", new { name = "Knowledge site " + Guid.NewGuid().ToString("N")[..8] });
@@ -68,6 +73,9 @@ public static class KnowledgeScenario
         var scopedArticles = await scopedClient.GetFromJsonAsync<JsonElement[]>("/api/knowledge");
         Assert.Contains(scopedArticles!, x => x.GetProperty("id").GetGuid() == siteArticleId);
         Assert.DoesNotContain(scopedArticles!, x => x.GetProperty("id").GetGuid() == groupArticleId || x.GetProperty("id").GetGuid() == id);
+        var scopedSearch = await scopedClient.GetFromJsonAsync<JsonElement[]>("/api/knowledge/search?q=content");
+        Assert.Contains(scopedSearch!, x => x.GetProperty("id").GetGuid() == siteArticleId);
+        Assert.DoesNotContain(scopedSearch!, x => x.GetProperty("id").GetGuid() == groupArticleId || x.GetProperty("id").GetGuid() == id);
         Assert.Equal(HttpStatusCode.OK, (await scopedClient.GetAsync($"/api/knowledge/{siteArticleId}")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await scopedClient.GetAsync($"/api/knowledge/{groupArticleId}")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await scopedClient.GetAsync($"/api/knowledge/{siteArticleId}/versions")).StatusCode);
