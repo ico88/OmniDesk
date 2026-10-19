@@ -1686,6 +1686,9 @@ una copia temporanea: 82/82 test API, build dashboard e 6/6 Vitest. Anche
 `./scripts/smoke.sh --browser` è passato con migrazioni, login, ClamAV
 clean/EICAR e scenario Chromium completo, incluse le nuove verifiche degli
 allegati portale. `bash -n scripts/test.sh scripts/smoke.sh` e
-`git diff --check` passati. I run GitHub `39330690025` (Linux) e `39330689863`
-(Windows) sono passati sul commit precedente `fab9e73`; i nuovi controlli
-devono girare sul prossimo SHA. Nessun servizio LAN è stato modificato.
+`git diff --check` passati. CI GitHub sul commit `25724bc`: Linux run
+`39331892091` completata con successo, inclusi suite, build Docker e smoke;
+Windows run `39331892158` completata con successo, inclusi contratti Tray,
+compilazione MSI, install/recovery/uninstall, upgrade/repair/rollback delle
+baseline e pubblicazione artifact non firmati. Nessun servizio LAN è stato
+modificato; l'artifact non è stato promosso né distribuito.
