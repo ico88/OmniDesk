@@ -1747,13 +1747,28 @@ La CI Linux `39337297948` è terminata con successo sul commit `da91205`; CI
 Windows `39337297929` è ancora in esecuzione. Nessun servizio LAN è stato
 modificato.
 
-### Calendario lavorativo SLA — calcolo di base — 2026-10-19
+### Policy SLA versionate e calendario lavorativo — 2026-10-19
 
-Implementato `BusinessCalendar.AddWorkingTime` come logica pura: finestre
-settimanali non sovrapposte, festività, fuso IANA, avanzamento degli orari locali
-inesistenti al primo minuto valido e scelta deterministica della prima/ultima
-occorrenza nell'ora autunnale ripetuta. I test mirati passano 4/4;
-`./scripts/test.sh` passa 87/87 test API, build production dashboard e 6/6
-Vitest. Il codice non è ancora integrato con policy versionate, ticket, API,
-pause, timer o escalation; nessuna UI SLA è disponibile. La CI che include
-questo incremento partirà dopo il push; nessun servizio LAN è stato modificato.
+`BusinessCalendar.AddWorkingTime` calcola tempo lavorativo con finestre
+settimanali non sovrapposte, festività e fuso IANA. Gli orari locali inesistenti
+avanzano al primo minuto valido; nell'ora autunnale ripetuta, l'intervallo apre
+alla prima e chiude all'ultima occorrenza. I quattro test del calcolatore coprono
+weekend/festività e i due cambi DST.
+
+La migrazione PostgreSQL `SupportSlaPolicies` aggiunge policy globali/per sede e
+versioni immutabili JSONB con autore/data di pubblicazione, calendario e minuti
+di primo riscontro/risoluzione. Gli endpoint amministrativi esigono
+`tickets.sla.manage`, rispettano lo scope della sede e il versionamento
+ottimistico. Il test API/PostgreSQL verifica diniego anonimo, gestione site
+scoped, diniego cross-site, pubblicazione di una nuova versione, conflitto stale
+e assenza del permesso per Operator. Test mirato 1/1; `./scripts/test.sh` passa
+88/88 test API, build production dashboard e 6/6 Vitest. Le policy non sono
+ancora applicate ai ticket: target, pause, timer, escalation e UI restano aperti.
+
+CI Linux e Windows `39337919629`/`39337919622` sono verdi per il precedente
+incremento calendario. Per questa migrazione è stato ricostruito
+`omnidesk-api:local` dai sorgenti aggiornati e poi `./scripts/smoke.sh --browser`
+è passato: ha applicato `20261019225641_SupportSlaPolicies`, verificato stack
+HTTPS, Chromium, ClamAV clean/EICAR, backup con allegato e restore completo
+isolato DB/blob/chiavi/CA con probe HTTPS/CSRF/anonimo. La CI per la nuova
+migrazione/API SLA partirà dopo il push. Nessun servizio LAN è stato modificato.

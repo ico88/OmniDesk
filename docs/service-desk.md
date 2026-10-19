@@ -46,7 +46,7 @@ Audit comune con actor umano/macchina/sistema, origine, motivo, timestamp UTC, t
 
 ## SLA e automazioni
 
-**Avanzamento:** è disponibile e testato un calcolatore puro di tempo lavorativo, senza persistenza né endpoint. Accetta fuso IANA, intervalli settimanali e festività; per i salti DST sposta l'orario locale inesistente al primo minuto valido, mentre nell'ora ripetuta apre sulla prima occorrenza e chiude sull'ultima. Intervalli sovrapposti o non positivi sono rifiutati. Non calcola ancora target associati ai ticket, pause, riaperture, calendari versionati, timer durevoli o escalation; non è una funzione SLA utilizzabile dagli operatori.
+**Avanzamento:** il calcolatore puro di tempo lavorativo è integrato in policy SLA globali o per sede, versionate in modo immutabile e gestite con `tickets.sla.manage`. Le policy persistono tempi di primo riscontro/risoluzione e calendario IANA; i test verificano accesso site-scoped, diniego cross-site e pubblicazione concorrente con versione attesa. Restano assenti l'associazione automatica al ticket, i target persistiti, pause/riaperture, timer durevoli, escalation, UI e gestione allarmi. L'operatore non vede ancora una funzione SLA operativa.
 
 SLA versionati per primo riscontro e risoluzione, calendari lavorativi, festività, fuso IANA e gestione ora legale. Ogni ticket conserva la versione applicata; nuove policy non riscrivono silenziosamente scadenze precedenti. Pause solo in stati ammessi, intervalli persistenti, comportamento di riapertura esplicito. Scadenze UTC ricalcolabili dai dati persistiti, escalation idempotenti per ticket/regola/fase e recupero dopo riavvio; clock iniettabile per test.
 

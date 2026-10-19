@@ -32,7 +32,7 @@
 | Intakes | Source, ExternalKey, ReceivedAt originale, VerifiedActorId nullable, SourceDeviceId nullable, ProposedSiteId, PayloadRef minimizzato, State, QualificationReason, PromotedTicketId. Unicità (Source, ExternalKey) quando disponibile |
 | Mailboxes / EmailMessages / MailThreadBindings | Mailbox ID, riferimento segreto esterno, message ID/hash, intake/ticket, token thread hashato e scadenza, identità verificata. Nessuna password mailbox in chiaro |
 | TicketAlertLinks | TicketId, AlertOccurrenceId, AutomationVersionId; unicità per occorrenza/policy di correlazione, collegamento idempotente |
-| SlaPolicies / SlaPolicyVersions | Criteri di applicazione, obiettivi primo riscontro/risoluzione, pause e riapertura; versione pubblicata immutabile |
+| SlaPolicies / SlaPolicyVersions | **Implementato nel core:** `SupportSlaPolicies` e `SupportSlaPolicyVersions` con ambito globale/sede, versionamento ottimistico, definizione JSONB immutabile, tempi primo riscontro/risoluzione in minuti lavorativi, calendario/fuso e autore/data pubblicazione. Accesso con `tickets.sla.manage`; non è ancora associata ai ticket |
 | BusinessCalendars / CalendarVersions / Holidays | Fuso IANA, fasce e festività versionate; calendario storico conservato per riprodurre i calcoli |
 | TicketSlaTargets / SlaPauseIntervals | Ticket, tipo obiettivo, policy/calendario versione, start/due UTC, tempo consumato, pause start/end e motivo; vincoli intervalli validi e target univoco per ciclo |
 | EscalationEvents | Target, ciclo, regola/versione, fase, dueAt, stato; chiave idempotente univoca per evitare duplicazioni al riavvio |
