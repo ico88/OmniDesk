@@ -14,7 +14,7 @@ parser.add_argument('--artifact', type=Path, required=True)
 parser.add_argument('--run', required=True)
 parser.add_argument('--commit', required=True)
 parser.add_argument('--output', type=Path, required=True)
-parser.add_argument('--version', default='0.8.0')
+parser.add_argument('--version', default='0.8.1')
 parser.add_argument('--remote-engine', action='store_true')
 parser.add_argument('--ca', type=Path, default=Path('omnidesk-local-ca.crt'))
 args = parser.parse_args()
@@ -85,7 +85,8 @@ try:
 finally:
     temporary.unlink(missing_ok=True)
 release = dict(version=args.version, commit=args.commit, sha256=hashlib.sha256(args.output.read_bytes()).hexdigest(),
-               size=args.output.stat().st_size, fileName=args.output.name, remoteEngineIncluded=args.remote_engine)
+               size=args.output.stat().st_size, fileName=args.output.name, remoteEngineIncluded=args.remote_engine,
+               msiSha256=hashlib.sha256(files['OmniDesk.Agent.msi']).hexdigest(), msiSize=len(files['OmniDesk.Agent.msi']))
 metadata = args.output.parent / ('windows-release.' + uuid.uuid4().hex + '.tmp')
 metadata.write_text(json.dumps(release, indent=2) + '\n')
 metadata.replace(args.output.parent / 'windows-release.json')

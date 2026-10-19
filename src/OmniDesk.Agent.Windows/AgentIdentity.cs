@@ -59,6 +59,12 @@ public sealed record AgentIdentity(string ServerUrl, Guid DeviceId, string Encry
         }
         finally { if (File.Exists(temporary)) File.Delete(temporary); }
     }
+    internal static void ProtectTrustedFile(string path)
+    {
+        var acl = new FileSecurity(); acl.SetAccessRuleProtection(true, false); acl.SetOwner(AdminSid);
+        foreach (var sid in new[] { SystemSid, AdminSid }) acl.AddAccessRule(new FileSystemAccessRule(sid, FileSystemRights.FullControl, AccessControlType.Allow));
+        new FileInfo(path).SetAccessControl(acl);
+    }
 
     public static AgentIdentity Create(string server, Guid id, RSA rsa) => new(ValidateServer(server).AbsoluteUri, id,
         Convert.ToBase64String(ProtectedData.Protect(Encoding.UTF8.GetBytes(rsa.ExportPkcs8PrivateKeyPem()), null, DataProtectionScope.LocalMachine)));

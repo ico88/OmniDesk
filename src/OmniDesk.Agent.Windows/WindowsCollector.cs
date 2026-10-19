@@ -1,6 +1,7 @@
 using System.Management;
 using System.Net.NetworkInformation;
 using System.Runtime.InteropServices;
+using System.Reflection;
 using Microsoft.Win32;
 using OmniDesk.Contracts;
 
@@ -35,7 +36,7 @@ public sealed class WindowsCollector
             catch (IOException) { /* Offline drive is omitted, not represented as zero. */ }
         }
         return new(cpu, checked((long)memory.TotalPhysical), checked((long)memory.AvailablePhysical), received, sent,
-            checked((long)(GetTickCount64() / 1000)), disks.ToArray());
+            checked((long)(GetTickCount64() / 1000)), disks.ToArray(), typeof(WindowsCollector).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion?.Split('+')[0]);
     }
     public InventoryRequest Inventory()
     {

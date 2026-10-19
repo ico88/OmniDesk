@@ -1,13 +1,16 @@
 using System.Diagnostics;
+using System.ComponentModel;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Security.Cryptography;
 using System.Text.Json;
 using OmniDesk.Contracts;
 namespace OmniDesk.Agent.Windows;
+internal sealed record UpdateReceipt(Guid JobId, Guid LeaseId, UpdateResultRequest? Result, string? Kind = null,
+    string? TargetVersion = null, string? MsiSha256 = null, string? State = null, DateTimeOffset? StartedAt = null);
 public sealed class UpdateWorker(ILogger<UpdateWorker> logger) : BackgroundService
 {
-    private sealed record Receipt(Guid JobId, Guid LeaseId, UpdateResultRequest? Result);
     private static readonly JsonSerializerOptions Json = new() { PropertyNameCaseInsensitive = true };
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -29,20 +32,44 @@ public sealed class UpdateWorker(ILogger<UpdateWorker> logger) : BackgroundServi
                         return await client.SendAsync(request, stoppingToken);
                     }
                     if (File.Exists(receiptPath)) AgentIdentity.AssertTrusted(new FileInfo(receiptPath));
-                    Receipt? receipt = File.Exists(receiptPath) ? JsonSerializer.Deserialize<Receipt>(await File.ReadAllTextAsync(receiptPath, stoppingToken), Json) : null;
+                    UpdateReceipt? receipt = File.Exists(receiptPath) ? JsonSerializer.Deserialize<UpdateReceipt>(await File.ReadAllTextAsync(receiptPath, stoppingToken), Json) : null;
                     if (receipt is not null && receipt.Result is null)
                     {
-                        // Crash during native operation: never execute the same install again automatically.
-                        receipt = receipt with { Result = new(receipt.LeaseId, false, false, [], "Operation interrupted; inspect Windows Update history before retry") };
-                        Save(receiptPath, receipt);
+                        if (receipt.Kind == "agent.update" && receipt.State == "installing")
+                        {
+                            if (receipt.StartedAt < DateTimeOffset.UtcNow.AddMinutes(-15) && !Process.GetProcessesByName("OmniDeskUpdater").Any())
+                            {
+                                var installed = Version.TryParse(AgentVersion(), out var parsed) ? parsed : new Version(0, 0);
+                                var target = Version.TryParse(receipt.TargetVersion, out var expected) ? expected : new Version(int.MaxValue, 0);
+                                var succeeded = installed >= target;
+                                receipt = receipt with { State = succeeded ? "installed" : "failed", Result = new(receipt.LeaseId, succeeded, false, [], succeeded ? null : "MSI update did not complete; inspect Windows Installer log before retry") }; Save(receiptPath, receipt);
+                            }
+                        }
+                        else
+                        {
+                            // Crash during native operation: never execute the same install again automatically.
+                            receipt = receipt with { Result = new(receipt.LeaseId, false, false, [], "Operation interrupted; inspect Windows Update history before retry") };
+                            Save(receiptPath, receipt);
+                        }
                     }
-                    if (receipt is not null)
+                    if (receipt?.Result is not null)
                     {
                         using var ack = await Send($"api/agent/jobs/{receipt.JobId}/result", receipt.Result);
-                        if (ack.IsSuccessStatusCode || ack.StatusCode is HttpStatusCode.Conflict or HttpStatusCode.NotFound) File.Delete(receiptPath);
+                        if (ack.IsSuccessStatusCode || ack.StatusCode is HttpStatusCode.Conflict or HttpStatusCode.NotFound)
+                        {
+                            File.Delete(receiptPath);
+                            if (receipt.Kind == "agent.update")
+                            {
+                                var staged = Path.Combine(AgentIdentity.Folder, $"agent-update-{receipt.JobId:N}.msi");
+                                if (File.Exists(staged)) File.Delete(staged);
+                                var updater = Path.Combine(AgentIdentity.Folder, "OmniDeskUpdater.exe");
+                                if (File.Exists(updater)) File.Delete(updater);
+                                if (receipt.Result.Succeeded) { var log = Path.Combine(AgentIdentity.Folder, $"agent-update-{receipt.JobId:N}.log"); if (File.Exists(log)) File.Delete(log); }
+                            }
+                        }
                         else ack.EnsureSuccessStatusCode();
                     }
-                    else
+                    else if (receipt is null)
                     {
                         using var response = await Send("api/agent/jobs/claim", null);
                         if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden) { logger.LogError("Update worker authentication rejected; stopped."); return; }
@@ -50,9 +77,21 @@ public sealed class UpdateWorker(ILogger<UpdateWorker> logger) : BackgroundServi
                         if (response.StatusCode == HttpStatusCode.OK)
                         {
                             var job = await response.Content.ReadFromJsonAsync<UpdateLease>(cancellationToken: stoppingToken) ?? throw new InvalidOperationException("Missing lease");
-                            Save(receiptPath, new Receipt(job.Id, job.LeaseId, null));
-                            var result = await Execute(job, stoppingToken);
-                            Save(receiptPath, new Receipt(job.Id, job.LeaseId, result));
+                            if (job.Kind == "agent.update")
+                            {
+                                UpdateResultRequest? outcome;
+                                try { outcome = await BeginAgentUpdate(job, client, server, identity.Assertion(), receiptPath, stoppingToken); }
+                                catch (Exception e) when (e is HttpRequestException or InvalidDataException or InvalidOperationException or UnauthorizedAccessException or IOException or Win32Exception)
+                                { outcome = new(job.LeaseId, false, false, [], $"Agent update staging failed ({e.GetType().Name})"); }
+                                if (outcome is not null) Save(receiptPath, new UpdateReceipt(job.Id, job.LeaseId, outcome, "agent.update"));
+                                else logger.LogInformation("Agent MSI update launched; the protected receipt will be reported when Windows Installer completes.");
+                            }
+                            else
+                            {
+                                Save(receiptPath, new UpdateReceipt(job.Id, job.LeaseId, null));
+                                var result = await Execute(job, stoppingToken);
+                                Save(receiptPath, new UpdateReceipt(job.Id, job.LeaseId, result));
+                            }
                         }
                     }
                 }
@@ -63,8 +102,40 @@ public sealed class UpdateWorker(ILogger<UpdateWorker> logger) : BackgroundServi
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { return; }
         }
     }
-    private static void Save(string path, Receipt value)
+    internal static void Save(string path, UpdateReceipt value)
     { AgentIdentity.WriteTrusted(path, JsonSerializer.Serialize(value)); }
+    private static string AgentVersion() => typeof(UpdateWorker).Assembly.GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+        .OfType<System.Reflection.AssemblyInformationalVersionAttribute>().FirstOrDefault()?.InformationalVersion.Split('+')[0] ?? "0.0.0";
+    private static async Task<UpdateResultRequest?> BeginAgentUpdate(UpdateLease job, HttpClient client, Uri server, string assertion, string receiptPath, CancellationToken ct)
+    {
+        var package = job.AgentUpdate ?? throw new InvalidOperationException("Update package metadata missing");
+        if (!Version.TryParse(package.Version, out var target) || target <= Version.Parse(AgentVersion()) || package.Size is < 1 or > 268435456 ||
+            package.Sha256.Length != 64 || package.Sha256.Any(x => !Uri.IsHexDigit(x))) throw new InvalidOperationException("Invalid update package metadata");
+        using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(server, $"api/agent/jobs/{job.Id}/package?leaseId={job.LeaseId}"));
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", assertion);
+        using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+        response.EnsureSuccessStatusCode();
+        if (response.Content.Headers.ContentLength != package.Size) throw new InvalidDataException("MSI package size mismatch");
+        var msiPath = Path.Combine(AgentIdentity.Folder, $"agent-update-{job.Id:N}.msi");
+        await using (var source = await response.Content.ReadAsStreamAsync(ct))
+        await using (var targetFile = new FileStream(msiPath, FileMode.Create, FileAccess.Write, FileShare.None, 65536, true))
+        {
+            await source.CopyToAsync(targetFile, ct);
+            if (targetFile.Length != package.Size) throw new InvalidDataException("MSI package size mismatch");
+        }
+        AgentIdentity.ProtectTrustedFile(msiPath);
+        await using (var verify = File.OpenRead(msiPath))
+            if (Convert.ToHexString(await SHA256.HashDataAsync(verify, ct)).ToLowerInvariant() != package.Sha256) throw new InvalidDataException("MSI package hash mismatch");
+        AgentIdentity.AssertTrusted(new FileInfo(msiPath));
+        var updaterPath = Path.Combine(AgentIdentity.Folder, "OmniDeskUpdater.exe");
+        var self = Environment.ProcessPath ?? throw new InvalidOperationException("Agent executable path unavailable");
+        File.Copy(self, updaterPath, true); AgentIdentity.AssertTrusted(new FileInfo(updaterPath));
+        Save(receiptPath, new UpdateReceipt(job.Id, job.LeaseId, null, "agent.update", package.Version, package.Sha256, "installing", DateTimeOffset.UtcNow));
+        var start = new ProcessStartInfo(updaterPath) { UseShellExecute = false, CreateNoWindow = true };
+        start.ArgumentList.Add("--apply-agent-update"); start.ArgumentList.Add(receiptPath); start.ArgumentList.Add(msiPath);
+        _ = Process.Start(start) ?? throw new InvalidOperationException("Cannot start protected updater");
+        return null;
+    }
     private static async Task<UpdateResultRequest> Execute(UpdateLease job, CancellationToken ct)
     {
         var scriptPath = Path.Combine(AgentIdentity.Folder, "update-worker.ps1");

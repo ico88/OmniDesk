@@ -4,6 +4,7 @@ using OmniDesk.Agent.Windows;
 using OmniDesk.Contracts;
 
 if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException("OmniDesk Agent requires Windows.");
+if (args.Length == 3 && args[0] == "--apply-agent-update") { await AgentUpdater.Apply(args[1], args[2]); return; }
 if (args.Length == 1 && args[0] == "self-test") { await WindowsSelfTest.Run(); return; }
 if (args.Length == 1 && args[0] == "--help")
 {

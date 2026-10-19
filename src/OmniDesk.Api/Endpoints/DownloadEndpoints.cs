@@ -5,10 +5,10 @@ using OmniDesk.Api.Data;
 using OmniDesk.Api.Security;
 namespace OmniDesk.Api.Endpoints;
 
-public sealed record WindowsRelease(string Version,string Commit,string Sha256,long Size,string FileName,bool RemoteEngineIncluded);
+public sealed record WindowsRelease(string Version,string Commit,string Sha256,long Size,string FileName,bool RemoteEngineIncluded,string? MsiSha256=null,long? MsiSize=null);
 public static class DownloadEndpoints
 {
-    private static WindowsRelease? ReadRelease(IConfiguration config)
+    public static WindowsRelease? ReadRelease(IConfiguration config)
     {
         var directory=config["Downloads:Directory"];
         if(string.IsNullOrWhiteSpace(directory))return null;
@@ -18,7 +18,9 @@ public static class DownloadEndpoints
             var release=JsonSerializer.Deserialize<WindowsRelease>(File.ReadAllText(manifest),new JsonSerializerOptions(JsonSerializerDefaults.Web));
             if(release is null||!Regex.IsMatch(release.Version??"",@"\A[0-9]+\.[0-9]+\.[0-9]+\z")||
                 !Regex.IsMatch(release.Commit??"",@"\A[a-f0-9]{40}\z")||!Regex.IsMatch(release.Sha256??"",@"\A[a-f0-9]{64}\z")||
-                release.Size is < 1 or > 268435456||release.FileName!=$"OmniDesk.Windows.LAN-{release.Version}.zip")return null;
+                release.Size is < 1 or > 268435456||release.FileName!=$"OmniDesk.Windows.LAN-{release.Version}.zip"||
+                ((release.MsiSha256 is null) != (release.MsiSize is null)) ||
+                (release.MsiSha256 is not null && (!Regex.IsMatch(release.MsiSha256, @"\A[a-f0-9]{64}\z") || release.MsiSize is < 1 or > 268435456)))return null;
             var file=new FileInfo(Path.Combine(directory,release.FileName));
             return file.Exists&&file.Length==release.Size?release:null;
         }

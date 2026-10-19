@@ -134,13 +134,13 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'MSI build failed' }
           $msi = @(Get-ChildItem installer/OmniDesk.Agent/bin -Filter OmniDesk.Agent.msi -Recurse | Where-Object FullName -Match '[\\/]Release[\\/]')
           if ($msi.Count -ne 1) { throw 'Expected one Release MSI' }
-          $out = 'artifacts/windows-0.8.0'
+          $out = 'artifacts/windows-0.8.1'
           New-Item -ItemType Directory $out -Force | Out-Null
           Copy-Item $msi[0].FullName $out
           Copy-Item artifacts/setup-win-x64/OmniDesk.Setup.exe $out
           @('OmniDesk.Agent.msi','OmniDesk.Setup.exe') | ForEach-Object { $hash=Get-FileHash (Join-Path $out $_) -Algorithm SHA256; '{0}  {1}' -f $hash.Hash.ToLowerInvariant(), $_ } | Set-Content (Join-Path $out SHA256SUMS.txt) -Encoding ascii
       - uses: actions/upload-artifact@v4
         with:
-          name: windows-0.8.0-native-installer
+          name: windows-0.8.1-native-installer
           if-no-files-found: error
-          path: artifacts/windows-0.8.0/*
+          path: artifacts/windows-0.8.1/*

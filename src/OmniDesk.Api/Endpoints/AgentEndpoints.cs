@@ -117,5 +117,6 @@ public static class AgentEndpoints
     private static bool Valid(MetricsRequest r) => (r.CpuPercent is null || (double.IsFinite(r.CpuPercent.Value) && r.CpuPercent is >= 0 and <= 100)) &&
         r.TotalMemoryBytes > 0 && r.AvailableMemoryBytes >= 0 && r.AvailableMemoryBytes <= r.TotalMemoryBytes &&
         r.NetworkReceivedBytes >= 0 && r.NetworkSentBytes >= 0 && r.UptimeSeconds >= 0 && r.Disks is not null && r.Disks.Length <= 64 &&
+        (r.AgentVersion is null || (r.AgentVersion.Length <= 64 && System.Text.RegularExpressions.Regex.IsMatch(r.AgentVersion, @"\A[0-9]+\.[0-9]+\.[0-9]+\z"))) &&
         r.Disks.All(x => x is not null && !string.IsNullOrWhiteSpace(x.Name) && x.Name.Length <= 200 && x.TotalBytes > 0 && x.FreeBytes >= 0 && x.FreeBytes <= x.TotalBytes);
 }

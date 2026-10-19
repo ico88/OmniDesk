@@ -11,15 +11,23 @@ import { Icon } from './Icon';
 type MetricDisk = { name: string; totalBytes: number; freeBytes: number };
 export type DeviceStatus = {
   id: string; name: string; groupId: string | null; capabilities: string[]; online: boolean; revoked: boolean; lastSeen: string | null;
-  metrics: { cpuPercent: number | null; totalMemoryBytes: number; availableMemoryBytes: number; networkReceivedBytes: number; networkSentBytes: number; uptimeSeconds: number; disks: MetricDisk[] } | null;
+  metrics: { cpuPercent: number | null; totalMemoryBytes: number; availableMemoryBytes: number; networkReceivedBytes: number; networkSentBytes: number; uptimeSeconds: number; disks: MetricDisk[]; agentVersion?: string | null } | null;
   inventory: { operatingSystem: string; architecture: string; manufacturer: string | null; model: string | null; processor: string | null; logicalProcessors: number; software: { name: string; version: string | null; publisher: string | null }[]; warnings: string[] } | null;
 };
 type Group = { id: string; name: string };
 type UpdateItem = { UpdateId: string; Revision: number; Title: string; Kb: string[]; ResultCode: number | null };
 type UpdateJob = { id: string; kind: string; state: string; createdAt: string; result: string | null };
+type WindowsDownload = { available: boolean; release: { version: string; msiSha256?: string | null; msiSize?: number | null } | null };
 
 const jobLabels: Record<string, string> = { queued: 'In coda', leased: 'In esecuzione', succeeded: 'Completato', failed: 'Non riuscito', cancelled: 'Annullato' };
 const byteCount = (bytes: number) => `${(bytes / 1073741824).toFixed(1)} GiB`;
+const versionAtLeast = (value: string | null | undefined, minimum: string) => {
+  if (!value) return false;
+  const a = value.split('.').map(Number); const b = minimum.split('.').map(Number);
+  if (a.length !== 3 || a.some(x => !Number.isInteger(x) || x < 0)) return false;
+  for (let i = 0; i < 3; i++) { if ((a[i] ?? 0) !== (b[i] ?? 0)) return (a[i] ?? 0) > (b[i] ?? 0); }
+  return true;
+};
 
 export function DeviceWorkspace({ device, admin, groups, onDeviceChanged, onMessage }: {
   device: DeviceStatus;
@@ -34,6 +42,7 @@ export function DeviceWorkspace({ device, admin, groups, onDeviceChanged, onMess
   const [error, setError] = useState('');
   const [jobs, setJobs] = useState<UpdateJob[]>([]);
   const [selectedUpdates, setSelectedUpdates] = useState<UpdateItem[]>([]);
+  const [windowsRelease, setWindowsRelease] = useState<WindowsDownload | null>(null);
 
   async function work(action: () => Promise<void>) {
     setBusy(true);
@@ -57,6 +66,13 @@ export function DeviceWorkspace({ device, admin, groups, onDeviceChanged, onMess
     const timer = window.setInterval(() => void loadAvailability(), 15000);
     return () => { active = false; window.clearInterval(timer); };
   }, [device.id]);
+
+  useEffect(() => {
+    let active = true;
+    if (admin) void api<WindowsDownload>('/admin/downloads/windows').then(value => { if (active) setWindowsRelease(value); }).catch(() => { if (active) setWindowsRelease({ available: false, release: null }); });
+    else setWindowsRelease(null);
+    return () => { active = false; };
+  }, [admin]);
 
   useEffect(() => {
     if (activeTab === 'updates' && device.capabilities.includes('updates')) void work(loadJobs);
@@ -118,9 +134,14 @@ export function DeviceWorkspace({ device, admin, groups, onDeviceChanged, onMess
 
     {activeTab === 'updates' && <DevicePanel id="updates"><div className="section-heading"><div><span className="eyebrow">GESTIONE</span><h3>Aggiornamenti Windows</h3></div><button className="secondary compact" disabled={busy || !count('updates')} onClick={() => void work(loadJobs)}><Icon name="refresh" size={15}/>Aggiorna</button></div>
       {!count('updates') ? <p>Non hai il permesso per gestire gli aggiornamenti di questo dispositivo.</p> : <>
+        <article className="update-job-card"><div><strong>OmniDesk Agent</strong><span>Installato: {metrics?.agentVersion ?? 'versione non rilevata'}</span></div>{admin ? <><small>{!versionAtLeast(metrics?.agentVersion, '0.8.1') ? 'Questa versione non supporta l’aggiornamento remoto: installa manualmente l’MSI 0.8.1 una volta.' : windowsRelease?.available && windowsRelease.release?.msiSha256 ? `Release disponibile: ${windowsRelease.release.version}` : 'Release MSI verificata non disponibile sul server'}</small><button disabled={busy || device.revoked || !device.online || !versionAtLeast(metrics?.agentVersion, '0.8.1') || !windowsRelease?.available || !windowsRelease.release?.msiSha256 || !windowsRelease.release?.msiSize || !windowsRelease.release.version || versionAtLeast(metrics?.agentVersion, windowsRelease.release.version)} onClick={() => {
+          const target = windowsRelease?.release?.version;
+          if (!target || !window.confirm(`Aggiornare OmniDesk Agent a ${target}? Il servizio si arresterà e ripartirà durante l’installazione. Non è previsto un riavvio di Windows.`)) return;
+          void work(async () => { await api(`/admin/devices/${device.id}/agent-update`, 'POST', { requestId: crypto.randomUUID() }); await loadJobs(); });
+        }}>Aggiorna Agent</button></> : <small>Solo un amministratore globale può aggiornare il software Agent.</small>}</article>
         <div className="action-row"><button disabled={busy || device.revoked} onClick={() => void work(async () => { await api(`/devices/${device.id}/updates/scan`, 'POST', { requestId: crypto.randomUUID() }); await loadJobs(); })}>Avvia scansione</button><p>I lavori vengono eseguiti dall’agente. Nessun riavvio automatico.</p></div>
         {!jobs.length && <p>Nessun lavoro di aggiornamento registrato.</p>}
-        {jobs.map(job => <article className="update-job-card" key={job.id}><div><strong>{job.kind === 'scan' ? 'Scansione' : 'Installazione'}</strong><span className={`status-pill ${job.state === 'succeeded' ? 'online' : job.state === 'failed' ? 'danger' : 'offline'}`}>{jobLabels[job.state] ?? job.state}</span></div><small>{new Date(job.createdAt).toLocaleString('it-IT')}</small>
+        {jobs.map(job => <article className="update-job-card" key={job.id}><div><strong>{job.kind === 'scan' ? 'Scansione' : job.kind === 'install' ? 'Installazione aggiornamenti' : 'Aggiornamento Agent'}</strong><span className={`status-pill ${job.state === 'succeeded' ? 'online' : job.state === 'failed' ? 'danger' : 'offline'}`}>{jobLabels[job.state] ?? job.state}</span></div><small>{new Date(job.createdAt).toLocaleString('it-IT')}</small>
           {job.state === 'queued' && <button className="secondary compact" disabled={busy} onClick={() => void work(async () => { await api(`/devices/${device.id}/updates/${job.id}`, 'DELETE'); await loadJobs(); })}>Annulla</button>}
           {job.result && (() => { try { const result = JSON.parse(job.result) as { Succeeded: boolean; RebootRequired: boolean; Error: string | null; Updates: UpdateItem[] }; return <div className="update-result"><p>{result.Succeeded ? 'Operazione completata' : 'Operazione non riuscita'}{result.RebootRequired ? ' · Riavvio richiesto' : ''}</p>{result.Error && <details><summary>Dettagli errore</summary><code>{result.Error}</code></details>}{job.kind === 'scan' && result.Succeeded && result.Updates.map(item => <label className="update-choice" key={`${item.UpdateId}-${item.Revision}`}><input type="checkbox" checked={selectedUpdates.some(x => x.UpdateId === item.UpdateId)} onChange={event => setSelectedUpdates(event.target.checked ? [...selectedUpdates.filter(x => x.UpdateId !== item.UpdateId), item] : selectedUpdates.filter(x => x.UpdateId !== item.UpdateId))}/>{item.Title} · {item.Kb.join(', ')}</label>)}</div>; } catch { return <p>Risultato non leggibile; richiedi di nuovo l’elenco lavori.</p>; } })()}
         </article>)}
