@@ -81,7 +81,7 @@ public sealed class TicketNotificationWorker(IServiceScopeFactory scopes, ILogge
         }
     }
 
-    private static async Task ProjectNotifications(AppDbContext db, PermissionService permissions, CoreOutboxEvent evt,
+    public static async Task ProjectNotifications(AppDbContext db, PermissionService permissions, CoreOutboxEvent evt,
         DateTimeOffset now, CancellationToken ct)
     {
         if (evt.AggregateType != "ticket") return;
@@ -121,6 +121,12 @@ public sealed class TicketNotificationWorker(IServiceScopeFactory scopes, ILogge
         else if (evt.EventType == "ticket.attachment.ready")
         {
             kind = "ticket.attachment";
+            await AddAssigneeOrQueue(db, root, recipients, ct);
+            await AddTicketParticipants(db, ticket.Id, evt.OccurredAt, recipients, ct);
+        }
+        else if (evt.EventType == "ticket.sla.breached")
+        {
+            kind = "ticket.sla.breached";
             await AddAssigneeOrQueue(db, root, recipients, ct);
             await AddTicketParticipants(db, ticket.Id, evt.OccurredAt, recipients, ct);
         }

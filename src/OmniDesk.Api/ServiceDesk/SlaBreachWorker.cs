@@ -3,7 +3,7 @@ using OmniDesk.Api.Data;
 
 namespace OmniDesk.Api.ServiceDesk;
 
-/// <summary>Persists each overdue SLA breach once; notifications and escalation are separate consumers.</summary>
+/// <summary>Persists each overdue SLA breach once and emits a transactional notification event.</summary>
 public sealed class SlaBreachWorker(IServiceScopeFactory scopes, ILogger<SlaBreachWorker> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -54,11 +54,25 @@ public sealed class SlaBreachWorker(IServiceScopeFactory scopes, ILogger<SlaBrea
         if (target is null) return false;
 
         target.BreachedAt = now;
+        var ticket = await db.SupportTickets.AsNoTracking().SingleAsync(x => x.Id == target.TicketId, cancellationToken);
         db.AuditEvents.Add(new AuditEvent
         {
             Action = "ticket.sla.target.breached",
             Target = target.TicketId.ToString(),
             Outcome = "success"
+        });
+        CoreOutbox.Add(db, "ticket.sla.breached", "ticket", ticket.Id, new
+        {
+            ticketId = ticket.Id,
+            deviceId = ticket.DeviceId,
+            siteId = ticket.SiteId,
+            assigneeId = ticket.AssigneeId,
+            queueId = ticket.QueueId,
+            targetType = target.TargetType,
+            policyId = target.PolicyId,
+            policyVersion = target.PolicyVersion,
+            cycle = target.Cycle,
+            dueAt = target.DueAt
         });
         await db.SaveChangesAsync(cancellationToken);
         return true;
