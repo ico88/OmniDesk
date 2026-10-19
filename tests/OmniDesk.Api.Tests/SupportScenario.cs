@@ -431,6 +431,74 @@ public static class SupportScenario
         var closed = await admin.GetFromJsonAsync<System.Text.Json.JsonElement>($"/api/support/{manualTicket.Id}/messages");
         Assert.Equal("closed", closed.GetProperty("state").GetString());
         Assert.Equal(new[] { "closed" }, closed.GetProperty("allowedStates").EnumerateArray().Select(x => x.GetString()));
+
+        var definitionV1 = TicketWorkflowPolicyTests.CustomDefinition();
+        Assert.Equal(HttpStatusCode.Forbidden, (await scoped.GetAsync("/api/admin/support-workflows")).StatusCode);
+        var workflowCreate = await admin.PostAsJsonAsync("/api/admin/support-workflows", new { name = "Assistenza sede", siteId, definition = definitionV1 });
+        Assert.Equal(HttpStatusCode.Created, workflowCreate.StatusCode);
+        var workflowId = (await workflowCreate.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("id").GetGuid();
+        Assert.Equal(HttpStatusCode.Forbidden, (await scoped.PostAsJsonAsync("/api/admin/support-workflows", new { name = "Non autorizzato", siteId, definition = definitionV1 })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await admin.PostAsJsonAsync("/api/admin/support-workflows", new { name = "Duplicato sede", siteId, definition = definitionV1 })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await admin.PostAsync($"/api/admin/support-workflows/{workflowId}/publish?expectedVersion=1", null)).StatusCode);
+        var customTicketRequest = new ManualSupportCreate(Guid.NewGuid(), device, "Fornitore non raggiungibile", "Test workflow personalizzato", "network", "normal");
+        var customTicketResponse = await admin.PostAsJsonAsync("/api/support/manual", customTicketRequest);
+        Assert.Equal(HttpStatusCode.Created, customTicketResponse.StatusCode);
+        var customTicketId = (await customTicketResponse.Content.ReadFromJsonAsync<SupportTicketView>())!.Id;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var bound = await db.SupportTickets.SingleAsync(x => x.Id == customTicketId);
+            Assert.Equal(workflowId, bound.WorkflowId);
+            Assert.Equal(1, bound.WorkflowVersion);
+        }
+        var customThread = await admin.GetFromJsonAsync<System.Text.Json.JsonElement>($"/api/support/{customTicketId}/messages");
+        Assert.Equal(1, customThread.GetProperty("workflowVersion").GetInt32());
+        Assert.Equal("In attesa fornitore", customThread.GetProperty("stateLabels").GetProperty("waiting_vendor").GetString());
+        Assert.Contains("waiting_vendor", customThread.GetProperty("allowedStates").EnumerateArray().Select(x => x.GetString()));
+        Assert.Equal(HttpStatusCode.Conflict, (await admin.PutAsJsonAsync($"/api/support/{customTicketId}", new
+        { expectedVersion = 1, state = "closed", resolution = "Non saltare il flusso", addReply = true })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await admin.PutAsJsonAsync($"/api/support/{customTicketId}", new
+        { expectedVersion = 1, state = "waiting_vendor", resolution = (string?)null })).StatusCode);
+
+        var definitionV2 = definitionV1 with
+        {
+            States = [.. definitionV1.States, new TicketWorkflowState("on_hold", "In attesa interna")],
+            Transitions = [.. definitionV1.Transitions.Where(x => !(x.From == "waiting_vendor" && x.To == "resolved")),
+                new TicketWorkflowTransition("on_hold", "on_hold"), new TicketWorkflowTransition("in_progress", "on_hold")]
+        };
+        Assert.Equal(HttpStatusCode.OK, (await admin.PutAsJsonAsync($"/api/admin/support-workflows/{workflowId}",
+            new TicketWorkflowDraftRequest(2, "Assistenza sede", definitionV2))).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await admin.PostAsync($"/api/admin/support-workflows/{workflowId}/publish?expectedVersion=3", null)).StatusCode);
+        var newCustomTicketResponse = await admin.PostAsJsonAsync("/api/support/manual", customTicketRequest with { RequestId = Guid.NewGuid(), Subject = "Ticket dopo la pubblicazione" });
+        Assert.Equal(HttpStatusCode.Created, newCustomTicketResponse.StatusCode);
+        var newCustomTicketId = (await newCustomTicketResponse.Content.ReadFromJsonAsync<SupportTicketView>())!.Id;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var oldBinding = await db.SupportTickets.SingleAsync(x => x.Id == customTicketId);
+            var newBinding = await db.SupportTickets.SingleAsync(x => x.Id == newCustomTicketId);
+            Assert.Equal(1, oldBinding.WorkflowVersion);
+            Assert.Equal(2, newBinding.WorkflowVersion);
+        }
+        Assert.Equal(HttpStatusCode.NoContent, (await admin.PutAsJsonAsync($"/api/support/{customTicketId}", new
+        { expectedVersion = 2, state = "resolved", resolution = "Il fornitore ha ripristinato il servizio", addReply = true })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await admin.PostAsync($"/api/admin/support-workflows/{workflowId}/deactivate?expectedVersion=4", null)).StatusCode);
+
+        var globalWorkflowResponse = await admin.PostAsJsonAsync("/api/admin/support-workflows", new
+        { name = "Workflow globale", siteId = (Guid?)null, definition = definitionV1 });
+        Assert.Equal(HttpStatusCode.Created, globalWorkflowResponse.StatusCode);
+        var globalWorkflowId = (await globalWorkflowResponse.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("id").GetGuid();
+        Assert.Equal(HttpStatusCode.OK, (await admin.PostAsync($"/api/admin/support-workflows/{globalWorkflowId}/publish?expectedVersion=1", null)).StatusCode);
+        var fallbackTicketResponse = await admin.PostAsJsonAsync("/api/support/manual", customTicketRequest with { RequestId = Guid.NewGuid(), Subject = "Ticket workflow globale" });
+        Assert.Equal(HttpStatusCode.Created, fallbackTicketResponse.StatusCode);
+        var fallbackTicketId = (await fallbackTicketResponse.Content.ReadFromJsonAsync<SupportTicketView>())!.Id;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var fallback = await db.SupportTickets.SingleAsync(x => x.Id == fallbackTicketId);
+            Assert.Equal(globalWorkflowId, fallback.WorkflowId);
+            Assert.Equal(1, fallback.WorkflowVersion);
+        }
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
