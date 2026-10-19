@@ -1298,4 +1298,6 @@ risultati trovati nel corpo, output senza corpo articolo, negazione senza grant,
 limite minimo e isolamento sede/gruppo. `docker compose build api dashboard`
 passato; `./scripts/smoke.sh --browser` passato verificando API e campo di ricerca
 con Chromium su Compose isolato. Compose standard/test e `git diff --check`
-passati. Nessun dato, container o schema LAN è stato modificato.
+passati. GitHub Actions `build-and-test` run 39297406507 e
+`windows-agent-package` run 39297406508 passate, inclusi i test MSI Windows.
+Nessun dato, container o schema LAN è stato modificato.
