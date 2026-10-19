@@ -51,6 +51,15 @@ public sealed class TrayProtocolTests
         await Assert.ThrowsAsync<InvalidDataException>(() => TrayProtocol.Write(stream,request,CancellationToken.None));
         await TrayProtocol.Write(stream,request,CancellationToken.None,TrayProtocol.MaxSupportPayload); stream.Position=0;
         Assert.Equal(request,await TrayProtocol.Read<TrayRequest>(stream,CancellationToken.None,TrayProtocol.MaxSupportPayload));
+        var conversation = new TrayRequest(TrayProtocol.Version, Guid.NewGuid(), TrayProtocol.TicketConversationMethod, TicketId: Guid.NewGuid());
+        Assert.True(TrayProtocol.Valid(conversation));
+        Assert.False(TrayProtocol.Valid(conversation with { TicketId = null }));
+        Assert.False(TrayProtocol.Valid(conversation with { Body = "extra" }));
+        var reply = new TrayRequest(TrayProtocol.Version, Guid.NewGuid(), TrayProtocol.ReplyToTicketMethod,
+            TicketId: Guid.NewGuid(), ExpectedVersion: 1, Body: "Serve ancora aiuto");
+        Assert.True(TrayProtocol.Valid(reply));
+        Assert.False(TrayProtocol.Valid(reply with { ExpectedVersion = 0 }));
+        Assert.False(TrayProtocol.Valid(reply with { Body = " " }));
     }
     [Fact]
     public async Task Nested_duplicate_fields_are_rejected()

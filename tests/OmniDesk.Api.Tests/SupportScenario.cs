@@ -76,6 +76,20 @@ public static class SupportScenario
         Assert.True(ticket.Number > 0);
         Assert.Equal("software", ticket.Category);
         Assert.Equal(device,ticket.DeviceId); Assert.True(ticket.HasScreenshot);
+        Auth();
+        var requesterThread = await agent.GetFromJsonAsync<System.Text.Json.JsonElement>($"/api/agent/support/{owner}/{ticket.Id}/messages");
+        Assert.Single(requesterThread.GetProperty("messages").EnumerateArray());
+        Assert.Equal(create.Description, requesterThread.GetProperty("messages")[0].GetProperty("body").GetString());
+        Auth();
+        Assert.Equal(HttpStatusCode.NotFound, (await agent.PostAsJsonAsync($"/api/agent/support/{other}/{ticket.Id}/messages", new SupportRequesterReply(other, 1, "No access"))).StatusCode);
+        Auth();
+        Assert.Equal(HttpStatusCode.NoContent, (await agent.PostAsJsonAsync($"/api/agent/support/{owner}/{ticket.Id}/messages", new SupportRequesterReply(owner, 1, "Il problema è ancora presente."))).StatusCode);
+        Auth();
+        Assert.Equal(HttpStatusCode.Conflict, (await agent.PostAsJsonAsync($"/api/agent/support/{owner}/{ticket.Id}/messages", new SupportRequesterReply(owner, 1, "Risposta obsoleta"))).StatusCode);
+        Auth();
+        requesterThread = await agent.GetFromJsonAsync<System.Text.Json.JsonElement>($"/api/agent/support/{owner}/{ticket.Id}/messages");
+        Assert.Equal(2, requesterThread.GetProperty("version").GetInt64());
+        Assert.Contains(requesterThread.GetProperty("messages").EnumerateArray(), m => m.GetProperty("body").GetString() == "Il problema è ancora presente.");
         Assert.Equal(siteQueueId, (await admin.GetFromJsonAsync<System.Text.Json.JsonElement[]>($"/api/support?deviceId={device}"))!.Single().GetProperty("queueId").GetGuid());
         var availableQueues = await admin.GetFromJsonAsync<System.Text.Json.JsonElement[]>($"/api/support/{ticket.Id}/queues");
         Assert.Contains(availableQueues!, x => x.GetProperty("id").GetGuid() == siteQueueId);
@@ -128,7 +142,7 @@ public static class SupportScenario
         var scopedTicketQueues = await scoped.GetFromJsonAsync<System.Text.Json.JsonElement[]>($"/api/support/{ticket.Id}/queues");
         Assert.Contains(scopedTicketQueues!, x => x.GetProperty("id").GetGuid() == siteQueueId);
         Assert.DoesNotContain(scopedTicketQueues!, x => x.GetProperty("id").GetGuid() == otherSiteQueueId);
-        Assert.Equal(HttpStatusCode.BadRequest, (await admin.PutAsJsonAsync("/api/support/bulk-queue", new { queueId = otherSiteQueueId, tickets = new[] { new { ticketId = ticket.Id, expectedVersion = 1L } } })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await admin.PutAsJsonAsync("/api/support/bulk-queue", new { queueId = otherSiteQueueId, tickets = new[] { new { ticketId = ticket.Id, expectedVersion = 2L } } })).StatusCode);
         var scopedAssignees=await scoped.GetFromJsonAsync<System.Text.Json.JsonElement[]>($"/api/support/{ticket.Id}/assignees");
         Assert.DoesNotContain(scopedAssignees!,x=>x.GetProperty("id").GetString()==scopedId);
         Assert.Equal(HttpStatusCode.BadRequest,(await admin.PutAsJsonAsync($"/api/admin/support-queues/{siteQueueId}/members",new {expectedVersion=1,userIds=new[]{"unknown-user"}})).StatusCode);
@@ -137,11 +151,11 @@ public static class SupportScenario
         scopedAssignees=await scoped.GetFromJsonAsync<System.Text.Json.JsonElement[]>($"/api/support/{ticket.Id}/assignees");
         Assert.Contains(scopedAssignees!,x=>x.GetProperty("id").GetString()==scopedId);
         var adminUser=(await admin.GetFromJsonAsync<System.Text.Json.JsonElement[]>("/api/admin/users"))!.Single(x=>x.GetProperty("email").GetString()=="admin@example.test").GetProperty("id").GetString();
-        Assert.Equal(HttpStatusCode.BadRequest,(await admin.PutAsJsonAsync($"/api/support/{ticket.Id}",new {expectedVersion=1,state="open",resolution=(string?)null,queueId=otherSiteQueueId,updateQueue=true})).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest,(await admin.PutAsJsonAsync($"/api/support/{ticket.Id}",new {expectedVersion=1,state="open",resolution=(string?)null,queueId=siteQueueId,updateQueue=true,assigneeId=adminUser,updateAssignment=true})).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest,(await admin.PutAsJsonAsync($"/api/support/{ticket.Id}",new {expectedVersion=1,state="open",resolution=(string?)null,priority="emergency",updatePriority=true})).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest,(await admin.PutAsJsonAsync($"/api/support/{ticket.Id}",new {expectedVersion=1,state="open",resolution=(string?)null,assigneeId="new-user-without-scope",updateAssignment=true})).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest,(await admin.PutAsJsonAsync($"/api/support/{ticket.Id}",new {expectedVersion=1,state="open",resolution=(string?)null,queueId=Guid.NewGuid(),updateQueue=true})).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,(await admin.PutAsJsonAsync($"/api/support/{ticket.Id}",new {expectedVersion=2,state="open",resolution=(string?)null,queueId=otherSiteQueueId,updateQueue=true})).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,(await admin.PutAsJsonAsync($"/api/support/{ticket.Id}",new {expectedVersion=2,state="open",resolution=(string?)null,queueId=siteQueueId,updateQueue=true,assigneeId=adminUser,updateAssignment=true})).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,(await admin.PutAsJsonAsync($"/api/support/{ticket.Id}",new {expectedVersion=2,state="open",resolution=(string?)null,priority="emergency",updatePriority=true})).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,(await admin.PutAsJsonAsync($"/api/support/{ticket.Id}",new {expectedVersion=2,state="open",resolution=(string?)null,assigneeId="new-user-without-scope",updateAssignment=true})).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,(await admin.PutAsJsonAsync($"/api/support/{ticket.Id}",new {expectedVersion=2,state="open",resolution=(string?)null,queueId=Guid.NewGuid(),updateQueue=true})).StatusCode);
         Assert.Contains((await admin.GetFromJsonAsync<SupportTicketView[]>("/api/support"))!,t=>t.Id==ticket.Id);
         var scopedSummary=await scoped.GetFromJsonAsync<System.Text.Json.JsonElement>($"/api/support/summary?deviceId={device}");
         Assert.Equal(1,scopedSummary.GetProperty("total").GetInt32());
@@ -170,7 +184,7 @@ public static class SupportScenario
         var invalid = await admin.PutAsJsonAsync($"/api/support/{ticket.Id}",new SupportEdit(1,"resolved","   "));
         Assert.Contains("Scrivi una risposta",await invalid.Content.ReadAsStringAsync());
         Assert.Equal(HttpStatusCode.BadRequest,(await admin.PutAsJsonAsync($"/api/support/{ticket.Id}",new SupportEdit(1,"resolved",null))).StatusCode);
-        Assert.Equal(HttpStatusCode.NoContent,(await admin.PutAsJsonAsync($"/api/support/{ticket.Id}",new {expectedVersion=1,state="resolved",resolution="Risolto fixture",addReply=true,priority="urgent",updatePriority=true,queueId=siteQueueId,updateQueue=true,assigneeId=scopedId,updateAssignment=true})).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent,(await admin.PutAsJsonAsync($"/api/support/{ticket.Id}",new {expectedVersion=2,state="resolved",resolution="Risolto fixture",addReply=true,priority="urgent",updatePriority=true,queueId=siteQueueId,updateQueue=true,assigneeId=scopedId,updateAssignment=true})).StatusCode);
         var assignedTicket=(await admin.GetFromJsonAsync<System.Text.Json.JsonElement[]>($"/api/support?deviceId={device}"))!.Single();
         Assert.Equal("urgent",assignedTicket.GetProperty("priority").GetString());
         Assert.Equal("software",assignedTicket.GetProperty("category").GetString());
@@ -190,22 +204,24 @@ public static class SupportScenario
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            var evt = await db.CoreOutboxEvents.SingleAsync(x => x.EventType == "ticket.updated" && x.AggregateId == ticket.Id);
-            Assert.Contains("resolved", evt.Payload);
-            Assert.DoesNotContain("Risolto fixture", evt.Payload);
+            var events = await db.CoreOutboxEvents.Where(x => x.EventType == "ticket.updated" && x.AggregateId == ticket.Id).ToArrayAsync();
+            Assert.Equal(2, events.Length);
+            Assert.Contains(events, x => x.Payload.Contains("resolved", StringComparison.Ordinal));
+            Assert.All(events, x => Assert.DoesNotContain("Risolto fixture", x.Payload));
+            Assert.All(events, x => Assert.DoesNotContain("Il problema è ancora presente", x.Payload));
         }
         Assert.Equal(HttpStatusCode.Conflict,(await admin.PutAsJsonAsync($"/api/support/{ticket.Id}",new SupportEdit(1,"closed","Stale"))).StatusCode);
         var conversation = await admin.GetFromJsonAsync<System.Text.Json.JsonElement>($"/api/support/{ticket.Id}/messages");
         var messages = conversation.GetProperty("messages").EnumerateArray().ToArray();
-        Assert.Equal(2,messages.Length);
+        Assert.Equal(3,messages.Length);
         Assert.Contains(messages,m=>m.GetProperty("body").GetString()=="Risolto fixture");
         Assert.Contains(messages,m=>m.GetProperty("toState").GetString()=="resolved");
         Assert.True(conversation.GetProperty("canReply").GetBoolean());
-        Assert.Equal(2,conversation.GetProperty("version").GetInt64());
-        Assert.Equal(HttpStatusCode.NoContent, (await admin.PutAsJsonAsync("/api/support/bulk-queue", new { queueId = (Guid?)null, tickets = new[] { new { ticketId = ticket.Id, expectedVersion = 2L } } })).StatusCode);
-        Assert.Equal(HttpStatusCode.Conflict, (await admin.PutAsJsonAsync("/api/support/bulk-queue", new { queueId = (Guid?)null, tickets = new[] { new { ticketId = ticket.Id, expectedVersion = 2L } } })).StatusCode);
+        Assert.Equal(3,conversation.GetProperty("version").GetInt64());
+        Assert.Equal(HttpStatusCode.NoContent, (await admin.PutAsJsonAsync("/api/support/bulk-queue", new { queueId = (Guid?)null, tickets = new[] { new { ticketId = ticket.Id, expectedVersion = 3L } } })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await admin.PutAsJsonAsync("/api/support/bulk-queue", new { queueId = (Guid?)null, tickets = new[] { new { ticketId = ticket.Id, expectedVersion = 3L } } })).StatusCode);
         Assert.Equal(HttpStatusCode.NoContent, (await admin.PutAsJsonAsync($"/api/admin/support-queues/{siteQueueId}", new { name = "Rete", expectedName = "Rete", expectedVersion = 2, isActive = false })).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, (await admin.PutAsJsonAsync($"/api/support/{ticket.Id}", new { expectedVersion = 3, state = "resolved", resolution = "Risolto fixture", queueId = siteQueueId, updateQueue = true })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await admin.PutAsJsonAsync($"/api/support/{ticket.Id}", new { expectedVersion = 4, state = "resolved", resolution = "Risolto fixture", queueId = siteQueueId, updateQueue = true })).StatusCode);
         var older = await admin.GetFromJsonAsync<System.Text.Json.JsonElement>($"/api/support/{ticket.Id}/messages?before={messages[1].GetProperty("id").GetInt64()}");
         Assert.Single(older.GetProperty("messages").EnumerateArray());
         Assert.Equal(HttpStatusCode.BadRequest,(await admin.GetAsync($"/api/support/{ticket.Id}/messages?before=0")).StatusCode);
