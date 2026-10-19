@@ -74,5 +74,28 @@ public static class UpdateScenario
         agent.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", assertion());
         Assert.Equal(HttpStatusCode.NoContent, (await agent.PostAsJsonAsync($"/api/agent/jobs/{serviceLease.Id}/result", new UpdateResultRequest(serviceLease.LeaseId, true, false, []))).StatusCode);
         Assert.Single(await admin.GetFromJsonAsync<JsonElement[]>($"/api/devices/{device}/services/jobs"));
+
+        var startedAt = DateTimeOffset.UtcNow.AddSeconds(-10);
+        var processAction = new ProcessControlRequest(Guid.NewGuid(), 12345, "notepad.exe", startedAt);
+        Assert.Equal(HttpStatusCode.Forbidden, (await scoped.PostAsJsonAsync($"/api/devices/{device}/processes/actions", processAction)).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await admin.PostAsJsonAsync($"/api/devices/{device}/processes/actions", processAction with { ProcessId = 4 })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await admin.PostAsJsonAsync($"/api/devices/{device}/processes/actions", processAction with { ProcessName = "lsass.exe" })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await admin.PostAsJsonAsync($"/api/devices/{device}/processes/actions", processAction with { ProcessName = "MeshService64.exe" })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await admin.PostAsJsonAsync($"/api/devices/{device}/processes/actions", processAction with { StartedAt = default })).StatusCode);
+        Assert.Equal(HttpStatusCode.Created, (await admin.PostAsJsonAsync("/api/admin/roles", new { name = "Process Technician", permissions = new[] { "processes.manage" } })).StatusCode);
+        Assert.Equal(HttpStatusCode.Created, (await admin.PostAsJsonAsync("/api/admin/grants", new { userId = scopedId, role = "Process Technician", groupId = group, deviceId = (Guid?)null })).StatusCode);
+        var queuedProcess = await scoped.PostAsJsonAsync($"/api/devices/{device}/processes/actions", processAction);
+        Assert.Equal(HttpStatusCode.Created, queuedProcess.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await scoped.PostAsJsonAsync($"/api/devices/{device}/processes/actions", processAction)).StatusCode);
+        agent.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", assertion());
+        var processClaim = await agent.PostAsync("/api/agent/jobs/claim", null);
+        Assert.Equal(HttpStatusCode.OK, processClaim.StatusCode);
+        var processLease = (await processClaim.Content.ReadFromJsonAsync<UpdateLease>())!;
+        Assert.Equal("process.kill", processLease.Kind);
+        Assert.Equal(12345, processLease.ProcessControl!.ProcessId);
+        Assert.Equal(startedAt, processLease.ProcessControl.StartedAt);
+        agent.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", assertion());
+        Assert.Equal(HttpStatusCode.NoContent, (await agent.PostAsJsonAsync($"/api/agent/jobs/{processLease.Id}/result", new UpdateResultRequest(processLease.LeaseId, true, false, []))).StatusCode);
+        Assert.Single(await scoped.GetFromJsonAsync<JsonElement[]>($"/api/devices/{device}/processes/jobs"));
     }
 }
