@@ -22,6 +22,43 @@ public static partial class KnowledgeEndpoints
             var groups = await db.DeviceGroups.AsNoTracking().OrderBy(x => x.Name).Select(x => new { x.Id, x.Name }).ToListAsync();
             return Results.Ok(new { sites, groups });
         });
+        api.MapGet("/search", async (string? q, HttpContext c, AppDbContext db, PermissionService permissions) => {
+            var term = q?.Trim();
+            if (term is null || term.Length is < 2 or > 100) return Results.BadRequest(new { error = "La ricerca deve contenere da 2 a 100 caratteri." });
+            var userId = c.User.UserId();
+            var canManage = await permissions.Allows(userId, "knowledge.manage");
+            var canViewGlobally = await permissions.Allows(userId, "knowledge.view");
+            var allowedSiteIds = new HashSet<Guid>();
+            var allowedGroupIds = new HashSet<Guid>();
+            if (!canManage && !canViewGlobally)
+            {
+                var scopedPermissions = await (from grant in db.ScopeGrants
+                    join rolePermission in db.RolePermissions on grant.RoleId equals rolePermission.RoleId
+                    where grant.UserId == userId && rolePermission.Permission == "knowledge.view" && (grant.SiteId != null || grant.GroupId != null)
+                    select new { grant.SiteId, grant.GroupId }).ToListAsync();
+                allowedSiteIds.UnionWith(scopedPermissions.Where(x => x.SiteId != null).Select(x => x.SiteId!.Value));
+                allowedGroupIds.UnionWith(scopedPermissions.Where(x => x.GroupId != null).Select(x => x.GroupId!.Value));
+                if (allowedSiteIds.Count == 0 && allowedGroupIds.Count == 0) return Results.Forbid();
+            }
+
+            var query = db.KnowledgeArticles.AsNoTracking().AsQueryable();
+            if (!canManage) query = query.Where(x => x.IsPublished);
+            if (!canManage && !canViewGlobally)
+                query = query.Where(x => (x.SiteId != null && allowedSiteIds.Contains(x.SiteId.Value)) ||
+                                         (x.GroupId != null && allowedGroupIds.Contains(x.GroupId.Value)));
+            var normalizedTerm = term.ToLowerInvariant();
+            var matches = await query.Where(x => x.Title.ToLower().Contains(normalizedTerm) ||
+                                                   x.Summary.ToLower().Contains(normalizedTerm) ||
+                                                   x.Body.ToLower().Contains(normalizedTerm))
+                .OrderByDescending(x => x.Title.ToLower().Contains(normalizedTerm))
+                .ThenByDescending(x => x.Summary.ToLower().Contains(normalizedTerm))
+                .ThenByDescending(x => x.UpdatedAt)
+                .Take(50)
+                .Select(x => new { x.Id, x.Slug, x.Title, x.Summary, x.IsPublished, x.SiteId, x.GroupId, x.Version, x.CreatedAt, x.UpdatedAt, x.PublishedAt })
+                .ToListAsync();
+            c.Response.Headers.CacheControl = "no-store";
+            return Results.Ok(matches);
+        });
         api.MapGet("", async (HttpContext c, AppDbContext db, PermissionService permissions) => {
             var userId = c.User.UserId();
             var canManage = await permissions.Allows(userId, "knowledge.manage");

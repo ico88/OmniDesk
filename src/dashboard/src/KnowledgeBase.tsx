@@ -19,6 +19,8 @@ export function KnowledgeBase({ canManage, onMessage }: { canManage:boolean; onM
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState('');
   const [search,setSearch]=useState('');
+  const [searchResults,setSearchResults]=useState<Article[]|null>(null);
+  const [searchLoading,setSearchLoading]=useState(false);
   const [sites,setSites]=useState<ScopeOption[]>([]);
   const [groups,setGroups]=useState<ScopeOption[]>([]);
 
@@ -45,14 +47,30 @@ export function KnowledgeBase({ canManage, onMessage }: { canManage:boolean; onM
     if(!active)return;setArticles(list);
     const first=list[0];if(first){const full=await api<Article>(`/knowledge/${first.id}`);const history=canManage?await api<Revision[]>(`/knowledge/${first.id}/versions`):[];if(active){setSelected(full);setDraft({slug:full.slug,title:full.title,summary:full.summary,body:full.body??'',isPublished:full.isPublished,scope:full.siteId?`site:${full.siteId}`:full.groupId?`group:${full.groupId}`:'global'});setVersions(history);}}
   }).catch(e=>{if(active)setError(e instanceof Error?e.message:'La knowledge base non è disponibile');});return()=>{active=false;};},[canManage]);
+  useEffect(()=>{
+    const term=search.trim();
+    if(term.length<2){setSearchResults(null);setSearchLoading(false);return;}
+    let active=true;
+    setSearchResults(null);
+    const timeout=setTimeout(()=>{
+      setSearchLoading(true);
+      void api<Article[]>(`/knowledge/search?q=${encodeURIComponent(term)}`).then(results=>{
+        if(active){setSearchResults(results);setError('');}
+      }).catch(e=>{
+        if(active){setSearchResults([]);setError(e instanceof Error?e.message:'Ricerca non disponibile');}
+      }).finally(()=>{if(active)setSearchLoading(false);});
+    },250);
+    return()=>{active=false;clearTimeout(timeout);};
+  },[search]);
   async function work(run:()=>Promise<void>){setBusy(true);setError('');try{await run();}catch(e){setError(e instanceof Error?e.message:'Operazione non riuscita');}finally{setBusy(false);}}
-  const visible=articles.filter(article=>`${article.title} ${article.summary} ${article.slug}`.toLocaleLowerCase().includes(search.toLocaleLowerCase()));
+  const visible=search.trim().length>=2?(searchResults??[]):articles.filter(article=>`${article.title} ${article.summary} ${article.slug}`.toLocaleLowerCase().includes(search.toLocaleLowerCase()));
 
   return <div className="knowledge-layout">
     <section className="panel knowledge-list">
       <div className="section-heading"><div><span className="eyebrow">GUIDE OPERATIVE</span><h2>Knowledge base <span className="count">{articles.length}</span></h2></div>{canManage&&<button onClick={()=>{setSelected(null);setDraft(blank);setEditing(true);}}><Icon name="plus"/>Nuovo</button>}</div>
-      <label className="search-field"><Icon name="search"/><input aria-label="Cerca articoli" placeholder="Cerca una guida…" value={search} onChange={e=>setSearch(e.target.value)}/></label>
-      {visible.length===0?<p className="empty-state">{articles.length?'Nessun articolo corrisponde alla ricerca.':'Non ci sono guide pubblicate.'}</p>:<div className="knowledge-article-list">{visible.map(article=><button key={article.id} className={`knowledge-article-choice ${selected?.id===article.id&&!editing?'selected':''}`} onClick={()=>void work(()=>openArticle(article.id))}><strong>{article.title}</strong><small>{scopeName(article.siteId,article.groupId)} · {article.summary||article.slug}</small>{canManage&&!article.isPublished&&<span className="status-pill offline">Bozza</span>}</button>)}</div>}
+      <label className="search-field"><Icon name="search"/><input aria-label="Cerca articoli" maxLength={100} placeholder="Cerca titolo, descrizione o contenuto…" value={search} onChange={e=>setSearch(e.target.value)}/></label>
+      {searchLoading&&<p className="knowledge-search-status" role="status">Ricerca nelle guide autorizzate…</p>}
+      {!searchLoading&&visible.length===0?<p className="empty-state">{search.trim().length>=2?'Nessuna guida autorizzata corrisponde alla ricerca.':articles.length?'Nessun articolo corrisponde alla ricerca.':'Non ci sono guide pubblicate.'}</p>:<div className="knowledge-article-list">{visible.map(article=><button key={article.id} className={`knowledge-article-choice ${selected?.id===article.id&&!editing?'selected':''}`} onClick={()=>void work(()=>openArticle(article.id))}><strong>{article.title}</strong><small>{scopeName(article.siteId,article.groupId)} · {article.summary||article.slug}</small>{canManage&&!article.isPublished&&<span className="status-pill offline">Bozza</span>}</button>)}</div>}
     </section>
     <section className="panel knowledge-detail">
       {error&&<p role="alert" className="error">{error}</p>}
