@@ -1,6 +1,6 @@
 # Componenti Windows: OmniDesk Agent e OmniDesk Tray
 
-**Progetto futuro, esclusivamente documentale.** La baseline attuale contiene il servizio .NET e un MSI Agent unsigned compilato in CI; collector, DPAPI e ACL su directory temporanea sono stati verificati, non installazione o lifecycle del servizio. Non esistono ancora Tray, named pipe, MSI combinato, Service Recovery configurato o workflow ticket locale. Questa specifica non modifica M1–M5. La console IT WebView2 già compilata resta distinta dalla Tray per utenti finali.
+**Specifica obiettivo; implementazione parziale avviata successivamente.** La baseline verificata contiene servizio .NET e MSI Agent unsigned 0.5.1 compilato in CI, più binario diagnostico 0.5.2 cross-compilato. Sono ora presenti sorgenti 0.6.0 per Tray di stato, named pipe read-only e MSI combinato con recovery/ACL, **non ancora compilati né collaudati**. Ticket, screenshot e consenso remoto non implementati. [Stato e limiti 0.6.0](windows-agent-tray-implementation.md). La console IT WebView2 resta distinta dalla Tray per utenti finali; i gate M1–M5 non sono chiusi da questi sorgenti.
 
 ## Componenti e privilegi
 
@@ -61,9 +61,28 @@ Screenshot acquisito **dalla Tray non elevata**, dopo gesto esplicito, selezione
 
 La baseline adapter MeshCentral non dimostra questo workflow end-to-end. Il mapping sessioni Windows, i prompt/consensi nativi del motore e la revoca devono essere integrati evitando doppie conferme incoerenti o bypass: il motore deve applicare il grant autorizzato. Test su sessioni multiple e reti NAT obbligatori prima di dichiarare il controllo operativo. La revoca locale del consenso può essere consentita all'utente senza conferirgli diritto di fermare il servizio.
 
+### Matrice di autorizzazione proposta
+
+Ogni verifica server usa ambito corrente `global`, `group` o `device`, con default deny; il consenso utente non sostituisce alcun permesso. Le capacità aggiuntive sotto indicate sono proposte, non permessi già disponibili.
+
+| Operazione | Autorizzazione server e condizioni |
+| --- | --- |
+| Consultare stato dispositivo | `view`; nessuna emissione di credenziali remote |
+| Avviare desktop assistito | `remote.control`, dispositivo non revocato, consenso valido per il logon destinatario |
+| Aprire terminale | `terminal` e consenso specifico nel percorso assistito; `remote.control` non lo implica |
+| Trasferire file | `files` e consenso specifico nel percorso assistito; limiti e direzione trasferimento vincolati al grant |
+| Operare senza utente presente | Capacità precedente più futura `remote.unattended`, policy esplicita nell'ambito e motivo auditato; default deny |
+| Accedere a UAC/secure desktop | Capacità precedente più futura `remote.elevation`, policy e supporto motore verificati; la Tray resta non elevata |
+| Ritirare consenso | Utente della sessione destinataria verificato dal servizio; può terminare la propria assistenza senza permessi amministrativi |
+| Dismettere dispositivo | `administration` più futura `devices.decommission`; rimozione locale separatamente elevata |
+
+La verifica avviene alla richiesta, al rilascio e al consumo del grant e durante la sessione tramite rivalidazione con intervallo massimo definito in WT0. Perdita di autorizzazione, revoca identità o consenso invalido impongono chiusura del motore e audit dell'esito; se la chiusura non è confermata, registrare l'anomalia e impedire nuovi grant. Terminale, file e aggiornamenti non possono essere instradati attraverso una sessione desktop per evitare i rispettivi controlli server.
+
 ## MSI unico e disinstallazione autorizzata
 
 Un solo MSI per-machine futuro installa Agent e Tray, binari in Program Files non scrivibili dagli utenti, servizio automatico, recovery, ACL e avvio Tray al logon. Il MSI non avvia UI elevata nella sessione dell'installatore; entrambi i binari e il pacchetto saranno firmati. Compatibilità Windows/.NET, upgrade code, versioni IPC compatibili, rollback e migrazione credenziali vanno collaudati. L'eventuale Mesh agent rimane un motore distinto da coordinare nello stesso pacchetto dopo i gate M3, non parte della Tray.
+
+Il gate del pacchetto richiede entrambi i componenti installati e configurati dalla stessa transazione MSI, senza installer Tray separato. Repair e upgrade preservano l'identità dispositivo valida, ripristinano ACL/recovery/startup e gestiscono incompatibilità IPC senza esporre metodi privilegiati. Il rollback non deve lasciare startup Tray orfani o binari del servizio scrivibili. La rimozione completa elimina servizio e registrazioni Tray per tutti gli utenti, comprese le sessioni non connesse; dati utente e audit seguono una retention esplicita. I test devono includere tentativi di uninstall, repair e downgrade da account standard e verificare che nessuno consenta modifiche privilegiate senza autorizzazione elevata.
 
 Procedura ordinaria proposta: amministratore OmniDesk con permesso dedicato richiede dismissione del device, chiusura sessioni e cancellazione job queued; server revoca identità e credenziali/link remoti applicabili, registra ricevuta audit; amministratore Windows elevato rimuove MSI e componenti di startup, poi elimina identità locale con scelta esplicita e verificata. Preservare l'identità durante upgrade non equivale a conservarla dopo dismissione. Il pacchetto attuale la preserva: nessun comportamento è stato cambiato qui.
 

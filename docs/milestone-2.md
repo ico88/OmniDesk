@@ -13,6 +13,7 @@ Solo HTTPS con verifica certificato standard; nessun bypass TLS nell'agente. Red
 - GET/POST `/api/admin/groups` (Name).
 - GET/POST `/api/admin/enrollment-tokens` ({groupId?,expiresInMinutes?}); DELETE `/{id}` per revoca.
 - POST `/api/admin/devices/{id}/revoke`.
+- PUT `/api/admin/devices/{id}` ({name,groupId,expectedName,expectedGroupId}): solo amministrazione globale, confronto valori attesi e audit; etichetta console e gruppo, non hostname Windows.
 - POST `/api/agent/enroll` ({token,name,publicKeyPem}).
 - POST `/api/agent/metrics`, PUT `/api/agent/inventory`: JWT device, identità derivata dalla firma; nessun deviceId accettato nel payload.
 - GET `/api/devices/{id}/status`: view sul dispositivo; metriche/inventario/online/revoked.
@@ -36,6 +37,10 @@ Orologi server/device da sincronizzare: tolleranza asserzioni dieci secondi. Un 
 
 Hardening identità locale: Load rifiuta file/directory reparse point, proprietari diversi da SYSTEM/Administrators e ACL Allow per altri SID. Le scritture di identità, script e ricevute usano file temporanei univoci CreateNew, owner/DACL espliciti e sostituzione atomica. Evita di affidarsi a cartelle/file precreati da utenti non privilegiati. Una configurazione legacy con ACL/owner diversi viene rifiutata: verificare il server/device e correggere i permessi con amministratore durante il collaudo upgrade, senza concedere fiducia automaticamente. Test ACL su directory temporanea del runner Windows; nessun servizio di sistema modificato. MSI 0.5.1 distingue questa correzione dalla 0.5.0.
 
+Gestione dispositivi nella dashboard: dalla scheda aperta un amministratore globale modifica etichetta/gruppo o revoca l'identità con conferma. Un cambio concorrente di etichetta/gruppo torna 409 e richiede reload. Nuovi gruppi creati nella schermata Utenti sono ricaricati entrando in Dispositivi. Il cambio gruppo applica subito le nuove concessioni ereditate, preserva concessioni dirette e storico, annulla job queued non più autorizzati e richiede chiusura delle condivisioni remote attive. La revoca cancella solo job queued e blocca nuovi accessi dell'agente, senza eliminare dispositivo/metriche o arrestare MSI/servizio; ripeterla preserva la prima data di revoca. Nuovo enrollment richiesto per una nuova identità; nessun pulsante di riattivazione credenziali revocate. Operazioni remote e scansione/installazione update disabilitate nella UI del dispositivo revocato e rifiutate anche sul server.
+
 ## Evoluzione documentale successiva, non parte dell'implementazione M2
+
+Incremento implementativo LAN successivo: Agent/MSI sorgente 0.5.2, client HTTP comune senza redirect, `connect-test --server` e `verify-enrollment --server`, readiness prima del consumo token, script MSI/enrollment con trust CA LocalMachine verificato per SHA256. [Istruzioni e stato build/collaudo](windows-lan-install.md). Il binario è cross-compilato; il nuovo MSI non è ancora compilato su Windows né installato. La baseline 0.5.1 citata sotto descrive il momento della sola progettazione Agent/Tray.
 
 La [specifica Agent/Tray](windows-agent-tray.md) propone due componenti con privilegi separati e un unico MSI futuro: servizio indipendente dal logon, Tray non elevata, pipe locale protetta, recovery, dismissione/revoca e consenso remoto. Non modifica il pacchetto 0.5.1, che resta Agent-only; installazione, ACL servizio, recovery e lifecycle richiedono i nuovi collaudi WT e quelli M2 già aperti.

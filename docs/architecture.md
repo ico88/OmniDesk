@@ -76,3 +76,16 @@ Il servizio possiede credenziali protette da ACL/DPAPI o futuro Certificate Stor
 Richieste assistenza associate dal server al dispositivo dell'agente; lettura ticket vincolata anche all'utente verificato. Named pipe locale per logon con controllo dell'identità effettiva, protezione da server contraffatti e limiti sui messaggi, senza proxy privilegiato generico. Screenshot acquisiti nella sessione utente dopo anteprima/conferma. L'autorizzazione IT e il consenso utente remoto sono controlli distinti, entrambi correlati alla sessione; la chiusura della Tray non arresta il servizio né abilita automaticamente accesso non presidiato.
 
 Il MSI attuale installa solo l'Agent. Questa estensione non cambia codice, installer, porte o milestone corrente. Sequenza e gate: [percorso Windows WT](roadmap.md#percorso-futuro-windows-agent-e-tray).
+
+L'autorizzazione remota è applicata dal backend al rilascio/consumo del grant e durante la sessione: `view`, `remote.control`, `terminal`, `files`, `updates` e `administration` restano separati negli ambiti global/group/device. Accesso unattended, elevazione e dismissione avranno capacità aggiuntive esplicite, ancora progettuali. La [matrice Windows](windows-agent-tray.md#matrice-di-autorizzazione-proposta) distingue permessi IT, consenso del logon destinatario e privilegi locali; nessun ticket o messaggio Tray concede implicitamente controllo remoto.
+
+
+## Hardening account e lifecycle corrente
+
+Oltre al validatore periodico Identity della baseline, lo stato account e il security stamp sono verificati sul DB a ogni richiesta cookie. Sospensione/riattivazione, ruoli globali e revoca sessioni web sono autorizzati e auditati sul server, con protezione dell'ultimo amministratore abilitato e serializzazione PostgreSQL. Il guard remoto persiste e ritenta la revoca in caso di perdita autorizzazione o sospensione; test con adapter fake, gate motore reale ancora aperto. Le richieste già in esecuzione non vengono retroattivamente annullate. Dettagli in [M5](milestone-5.md) e [API](api.md).
+
+Backup locale e restore PostgreSQL isolato disponibili; ripristino completo app/chiavi e disaster recovery ancora da collaudare: [procedura e limiti](backup-restore.md).
+
+## Sorgenti Windows 0.6.0 in lavorazione
+
+Avviata l'implementazione Agent/Tray con processo UI asInvoker, stato heartbeat reale e pipe locale per logon, contratto read-only versionato e autenticazione tramite SID/SCM/owner. Il sorgente MSI installa entrambi i componenti e configura Run utente, recovery e DACL servizio. Nuovi progetti separati Windows.Ipc e Tray.Windows; nessuna dipendenza della dashboard o API dalle librerie Windows. **Non compilato o collaudato**, a causa dell'indisponibilità della revisione automatica necessaria ai comandi Docker; non pubblicato sul server. Ticket, screenshot e consenso remoto restano da implementare. [Stato dettagliato e gate](windows-agent-tray-implementation.md).

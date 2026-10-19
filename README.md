@@ -4,6 +4,10 @@ Piattaforma RMM self-hosted per Windows. Implementazione iniziale M1–M5, desti
 
 Disponibili: API ASP.NET Core .NET 10, PostgreSQL con migrazioni, Identity multiutente, CSRF/lockout, ruoli granulari globali/gruppo/device e audit, dashboard React con branding e layout personali, enrollment monouso, agente Windows .NET con snapshot metriche/inventario, coda Windows Update e console Windows WebView2. TOTP con recovery code implementata e cifrata nel DB, **disattivata per default**. Cambio password dalla console.
 
+La schermata Utenti gestisce gruppi/concessioni, sospensione e riattivazione account, ruoli globali e revoca sessioni web. L'ultimo amministratore attivo è protetto; stato account e security stamp verificati a ogni richiesta. Backup locale e prova di ripristino PostgreSQL isolata: [istruzioni e limiti](docs/backup-restore.md).
+
+Dalla scheda Dispositivi l'amministratore può modificare etichetta/gruppo e revocare l'identità con conferma. I job queued vengono rivalidati prima del ritiro: perdita permessi o revoca non autorizzano nuovi comandi. I lavori già avviati sul PC non vengono dichiarati interrotti dalla revoca server.
+
 Adapter MeshCentral con sessioni limitate e audit, motore Docker opzionale: non abilitato dal setup standard. Rimane un blocco audit node-forge e manca il collaudo desktop/terminale/file su Windows/NAT; non dichiarato operativo in produzione. Il singolo MSI attuale installa solo OmniDesk Agent: integrazione Mesh agent e firma restano aperte. MSI unsigned compilato dalla pipeline Windows; installazione/upgrade/uninstall ancora da verificare.
 
 ## Installazione Ubuntu Server

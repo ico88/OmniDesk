@@ -23,4 +23,16 @@ Per accesso pubblico, Nginx esistente continua a terminare HTTPS sul dominio con
 
 MeshCentral opzionale richiede un secondo vhost Nginx per MESH_DOMAIN con stesso upstream/CA e header Upgrade/Connection per WebSocket; il motore resta bloccato per release dagli avvisi audit documentati in M3. L'overlay diretto `compose.direct.yaml` ripristina Caddy pubblico 80/443 con Let's Encrypt solo su server dedicati senza conflitto Nginx; non usarlo nel deployment LAN richiesto.
 
-Verifiche su host di sviluppo: configurazioni Compose/Caddy statiche. Indirizzo 192.168.1.233 non assunto presente sul nostro host; raggiungibilità LAN e Nginx devono essere verificati sul server reale. Non sono state aperte porte firewall.
+Avvio LAN verificato sul server con indirizzo 192.168.1.233: container API/dashboard/Caddy attivi e PostgreSQL healthy; HTTPS, readiness e login amministratore verificati dal server con CA esplicita. Raggiungibilità da un altro client LAN ancora da verificare. Non sono state aperte porte firewall né modificati i servizi esistenti su 80/443.
+
+Il Caddyfile imposta `default_sni` all'IP LAN per i client che collegandosi tramite IP non inviano SNI; riferimento: [opzioni Caddy](https://caddyserver.com/docs/caddyfile/options#default-sni). La verifica del certificato rimane obbligatoria.
+
+Configurazione locale iniziale: dominio interno `omnidesk.internal`, account `admin@omnidesk.local`, TOTP disattivato. La password casuale iniziale è nel file locale `.secrets/bootstrap_password`, escluso da Git e protetto dalla directory `.secrets`; consultarlo sul server, cambiare password dalla dashboard e rimuoverlo dopo il trasferimento sicuro. Il certificato pubblico da distribuire ai client è `omnidesk-local-ca.crt` nella root del progetto, escluso da Git. Nessuna chiave privata è stata esportata.
+
+Gestione accessi: dalla schermata **Utenti** l'amministratore può consultare account/ruoli, creare gruppi e assegnare o revocare concessioni per gruppo/dispositivo. I gruppi creati sono selezionabili nella schermata Dispositivi per il token enrollment successivo. I ruoli globali e le altre concessioni restano attivi quando si revoca una singola concessione. Dopo un aggiornamento della dashboard ricaricare la pagina per acquisire il nuovo bundle.
+
+Da **Gestisci account** si possono sospendere/riattivare account, sostituire ruoli globali e revocare sessioni web. Sospensione propria e rimozione dell'ultimo amministratore abilitato sono vietate. Dopo cambi ruoli, revoca o riattivazione il destinatario deve autenticarsi nuovamente; i vecchi cookie non vengono ripristinati. Backup e prova restore disponibili in [backup-restore.md](backup-restore.md).
+
+Per Agent Windows usare la CA nello store LocalMachine Root, non solo nello store utente. Diagnostica e installazione 0.5.2: [windows-lan-install.md](windows-lan-install.md). Nessun bypass TLS o cambio firewall introdotto; il nuovo MSI richiede ancora build/collaudo Windows.
+
+Gestione dispositivo: aprire la scheda da **Dispositivi → Apri**; un amministratore globale può salvare etichetta/gruppo o revocare l'identità. Il cambio gruppo può togliere visibilità e capacità agli utenti del gruppo precedente, preservando concessioni dirette; conferma obbligatoria prima dello spostamento e della revoca. Revocare non disinstalla l'Agent e non interrompe lavori già avviati: blocca nuove comunicazioni, annulla queued e richiede chiusura sessioni remote. Conflitto 409: ricaricare la scheda prima di salvare nuovamente.

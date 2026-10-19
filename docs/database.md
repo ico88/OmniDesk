@@ -22,7 +22,12 @@ Eseguire migrazioni con `docker compose run --rm migrate` prima di avviare API. 
 
 DeviceEnrollment: EnrollmentTokens (hash univoco, gruppo FK, scadenza/consumo/revoca), DeviceCredentials (PK/FK DeviceId, chiave pubblica e revoca), DeviceAssertions (jti PK e scadenza indicizzata), DeviceMetrics e DeviceInventories (PK/FK DeviceId, receivedAt server, payload JSONB ultimo snapshot). MeshSessions: MeshDeviceMappings (DeviceId PK/FK, NodeId univoco), RemoteSessions (device FK, actor, capability, state, publicId non bearer, scadenza; URL bearer non salvato). UpdateJobs: device FK, RequestId univoco per device, indice parziale univoco su device per queued/leased, payload/result JSONB e lease. UserDashboardLayouts: UserId PK/FK, widgets JSONB. Token Identity cifrati via ProtectedUserStore senza modifica del tipo colonna; la chiave DataProtection deve essere preservata con i backup.
 
+## Migrazione UserLifecycle
+
+Aggiunge `AspNetUsers.IsDisabled boolean NOT NULL DEFAULT false`: conserva gli account precedenti attivi, senza cambiare hash/password/ruoli o concedere nuovi permessi. La sospensione e le mutazioni ruoli aggiornano security stamp e audit in transazione. Lo stato remoto `revocation_pending` usa la colonna testuale esistente, senza nuova tabella. La migrazione va applicata prima dell'API aggiornata; backup e prova restore in [backup-restore.md](backup-restore.md).
+
 ## Schema futuro Service Desk — non implementato
+
 
 Il [modello dati proposto](service-desk-data-model.md) definisce uno schema PostgreSQL `service_desk` separato con ticket, dispositivi collegati, code, workflow versionati, commenti pubblici/note interne, allegati privati, cronologia, interventi, intake/email, SLA/calendari, automazioni, notifiche e Knowledge Base. AI e approvazioni specifiche restano estensioni future senza esecuzione automatica di comandi.
 

@@ -8,6 +8,18 @@
 
 Gate produzione: revisione minacce, pen test autorizzazione/CSRF/enrollment, build riproducibili e SBOM, backup ripristinato, certificati pubblici verificati, test MSI install/upgrade/uninstall e rotazione credenziali. Nessuna data di completamento promessa per moduli non implementati.
 
+Incremento Agent LAN 0.5.2: client HTTP comune senza redirect, diagnostica readiness prima dell'enrollment, verifica identità protetta e script installazione con CA LocalMachine/impronta SHA256 e MSI elevato. Binario win-x64 cross-compilato, contratti/test TLS sul server LAN verificati. MSI 0.5.2 e lifecycle Windows ancora da compilare/collaudare su Windows; kit locale diagnostico senza MSI. [Procedura LAN](windows-lan-install.md). Nessun desktop remoto o Tray dichiarato operativo.
+
+Avanzamento hardening M5: rotazione recovery code con rinnovo security stamp, invalidazione delle altre sessioni entro il controllo Identity e conservazione della sessione corrente. Scenario PostgreSQL esteso e passato; gate Windows, firma e produzione restano aperti. Nessuna fase WT o SD avviata.
+
+Istanza di collaudo avviata su HTTPS 192.168.1.233:8085: build container, migrazioni, readiness e login verificati dal server. Istruzioni in [accesso LAN](lan-nginx.md); verifica da client LAN e gate di produzione ancora aperti.
+
+Accesso da client LAN confermato dall'utente. Incremento console M5: elenco utenti/ruoli globali, creazione gruppi e assegnazione/revoca concessioni per gruppo o dispositivo dalla dashboard. Lifecycle completo account/ruoli, reset assistito MFA/password e gate Windows restano aperti; percorso WT/SD non avviato.
+
+Incremento lifecycle M5: sospensione/riattivazione account, sostituzione ruoli globali e revoca sessioni web, ultimo amministratore protetto e controllo cookie/stamp a ogni richiesta. Compilato e verificato con PostgreSQL/Chromium. Guard sessioni remote con revoca persistente/retry dopo perdita permessi: test con fake, chiusura tunnel reale ancora aperta. Migrazione UserLifecycle versionata. Backup locale dell'istanza e restore del DB su PostgreSQL temporaneo verificati; restore completo applicazione/chiavi, off-site e retention non chiusi. Prossimi gate: lifecycle ruoli/gruppi avanzato, reset assistito e collaudi Windows/MSI, firma e motore remoto. Le fasi WT/SD rimangono separate dal completamento della baseline.
+
+Incremento gestione dispositivi: etichetta/gruppo e revoca identità dalla console, conflitti di modifica rilevati, rivalidazione job queued al claim e dopo cambio gruppo, revoca idempotente con cancellazione queued e richiesta chiusura sessioni remote. Verificati PostgreSQL (anche concorrenza), Chromium e build. Nessuna nuova migrazione o modifica all'Agent; MSI/Windows, remoto reale, Tray, lifecycle ruoli/gruppi avanzato e Service Desk restano aperti.
+
 ## Percorso futuro OmniDesk Service Desk
 
 **Tutte le fasi SD sono proposte, non implementate.** Percorso aggiuntivo: non sostituisce M1–M5 né chiude i gate di produzione. Specifiche in [Service Desk](service-desk.md) e [schema dati](service-desk-data-model.md). Prima di sviluppare saranno stabiliti contratti, matrice permessi e criteri di accettazione per ciascuna fase.
@@ -25,7 +37,7 @@ Le fasi non hanno date promesse. KB di base e storico non dipendono dall'AI. L'a
 
 ## Percorso futuro Windows Agent e Tray
 
-**Solo pianificato.** Non modifica M1–M5 né avvia lo sviluppo Service Desk. [Specifica tecnica](windows-agent-tray.md). Il MSI attuale resta Agent-only, unsigned; la Tray è distinta dalla console IT WebView2.
+**Implementazione parziale avviata su richiesta successiva dell'utente.** La baseline verificata resta quella M1–M5; Service Desk non avviato. [Specifica tecnica](windows-agent-tray.md), [stato sorgenti 0.6.0](windows-agent-tray-implementation.md). Il MSI già compilato resta Agent-only; il sorgente MSI 0.6.0 include Agent+Tray, non compilato o installato. Tray distinta dalla console IT WebView2.
 
 | Fase | Consegna proposta | Dipendenze e criteri di accettazione |
 | --- | --- | --- |
@@ -36,3 +48,13 @@ Le fasi non hanno date promesse. KB di base e storico non dipendono dall'AI. L'a
 | WT4 — consenso remoto end-to-end | Grant breve per device/capacità/logon, indicatore/ritiro consenso, chiusura tunnel e policy unattended separata disabilitata di default | WT2 e gate motore reale M3; WT3 solo per ingresso dal ticket. Test revoca live, permesso perso, timeout/Tray assente, multi-sessione e reti NAT; nessuna escalation privilegi tramite IPC |
 
 WT3 e WT4 hanno dipendenze diverse: assistenza remota dalla console non deve attendere l'intero Service Desk; ticket e screenshot richiedono invece i servizi pertinenti. Nessuna nuova attestazione di protezione anti-admin o collaudo Windows deriva dall'aggiornamento documentale.
+
+Avanzamento sorgenti WT0/WT1/WT2: contratto IPC v1 read-only, stato heartbeat reale del servizio, WTS/logon/ACL/pipe locale, NotifyIcon non elevata e MSI unico 0.6.0 con HKLM Run e recovery/DACL servizio. Implementato nel codice, non compilato: revisione automatica Docker indisponibile per capacità del modello, comandi non eseguiti. Nessuna fase WT conclusa; collaudi completi Windows rinviati come richiesto, compilazione ancora bloccata. WT3/WT4 e fasi SD restano da sviluppare. Istanza LAN non aggiornata con questi sorgenti.
+
+Gate aggiuntivi WT0/WT4: definire le capacità dedicate unattended/elevazione/dismissione e l'intervallo massimo di rivalidazione dei permessi; verificare separatamente desktop, terminale e file, consumo singolo del grant e chiusura reale del motore dopo revoca. Gate WT2: unica transazione MSI Agent+Tray, ripristino ACL/recovery durante repair, rollback senza residui privilegiati e rimozione startup per tutti gli utenti. Il lavoro corrente e i gate M1–M5 mantengono priorità; le fasi WT saranno avviate separatamente, senza includerle implicitamente nella milestone in corso.
+
+Priorità aggiornata su richiesta: completare remoto, poi ticket/screenshot, infine generare il singolo MSI per collaudo LAN. Incremento sorgenti: revoca esplicita durevole con risposta pending distinta dalla conferma e script unico di build Windows con checksum; nessun nuovo risultato compilato/testato. Motore remoto e Windows sono gate aperti, ticket/screenshot non avviati. Il blocco della revisione automatica Docker per capacità permane; richiesto ambiente Windows/runner per generazione reale MSI.
+
+Aggiornamento Ubuntu f1: l'operatore conferma build API/dashboard riuscita e ripetuta con cache; il precedente impedimento alla compilazione Docker non è più un blocco del server. Configurazioni Compose validate; container esistenti running con DB healthy, ma nessuna nuova attestazione runtime o distribuzione delle immagini ricompilate. Test applicativi e sonda LAN in questa sessione impediti dal sandbox, senza ripetere l'escalation automatica. Preparata procedura `scripts/validate-release.sh`. Installer: GitHub Actions Windows è il percorso concordato, workflow locale aggiornato con test contratto Tray e packaging; esecuzione/artifact ancora pendenti, accesso GitHub non verificabile dalla sessione. Priorità invariata: remoto completo → ticket/screenshot → MSI e prova LAN Windows.
+
+Incremento 0.6.0 in lavorazione: ticket macchina associati all'utente Windows autenticato della pipe e al dispositivo firmatario, elenco ticket propri e risposte, console IT con tickets.view/manage e versione attesa, screenshot con anteprima/consenso e validazione PNG limitata. Specifica effettiva in [support-implementation](support-implementation.md). È un percorso minimo aggiuntivo: non completa le fasi SD per sedi/email/SLA/KB o gli allegati generici. Agent e Tray cross-compilati; test server PostgreSQL aggiornati passati. Packaging Windows e prove reali ancora da eseguire. Per il remoto aggiunti stato configurazione, mapping amministrativo e storico/retry revoche nella console; motore non dichiarato operativo. L'advisory node-forge GHSA-86w9-cpqp-85rv risulta ancora senza versione corretta al controllo odierno; nessun rilascio pubblico del motore remoto.
