@@ -111,6 +111,21 @@ public sealed class SupportTicketDevice
     public string SiteNameSnapshot { get; set; } = "";
 }
 
+public sealed class SupportInterventionSummary
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid TicketId { get; set; }
+    public Guid DeviceId { get; set; }
+    public string ArtifactType { get; set; } = "";
+    public Guid ArtifactId { get; set; }
+    public string Capability { get; set; } = "";
+    public string? AuthorId { get; set; }
+    public string Summary { get; set; } = "";
+    public string Outcome { get; set; } = "";
+    public string? FollowUp { get; set; }
+    public DateTimeOffset RecordedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
 public sealed class CoreOutboxDelivery
 {
     public Guid EventId { get; set; }

@@ -16,6 +16,8 @@ public sealed record SupportInternalNote(long ExpectedVersion, string Body);
 public sealed record ManualSupportCreate(Guid RequestId, Guid DeviceId, string Subject, string Description, string Category, string Priority);
 public sealed record SupportTicketDeviceChange(long ExpectedVersion, Guid DeviceId);
 public sealed record SupportInterventionLink(long ExpectedVersion, Guid DeviceId, string ArtifactType, Guid ArtifactId);
+public sealed record SupportInterventionSummaryCreate(long ExpectedVersion, Guid DeviceId, string ArtifactType,
+    Guid ArtifactId, string Summary, string Outcome, string? FollowUp);
 public sealed record SupportInterventionCandidate(Guid Id, Guid DeviceId, string DeviceName, string ArtifactType,
     string Label, string Capability, string State, DateTimeOffset OccurredAt, DateTimeOffset? CompletedAt);
 public sealed record SupportTicketDeviceView(Guid DeviceId, string Name, Guid SiteId, string SiteName, bool IsPrimary);
@@ -32,10 +34,31 @@ public static class SupportEndpoints
 {
     private static readonly string[] Priorities = ["low", "normal", "high", "urgent"];
     private static readonly string[] Categories = ["general", "hardware", "software", "network", "account", "other"];
+    private static readonly string[] InterventionOutcomes = ["completed", "partial", "not_completed", "no_change", "follow_up"];
     public static bool ValidCategory(string? category) => category is not null && Categories.Contains(category);
     private static bool ValidKey(string? key) => key is { Length: 64 } && key.All(Uri.IsHexDigit);
     private static SupportTicketView View(SupportTicket t) => new(t.Id, t.Number, t.DeviceId, t.Subject, t.Description, t.State,
         t.Resolution, t.Version, t.CreatedAt, t.UpdatedAt, t.Screenshot != null, t.Category, t.Origin);
+    private static async Task<string?> LinkedArtifactCapability(AppDbContext db, Guid ticketId, Guid deviceId, string artifactType, Guid artifactId)
+    {
+        var bodies = await db.SupportMessages.AsNoTracking().Where(x => x.TicketId == ticketId && x.Kind == "rmm_intervention")
+            .Select(x => x.Body).ToArrayAsync();
+        foreach (var body in bodies)
+        {
+            try
+            {
+                using var document = JsonDocument.Parse(body);
+                var root = document.RootElement;
+                if (root.GetProperty("deviceId").GetGuid() == deviceId &&
+                    root.GetProperty("artifactType").GetString() == artifactType &&
+                    root.GetProperty("artifactId").GetGuid() == artifactId)
+                    return root.GetProperty("capability").GetString();
+            }
+            catch (JsonException) { }
+            catch (KeyNotFoundException) { }
+        }
+        return null;
+    }
     public static void MapSupportEndpoints(this WebApplication app)
     {
         var machine = app.MapGroup("/api/agent/support").WithMetadata(new MachineRequest())
@@ -705,16 +728,18 @@ public static class SupportEndpoints
             var userId = c.User.UserId();
             var ticket = await db.SupportTickets.AsNoTracking().SingleOrDefaultAsync(t => t.Id == id);
             if (ticket is null) return Results.NotFound();
-            if (!await p.Allows(userId, "tickets.manage", ticket.DeviceId, siteId: ticket.SiteId)) return Results.Forbid();
+            if (!await p.Allows(userId, "tickets.view", ticket.DeviceId, siteId: ticket.SiteId) ||
+                !await p.Allows(userId, "tickets.manage", ticket.DeviceId, siteId: ticket.SiteId)) return Results.Forbid();
             if (!await db.SupportTicketDevices.AnyAsync(x => x.TicketId == id && x.DeviceId == r.DeviceId)) return Results.NotFound();
-            if (!await p.Allows(userId, "tickets.manage", r.DeviceId)) return Results.Forbid();
+            if (!await p.Allows(userId, "tickets.view", r.DeviceId) || !await p.Allows(userId, "tickets.manage", r.DeviceId)) return Results.Forbid();
 
             await using var tx = await db.Database.BeginTransactionAsync();
             foreach (var deviceId in new[] { ticket.DeviceId, r.DeviceId }.Distinct().Order())
                 await DeviceOperationLock.Acquire(db, deviceId);
-            if (!await p.Allows(userId, "tickets.manage", ticket.DeviceId, siteId: ticket.SiteId)) return Results.Forbid();
+            if (!await p.Allows(userId, "tickets.view", ticket.DeviceId, siteId: ticket.SiteId) ||
+                !await p.Allows(userId, "tickets.manage", ticket.DeviceId, siteId: ticket.SiteId)) return Results.Forbid();
             if (!await db.SupportTicketDevices.AnyAsync(x => x.TicketId == id && x.DeviceId == r.DeviceId)) return Results.NotFound();
-            if (!await p.Allows(userId, "tickets.manage", r.DeviceId)) return Results.Forbid();
+            if (!await p.Allows(userId, "tickets.view", r.DeviceId) || !await p.Allows(userId, "tickets.manage", r.DeviceId)) return Results.Forbid();
             ticket = await db.SupportTickets.AsNoTracking().SingleAsync(t => t.Id == id);
 
             string capability, label, state;
@@ -775,7 +800,8 @@ public static class SupportEndpoints
             var ticket = await db.SupportTickets.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id);
             if (ticket is null) return Results.NotFound();
             var userId = c.User.UserId();
-            if (!await p.Allows(userId, "tickets.manage", ticket.DeviceId, siteId: ticket.SiteId)) return Results.Forbid();
+            if (!await p.Allows(userId, "tickets.view", ticket.DeviceId, siteId: ticket.SiteId) ||
+                !await p.Allows(userId, "tickets.manage", ticket.DeviceId, siteId: ticket.SiteId)) return Results.Forbid();
             var links = await db.SupportTicketDevices.AsNoTracking().Where(x => x.TicketId == id)
                 .Select(x => new { x.DeviceId, x.DeviceNameSnapshot }).ToArrayAsync();
             var deviceNames = links.ToDictionary(x => x.DeviceId, x => x.DeviceNameSnapshot);
@@ -788,7 +814,7 @@ public static class SupportEndpoints
                 .Select(x => new { x.Id, x.DeviceId, x.Kind, x.State, x.CreatedAt, x.CompletedAt }).ToArrayAsync();
             var candidates = new List<SupportInterventionCandidate>();
             foreach (var session in sessions)
-                if (await p.Allows(userId, "tickets.manage", session.DeviceId) &&
+                if (await p.Allows(userId, "tickets.view", session.DeviceId) && await p.Allows(userId, "tickets.manage", session.DeviceId) &&
                     (session.Capability is "remote.control" or "terminal" or "files") &&
                     await p.Allows(userId, session.Capability, session.DeviceId))
                     candidates.Add(new(session.Id, session.DeviceId, deviceNames[session.DeviceId],
@@ -803,7 +829,7 @@ public static class SupportEndpoints
                     var kind when kind is "scan" or "install" || kind.StartsWith("updates.", StringComparison.Ordinal) || kind == "agent.update" => "updates",
                     _ => ""
                 };
-                if (capability.Length > 0 && await p.Allows(userId, "tickets.manage", job.DeviceId) && await p.Allows(userId, capability, job.DeviceId))
+                if (capability.Length > 0 && await p.Allows(userId, "tickets.view", job.DeviceId) && await p.Allows(userId, "tickets.manage", job.DeviceId) && await p.Allows(userId, capability, job.DeviceId))
                     candidates.Add(new(job.Id, job.DeviceId, deviceNames[job.DeviceId], "update_job",
                         "Operazione " + job.Kind, capability, job.State, job.CreatedAt, job.CompletedAt));
             }
@@ -878,6 +904,73 @@ public static class SupportEndpoints
                 }
                 catch (JsonException) { /* Skip legacy or malformed records without exposing their body. */ }
                 catch (KeyNotFoundException) { }
+            }
+            c.Response.Headers.CacheControl = "no-store";
+            return Results.Ok(visible);
+        });
+        staff.MapPost("/{id:guid}/intervention-summaries", async (Guid id, SupportInterventionSummaryCreate r, HttpContext c, AppDbContext db, PermissionService p) => {
+            var summary = r.Summary?.Trim();
+            var followUp = r.FollowUp?.Trim();
+            if (r.ExpectedVersion < 1 || r.DeviceId == Guid.Empty || r.ArtifactId == Guid.Empty ||
+                r.ArtifactType is not ("remote_session" or "update_job") || string.IsNullOrWhiteSpace(summary) || summary.Length > 4000 ||
+                !InterventionOutcomes.Contains(r.Outcome) || followUp?.Length > 1000 ||
+                r.Outcome == "follow_up" && string.IsNullOrWhiteSpace(followUp))
+                return Results.BadRequest(new { error = "Riepilogo, esito o seguito non valido." });
+            var userId = c.User.UserId();
+            var ticket = await db.SupportTickets.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id);
+            if (ticket is null) return Results.NotFound();
+            if (!await p.Allows(userId, "tickets.view", ticket.DeviceId, siteId: ticket.SiteId) ||
+                !await p.Allows(userId, "tickets.manage", ticket.DeviceId, siteId: ticket.SiteId)) return Results.Forbid();
+            if (!await db.SupportTicketDevices.AnyAsync(x => x.TicketId == id && x.DeviceId == r.DeviceId)) return Results.NotFound();
+            if (!await p.Allows(userId, "tickets.view", r.DeviceId) || !await p.Allows(userId, "tickets.manage", r.DeviceId)) return Results.Forbid();
+
+            await using var tx = await db.Database.BeginTransactionAsync();
+            foreach (var deviceId in new[] { ticket.DeviceId, r.DeviceId }.Distinct().Order())
+                await DeviceOperationLock.Acquire(db, deviceId);
+            if (!await p.Allows(userId, "tickets.view", ticket.DeviceId, siteId: ticket.SiteId) ||
+                !await p.Allows(userId, "tickets.manage", ticket.DeviceId, siteId: ticket.SiteId)) return Results.Forbid();
+            if (!await db.SupportTicketDevices.AnyAsync(x => x.TicketId == id && x.DeviceId == r.DeviceId)) return Results.NotFound();
+            if (!await p.Allows(userId, "tickets.view", r.DeviceId) || !await p.Allows(userId, "tickets.manage", r.DeviceId)) return Results.Forbid();
+            ticket = await db.SupportTickets.AsNoTracking().SingleAsync(x => x.Id == id);
+            if (ticket.Version != r.ExpectedVersion) return Results.Conflict(new { error = "Il ticket è stato aggiornato. Ricarica gli interventi prima di riprovare." });
+            var capability = await LinkedArtifactCapability(db, id, r.DeviceId, r.ArtifactType, r.ArtifactId);
+            if (capability is null) return Results.Conflict(new { error = "Collega prima l'attività RMM al ticket." });
+            if (!await p.Allows(userId, capability, r.DeviceId)) return Results.Forbid();
+
+            var now = DateTimeOffset.UtcNow;
+            var changed = await db.SupportTickets.Where(x => x.Id == id && x.Version == r.ExpectedVersion)
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.Version, x => x.Version + 1).SetProperty(x => x.UpdatedAt, now));
+            if (changed == 0) return Results.Conflict(new { error = "Il ticket è stato aggiornato. Ricarica gli interventi prima di riprovare." });
+            var item = new SupportInterventionSummary { TicketId = id, DeviceId = r.DeviceId, ArtifactType = r.ArtifactType,
+                ArtifactId = r.ArtifactId, Capability = capability, AuthorId = userId, Summary = summary, Outcome = r.Outcome,
+                FollowUp = string.IsNullOrWhiteSpace(followUp) ? null : followUp, RecordedAt = now };
+            db.SupportInterventionSummaries.Add(item);
+            db.AuditEvents.Add(new AuditEvent { ActorId = userId, Action = "ticket.intervention.summary.created", Target = id.ToString() });
+            CoreOutbox.Add(db, "ticket.intervention.summary.created", "ticket", id,
+                new { ticketId = id, deviceId = r.DeviceId, artifactType = r.ArtifactType, artifactId = r.ArtifactId,
+                    outcome = r.Outcome, version = r.ExpectedVersion + 1 }, c.TraceIdentifier);
+            await db.SaveChangesAsync();
+            await tx.CommitAsync();
+            return Results.Created($"/api/support/{id}/intervention-summaries/{item.Id}", new { item.Id, item.RecordedAt });
+        });
+        staff.MapGet("/{id:guid}/intervention-summaries", async (Guid id, HttpContext c, AppDbContext db, PermissionService p) => {
+            var ticket = await db.SupportTickets.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id);
+            if (ticket is null) return Results.NotFound();
+            var userId = c.User.UserId();
+            if (!await p.Allows(userId, "tickets.view", ticket.DeviceId, siteId: ticket.SiteId)) return Results.Forbid();
+            var rows = await db.SupportInterventionSummaries.AsNoTracking().Where(x => x.TicketId == id)
+                .OrderByDescending(x => x.RecordedAt).Take(100).ToArrayAsync();
+            var visible = new List<object>();
+            foreach (var row in rows)
+            {
+                if (!await p.Allows(userId, "tickets.view", row.DeviceId) || !await p.Allows(userId, row.Capability, row.DeviceId)) continue;
+                var authorName = row.AuthorId is null ? null : await db.Users.AsNoTracking().Where(x => x.Id == row.AuthorId)
+                    .Select(x => x.DisplayName).SingleOrDefaultAsync();
+                var deviceName = await db.SupportTicketDevices.AsNoTracking().Where(x => x.TicketId == id && x.DeviceId == row.DeviceId)
+                    .Select(x => x.DeviceNameSnapshot).SingleOrDefaultAsync() ?? await db.Devices.AsNoTracking()
+                    .Where(x => x.Id == row.DeviceId).Select(x => x.Name).SingleOrDefaultAsync() ?? "Dispositivo";
+                visible.Add(new { row.Id, row.DeviceId, deviceName, row.ArtifactType, row.ArtifactId, row.Summary,
+                    row.Outcome, row.FollowUp, row.RecordedAt, authorName = string.IsNullOrWhiteSpace(authorName) ? "Operatore" : authorName });
             }
             c.Response.Headers.CacheControl = "no-store";
             return Results.Ok(visible);

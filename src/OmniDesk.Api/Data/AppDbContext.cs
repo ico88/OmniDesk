@@ -39,6 +39,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
 {
     public DbSet<SupportMessage> SupportMessages => Set<SupportMessage>();
     public DbSet<SupportTicketDevice> SupportTicketDevices => Set<SupportTicketDevice>();
+    public DbSet<SupportInterventionSummary> SupportInterventionSummaries => Set<SupportInterventionSummary>();
     public DbSet<PortalDeviceAccess> PortalDeviceAccesses => Set<PortalDeviceAccess>();
     public DbSet<SupportTicket> SupportTickets => Set<SupportTicket>();
     public DbSet<SupportWorkflow> SupportWorkflows => Set<SupportWorkflow>();
@@ -88,6 +89,16 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
         b.Entity<SupportTicketDevice>().HasOne<Device>().WithMany().HasForeignKey(x => x.DeviceId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<SupportTicketDevice>().HasOne<AppUser>().WithMany().HasForeignKey(x => x.LinkedBy).OnDelete(DeleteBehavior.SetNull);
         b.Entity<SupportTicketDevice>().HasIndex(x => new { x.DeviceId, x.TicketId });
+        b.Entity<SupportInterventionSummary>().HasOne<SupportTicket>().WithMany().HasForeignKey(x => x.TicketId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<SupportInterventionSummary>().HasOne<Device>().WithMany().HasForeignKey(x => x.DeviceId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<SupportInterventionSummary>().HasOne<AppUser>().WithMany().HasForeignKey(x => x.AuthorId).OnDelete(DeleteBehavior.SetNull);
+        b.Entity<SupportInterventionSummary>().Property(x => x.ArtifactType).HasMaxLength(20);
+        b.Entity<SupportInterventionSummary>().Property(x => x.Capability).HasMaxLength(40);
+        b.Entity<SupportInterventionSummary>().Property(x => x.Summary).HasMaxLength(4000);
+        b.Entity<SupportInterventionSummary>().Property(x => x.Outcome).HasMaxLength(24);
+        b.Entity<SupportInterventionSummary>().Property(x => x.FollowUp).HasMaxLength(1000);
+        b.Entity<SupportInterventionSummary>().HasIndex(x => new { x.TicketId, x.RecordedAt });
+        b.Entity<SupportInterventionSummary>().HasIndex(x => new { x.DeviceId, x.ArtifactType, x.ArtifactId });
         b.Entity<SupportTicket>().HasOne<Device>().WithMany().HasForeignKey(x => x.DeviceId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<SupportTicket>().HasOne<Site>().WithMany().HasForeignKey(x => x.SiteId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<SupportTicket>().HasOne<AppUser>().WithMany().HasForeignKey(x => x.RequesterUserId).OnDelete(DeleteBehavior.SetNull);
