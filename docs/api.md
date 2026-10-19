@@ -60,6 +60,8 @@ i permessi `tickets.view` e `tickets.manage` nello stesso ambito. `PUT
 `queueId` nullable con `updateQueue` assegna o rimuove la coda;
 validazione ruolo, abilitazione, ambito e versione avvengono sul server. Priorità
 ammesse: `low`, `normal`, `high`, `urgent`; categoria ammessa tramite `category`
-in sola creazione. `GET /api/support/queues` richiede almeno `tickets.view` o
+in sola creazione. `PUT /api/support/bulk-queue` assegna/rimuove la stessa coda
+per 1–50 ticket, con versione attesa per ciascuno; l'operazione è atomica e
+richiede `tickets.manage` su ogni ticket. `GET /api/support/queues` richiede almeno `tickets.view` o
 `tickets.manage`; creazione e disattivazione code richiedono amministrazione in
 `/api/admin/support-queues`. Vedere [modello Service Desk](service-desk-data-model.md).
