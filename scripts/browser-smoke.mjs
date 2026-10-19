@@ -217,6 +217,7 @@ try {
  await page.getByRole('row').filter({has:page.getByRole('cell',{name:ticketSubject,exact:true})}).getByRole('button',{name:'Apri ticket',exact:true}).click();
  await page.locator('.ticket-interventions').waitFor();
  assert.equal(await page.locator('.ticket-intervention-link').isVisible(),true,'Ticket manager receives the RMM correlation control');
+ await page.waitForFunction(()=>{const select=[...document.querySelectorAll('select')].find(x=>x.labels?.[0]?.textContent?.trim()==='Stato');return select?.options.length>0;});
  assert.deepEqual(await page.getByLabel('Stato',{exact:true}).locator('option').evaluateAll(options=>options.map(option=>option.value)),['open','in_progress','resolved'],'Ticket UI lists only server-approved transitions');
  const interventionPicker=page.locator('.ticket-intervention-link select');
  await interventionPicker.waitFor();

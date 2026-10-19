@@ -48,6 +48,8 @@ public static class RemoteScenario
             Assert.Equal(HttpStatusCode.Forbidden, (await viewer.DeleteAsync($"/api/devices/{device}/remote-sessions/{body.GetProperty("id").GetGuid()}")).StatusCode);
             if (capability == "files") Assert.Equal(HttpStatusCode.NoContent, (await admin.PutAsJsonAsync($"/api/admin/devices/{device}/mesh", new { nodeId = "node//differentnode" })).StatusCode);
             Assert.Equal(HttpStatusCode.NoContent, (await scoped.DeleteAsync($"/api/devices/{device}/remote-sessions/{body.GetProperty("id").GetGuid()}")).StatusCode);
+            var endedSessions = await scoped.GetFromJsonAsync<JsonElement>($"/api/devices/{device}/remote-sessions");
+            Assert.NotEqual(JsonValueKind.Null, endedSessions.EnumerateArray().Single(x => x.GetProperty("id").GetGuid() == body.GetProperty("id").GetGuid()).GetProperty("endedAt").ValueKind);
         }
         Assert.Contains("remote.control", mesh.Calls); Assert.Contains("terminal", mesh.Calls); Assert.Contains("files", mesh.Calls);
         Assert.All(mesh.OperatorNames, name => Assert.Equal("Federico Operatore", name));

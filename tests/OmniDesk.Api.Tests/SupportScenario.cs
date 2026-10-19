@@ -100,7 +100,7 @@ public static class SupportScenario
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            db.RemoteSessions.Add(new RemoteSession { Id = remoteSessionId, DeviceId = device, Capability = "remote.control", State = "closed", ActorId = "fixture" });
+            db.RemoteSessions.Add(new RemoteSession { Id = remoteSessionId, DeviceId = device, Capability = "remote.control", State = "revoked", ActorId = "fixture", EndedAt = jobCompletedAt });
             db.UpdateJobs.Add(new UpdateJob { Id = updateJobId, DeviceId = device, RequestId = Guid.NewGuid(), RequestedBy = "fixture",
                 Kind = "diagnostics.processes", State = "succeeded", CreatedAt = jobStartedAt, CompletedAt = jobCompletedAt,
                 Result = "{\"output\":\"sensitive diagnostic output must not be exposed\"}" });
@@ -133,6 +133,7 @@ public static class SupportScenario
         var interventions = await admin.GetFromJsonAsync<System.Text.Json.JsonElement[]>($"/api/support/{ticket.Id}/interventions");
         Assert.Equal(2, interventions!.Length);
         Assert.Contains(interventions, x => x.GetProperty("artifactId").GetGuid() == remoteSessionId && x.GetProperty("capability").GetString() == "remote.control");
+        Assert.Equal(jobCompletedAt, interventions.Single(x => x.GetProperty("artifactId").GetGuid() == remoteSessionId).GetProperty("completedAt").GetDateTimeOffset());
         var linkedJob = interventions.Single(x => x.GetProperty("artifactId").GetGuid() == updateJobId);
         Assert.Equal("diagnostics.view", linkedJob.GetProperty("capability").GetString());
         Assert.Equal("succeeded", linkedJob.GetProperty("state").GetString());

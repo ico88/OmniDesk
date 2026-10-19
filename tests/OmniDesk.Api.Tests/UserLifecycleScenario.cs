@@ -71,7 +71,11 @@ public static class UserLifecycleScenario
         factory.Mesh.FailRevocation = false;
         await guard.Sweep(CancellationToken.None);
         using (var scope = factory.Services.CreateScope())
-            Assert.Equal("revoked", (await scope.ServiceProvider.GetRequiredService<AppDbContext>().RemoteSessions.FindAsync(remoteId))!.State);
+        {
+            var ended = (await scope.ServiceProvider.GetRequiredService<AppDbContext>().RemoteSessions.FindAsync(remoteId))!;
+            Assert.Equal("revoked", ended.State);
+            Assert.NotNull(ended.EndedAt);
+        }
         Assert.Contains("node//differentnode", factory.Mesh.RevokedNodes);
         Assert.Equal(HttpStatusCode.NoContent, (await admin.PutAsJsonAsync($"/api/admin/users/{id}/status", new { isDisabled = false })).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await oldCookie.GetAsync("/api/auth/me")).StatusCode);
@@ -86,7 +90,11 @@ public static class UserLifecycleScenario
         Assert.Equal(HttpStatusCode.NoContent, (await admin.PutAsJsonAsync($"/api/admin/users/{id}/roles", new { roles = new[] { "Viewer" } })).StatusCode);
         await guard.Sweep(CancellationToken.None);
         using (var scope = factory.Services.CreateScope())
-            Assert.Equal("revoked", (await scope.ServiceProvider.GetRequiredService<AppDbContext>().RemoteSessions.FindAsync(authorizedId))!.State);
+        {
+            var ended = (await scope.ServiceProvider.GetRequiredService<AppDbContext>().RemoteSessions.FindAsync(authorizedId))!;
+            Assert.Equal("revoked", ended.State);
+            Assert.NotNull(ended.EndedAt);
+        }
         Assert.Equal(HttpStatusCode.Unauthorized, (await enabled.GetAsync("/api/auth/me")).StatusCode);
         Assert.Equal(HttpStatusCode.NoContent, await Login(enabled, "lifecycle@example.test"));
         var me = await enabled.GetFromJsonAsync<JsonElement>("/api/auth/me");
