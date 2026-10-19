@@ -904,6 +904,11 @@ namespace OmniDesk.Api.Migrations
                         new
                         {
                             RoleId = "Administrator",
+                            Permission = "tickets.sla.manage"
+                        },
+                        new
+                        {
+                            RoleId = "Administrator",
                             Permission = "knowledge.view"
                         },
                         new
@@ -1338,6 +1343,82 @@ namespace OmniDesk.Api.Migrations
                         .HasFilter("\"SiteId\" IS NOT NULL");
 
                     b.ToTable("SupportQueueRoutingRules");
+                });
+
+            modelBuilder.Entity("OmniDesk.Api.Data.SupportSlaPolicy", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("CurrentVersion")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("ScopeKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid?>("SiteId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(1L);
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ScopeKey")
+                        .IsUnique();
+
+                    b.HasIndex("SiteId");
+
+                    b.ToTable("SupportSlaPolicies");
+                });
+
+            modelBuilder.Entity("OmniDesk.Api.Data.SupportSlaPolicyVersion", b =>
+                {
+                    b.Property<Guid>("PolicyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("DefinitionJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTimeOffset>("PublishedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PublishedBy")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.Property<Guid?>("SiteId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("PolicyId", "Version");
+
+                    b.HasIndex("PublishedBy");
+
+                    b.ToTable("SupportSlaPolicyVersions");
                 });
 
             modelBuilder.Entity("OmniDesk.Api.Data.SupportTicket", b =>
@@ -2018,6 +2099,29 @@ namespace OmniDesk.Api.Migrations
                         .WithMany()
                         .HasForeignKey("SiteId")
                         .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("OmniDesk.Api.Data.SupportSlaPolicy", b =>
+                {
+                    b.HasOne("OmniDesk.Api.Data.Site", null)
+                        .WithMany()
+                        .HasForeignKey("SiteId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("OmniDesk.Api.Data.SupportSlaPolicyVersion", b =>
+                {
+                    b.HasOne("OmniDesk.Api.Data.SupportSlaPolicy", null)
+                        .WithMany()
+                        .HasForeignKey("PolicyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OmniDesk.Api.Data.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("PublishedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("OmniDesk.Api.Data.SupportTicket", b =>

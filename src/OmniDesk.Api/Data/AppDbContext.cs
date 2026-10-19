@@ -46,6 +46,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
     public DbSet<SupportTicket> SupportTickets => Set<SupportTicket>();
     public DbSet<SupportWorkflow> SupportWorkflows => Set<SupportWorkflow>();
     public DbSet<SupportWorkflowVersion> SupportWorkflowVersions => Set<SupportWorkflowVersion>();
+    public DbSet<SupportSlaPolicy> SupportSlaPolicies => Set<SupportSlaPolicy>();
+    public DbSet<SupportSlaPolicyVersion> SupportSlaPolicyVersions => Set<SupportSlaPolicyVersion>();
     public DbSet<SupportQueue> SupportQueues => Set<SupportQueue>();
     public DbSet<SupportQueueMember> SupportQueueMembers => Set<SupportQueueMember>();
     public DbSet<SupportQueueRoutingRule> SupportQueueRoutingRules => Set<SupportQueueRoutingRule>();
@@ -181,6 +183,18 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
         b.Entity<SupportWorkflowVersion>().HasOne<SupportWorkflow>().WithMany().HasForeignKey(x => x.WorkflowId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<SupportTicket>().HasOne<SupportWorkflowVersion>().WithMany()
             .HasForeignKey(x => new { x.WorkflowId, x.WorkflowVersion }).OnDelete(DeleteBehavior.Restrict);
+
+        b.Entity<SupportSlaPolicy>().Property(x => x.Name).HasMaxLength(100);
+        b.Entity<SupportSlaPolicy>().Property(x => x.ScopeKey).HasMaxLength(64);
+        b.Entity<SupportSlaPolicy>().Property(x => x.Version).IsConcurrencyToken().HasDefaultValue(1L);
+        b.Entity<SupportSlaPolicy>().HasIndex(x => x.ScopeKey).IsUnique();
+        b.Entity<SupportSlaPolicy>().HasOne<Site>().WithMany().HasForeignKey(x => x.SiteId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<SupportSlaPolicyVersion>().HasKey(x => new { x.PolicyId, x.Version });
+        b.Entity<SupportSlaPolicyVersion>().Property(x => x.Name).HasMaxLength(100);
+        b.Entity<SupportSlaPolicyVersion>().Property(x => x.DefinitionJson).HasColumnType("jsonb");
+        b.Entity<SupportSlaPolicyVersion>().Property(x => x.PublishedBy).HasMaxLength(450);
+        b.Entity<SupportSlaPolicyVersion>().HasOne<SupportSlaPolicy>().WithMany().HasForeignKey(x => x.PolicyId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<SupportSlaPolicyVersion>().HasOne<AppUser>().WithMany().HasForeignKey(x => x.PublishedBy).OnDelete(DeleteBehavior.Restrict);
 
         b.Entity<DashboardLayout>().HasKey(x => x.UserId);
         b.Entity<DashboardLayout>().HasOne<AppUser>().WithOne().HasForeignKey<DashboardLayout>(x => x.UserId).OnDelete(DeleteBehavior.Cascade);

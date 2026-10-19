@@ -52,6 +52,28 @@ public sealed class SupportWorkflowVersion
     public DateTimeOffset PublishedAt { get; set; } = DateTimeOffset.UtcNow;
 }
 
+public sealed class SupportSlaPolicy
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid? SiteId { get; set; }
+    public string ScopeKey { get; set; } = "global";
+    public string Name { get; set; } = "";
+    public int CurrentVersion { get; set; }
+    public long Version { get; set; } = 1;
+    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
+public sealed class SupportSlaPolicyVersion
+{
+    public Guid PolicyId { get; set; }
+    public int Version { get; set; }
+    public string Name { get; set; } = "";
+    public Guid? SiteId { get; set; }
+    public string DefinitionJson { get; set; } = "";
+    public string PublishedBy { get; set; } = "";
+    public DateTimeOffset PublishedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
 public sealed class SupportTicket
 {
     public Guid Id { get; set; } = Guid.NewGuid();

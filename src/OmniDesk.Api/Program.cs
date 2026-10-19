@@ -170,5 +170,6 @@ app.MapDownloadEndpoints();
 app.MapKnowledgeEndpoints();
 app.MapNotificationEndpoints();
 app.MapTicketWorkflowEndpoints();
+app.MapSlaPolicyEndpoints();
 app.Run();
 public partial class Program { }

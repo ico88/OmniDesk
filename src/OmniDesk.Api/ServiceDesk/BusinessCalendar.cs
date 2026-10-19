@@ -22,7 +22,7 @@ public static class BusinessCalendar
         if (string.IsNullOrWhiteSpace(calendar.TimeZoneId)) throw new ArgumentException("A time-zone ID is required.", nameof(calendar));
         ArgumentNullException.ThrowIfNull(calendar.WeeklyHours);
         ArgumentNullException.ThrowIfNull(calendar.Holidays);
-        Validate(calendar.WeeklyHours);
+        ValidateDefinition(calendar);
         if (workingTime == TimeSpan.Zero) return start.ToUniversalTime();
 
         var zone = TimeZoneInfo.FindSystemTimeZoneById(calendar.TimeZoneId);
@@ -52,6 +52,16 @@ public static class BusinessCalendar
         }
 
         throw new InvalidOperationException("The calendar has no reachable working time within the supported horizon.");
+    }
+
+    public static void ValidateDefinition(BusinessCalendarDefinition calendar)
+    {
+        ArgumentNullException.ThrowIfNull(calendar);
+        if (string.IsNullOrWhiteSpace(calendar.TimeZoneId)) throw new ArgumentException("A time-zone ID is required.", nameof(calendar));
+        ArgumentNullException.ThrowIfNull(calendar.WeeklyHours);
+        ArgumentNullException.ThrowIfNull(calendar.Holidays);
+        _ = TimeZoneInfo.FindSystemTimeZoneById(calendar.TimeZoneId);
+        Validate(calendar.WeeklyHours);
     }
 
     private static DateTimeOffset ToUtc(DateOnly date, TimeOnly time, TimeZoneInfo zone, bool isEnd)
