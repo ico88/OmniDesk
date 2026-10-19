@@ -1771,8 +1771,7 @@ scadenze calcolate sul calendario lavorativo, inclusa la settimana successiva.
 pubblica dell'operatore completa idempotentemente il primo riscontro e la
 transizione a resolved/closed completa la risoluzione nella stessa transazione
 ticket. Il test verifica timestamp, indipendenza dei due target e idempotenza.
-Restano pause/ripresa, cicli di riapertura, worker breach, escalation, allarmi e
-visualizzazione SLA nella UI.
+Restano pause/ripresa, cicli di riapertura, worker breach, escalation e allarmi.
 
 CI Linux e Windows `39339233583`/`39339233542` sono verdi per la policy SLA
 base. Sul commit dei target iniziali, CI Linux `39340488203` è verde; il job
@@ -1783,5 +1782,11 @@ Ricostruito `omnidesk-api:local` dai sorgenti aggiornati, `./scripts/smoke.sh
 verificati stack HTTPS, Chromium, ClamAV clean/EICAR, backup con allegato e
 restore completo isolato DB/blob/chiavi/CA con probe HTTPS/CSRF/anonimo. Il
 completamento dei target è stato poi verificato con una seconda suite API e un
-secondo smoke runtime locale; la CI di tale estensione partirà dopo il push.
-Nessun servizio LAN è stato modificato.
+secondo smoke runtime locale. Aggiunti endpoint `GET /api/support/{id}/sla`
+protetto da `tickets.view` e pannello degli obiettivi nel dettaglio ticket; lo
+browser smoke crea una policy, verifica i due target, vede entrambi e controlla
+il completamento dopo la risposta/risoluzione. Dopo rebuild API/dashboard,
+`./scripts/test.sh` e `./scripts/smoke.sh --browser` sono passati (88 test API,
+6 Vitest, migrazioni, Chromium, ClamAV e restore isolato). Questa estensione UI
+deve ancora essere inclusa nella CI con il prossimo push. Nessun servizio LAN è
+stato modificato.
