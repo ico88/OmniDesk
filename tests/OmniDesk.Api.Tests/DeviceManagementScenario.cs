@@ -92,7 +92,7 @@ public static class DeviceManagementScenario
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            db.Devices.Add(new Device { Id = raceDevice, Name = "Queue/revoke race fixture" });
+            db.Devices.Add(new Device { Id = raceDevice, Name = "Queue/revoke race fixture", SiteId = Guid.Parse("11111111-1111-4111-8111-111111111111") });
             db.DeviceCredentials.Add(new DeviceCredential { DeviceId = raceDevice, PublicKeyPem = (await db.DeviceCredentials.FindAsync(device))!.PublicKeyPem });
             await db.SaveChangesAsync();
         }

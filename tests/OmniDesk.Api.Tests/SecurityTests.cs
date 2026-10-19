@@ -47,7 +47,8 @@ public sealed class SecurityTests : IClassFixture<ApiFactory>, IAsyncLifetime
         scopedId = await Create("scoped@example.test", null);
         viewerId = await Create("viewer@example.test", "Viewer");
         db.DeviceGroups.Add(new DeviceGroup { Id = group, Name = "Test group" });
-        db.Devices.AddRange(new Device { Id = device, Name = "Authorized", GroupId = group }, new Device { Id = other, Name = "Other" });
+        var site = Guid.Parse("11111111-1111-4111-8111-111111111111");
+        db.Devices.AddRange(new Device { Id = device, Name = "Authorized", GroupId = group, SiteId = site }, new Device { Id = other, Name = "Other", SiteId = site });
         await db.SaveChangesAsync();
     }
     public Task DisposeAsync() => Task.CompletedTask;
@@ -111,6 +112,19 @@ public sealed class SecurityTests : IClassFixture<ApiFactory>, IAsyncLifetime
         }
         var grantId = (await created.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("id").GetGuid();
         Assert.Equal(HttpStatusCode.NoContent, (await admin.DeleteAsync($"/api/admin/grants/{grantId}")).StatusCode);
+        Assert.Empty((await scoped.GetFromJsonAsync<Device[]>("/api/devices"))!);
+        var siteId = Guid.Parse("11111111-1111-4111-8111-111111111111");
+        var siteGrant = await admin.PostAsJsonAsync("/api/admin/grants", new { userId = scopedId, role = "Viewer", siteId });
+        Assert.Equal(HttpStatusCode.Created, siteGrant.StatusCode);
+        Assert.Equal(2, (await scoped.GetFromJsonAsync<Device[]>("/api/devices"))!.Length);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var p = scope.ServiceProvider.GetRequiredService<PermissionService>();
+            Assert.True(await p.Allows(scopedId, "view", other));
+            Assert.False(await p.Allows(scopedId, "remote.control", other));
+        }
+        var siteGrantId = (await siteGrant.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("id").GetGuid();
+        Assert.Equal(HttpStatusCode.NoContent, (await admin.DeleteAsync($"/api/admin/grants/{siteGrantId}")).StatusCode);
         Assert.Empty((await scoped.GetFromJsonAsync<Device[]>("/api/devices"))!);
         Assert.Equal(HttpStatusCode.Created, (await admin.PostAsJsonAsync("/api/admin/grants", new { userId = scopedId, role = "Operator", deviceId = device, groupId = (Guid?)null })).StatusCode);
         using (var scope = factory.Services.CreateScope())
