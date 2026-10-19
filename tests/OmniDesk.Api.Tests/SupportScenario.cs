@@ -133,7 +133,11 @@ public static class SupportScenario
         var interventions = await admin.GetFromJsonAsync<System.Text.Json.JsonElement[]>($"/api/support/{ticket.Id}/interventions");
         Assert.Equal(2, interventions!.Length);
         Assert.Contains(interventions, x => x.GetProperty("artifactId").GetGuid() == remoteSessionId && x.GetProperty("capability").GetString() == "remote.control");
-        Assert.Contains(interventions, x => x.GetProperty("artifactId").GetGuid() == updateJobId && x.GetProperty("capability").GetString() == "diagnostics.view" && x.GetProperty("state").GetString() == "succeeded");
+        var linkedJob = interventions.Single(x => x.GetProperty("artifactId").GetGuid() == updateJobId);
+        Assert.Equal("diagnostics.view", linkedJob.GetProperty("capability").GetString());
+        Assert.Equal("succeeded", linkedJob.GetProperty("state").GetString());
+        Assert.Equal("failed", linkedJob.GetProperty("currentState").GetString());
+        Assert.Equal(jobCompletedAt, linkedJob.GetProperty("completedAt").GetDateTimeOffset());
         Assert.DoesNotContain(System.Text.Json.JsonSerializer.Serialize(interventions), "sensitive diagnostic output");
         var remainingCandidates = await admin.GetFromJsonAsync<System.Text.Json.JsonElement[]>(candidateUrl);
         Assert.DoesNotContain(remainingCandidates!, x => x.GetProperty("id").GetGuid() == remoteSessionId);
