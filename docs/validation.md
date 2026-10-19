@@ -796,7 +796,7 @@ ammissibilità e versione; audit e outbox registrano le modifiche senza contenut
 ticket. Dashboard aggiornata per elenco, dettaglio e selettori. Test coprono default,
 default deny, ambito, assegnazione non autorizzata e aggiornamento versionato.
 
-`./scripts/test.sh`: 62 xUnit/PostgreSQL e 4 Vitest passati. `docker compose build
+`./scripts/test.sh`: 63 xUnit/PostgreSQL e 4 Vitest passati. `docker compose build
 api dashboard`, `docker compose config -q` e `git diff --check` passati. Workflow
 Windows MSI 0.8.4 ha superato build, installazione, recovery e disinstallazione;
 upgrade/repair/rollback è ancora in corso. Nessun deploy o test di upgrade su DB
@@ -805,6 +805,19 @@ LAN con record reali.
 La console filtra ora ticket autorizzati per priorità e email assegnatario. La
 suite copre filtri positivi e priorità non ammessa; non si effettuano conteggi o
 risultati prima dell’applicazione dei normali filtri di autorizzazione.
+
+
+## Numero ticket e migrazione con record esistenti — 19 ottobre 2026
+
+`TicketReadableNumber` aggiunge `SupportTickets.Number` come Identity PostgreSQL
+univoco. La Tray e la dashboard mostrano lo stesso numero `OD-000123`, mentre
+UUID resta l’identificatore API interno. Test di migrazione crea uno schema
+PostgreSQL isolato, applica tutte le migrazioni fino a `ProcessControlPermission`,
+inserisce ticket/dispositivo/sede preesistenti, applica la migrazione nuova e
+verifica numero assegnato al record storico e numero distinto al ticket successivo.
+`./scripts/test.sh`: 63 xUnit/PostgreSQL e 4 Vitest passati. Upgrade eseguito solo
+nello schema effimero dei test, non sul DB LAN. Pacchetto Windows aggiornato a 0.8.6;
+CI completa su questa revisione ancora da attendere.
 
 
 ## Terminazione processi RMM — 19 ottobre 2026

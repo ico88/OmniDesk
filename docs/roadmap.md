@@ -260,6 +260,12 @@ senza allargare l’insieme dei ticket restituiti oltre gli ambiti `tickets.view
 Test API verificano filtri e rifiuto di priorità non valide; code, categorie,
 contatori/SLA e assegnazione massiva restano da sviluppare.
 
+Il numero ticket è ora generato da Identity PostgreSQL e condiviso dalla Tray e
+dalla console nel formato `OD-000123`; non deriva dall’UUID e non promette una
+sequenza senza buchi. La migrazione conserva le richieste già presenti e assegna
+numeri distinti. La candidata Windows passa da 0.8.5 a 0.8.6 per includere il
+numero nella Tray; il workflow precedente non valida questo incremento.
+
 
 ### SD1 — priorità e assegnazione ticket — sorgenti e test verificati
 
@@ -269,7 +275,7 @@ la lista espone email assegnatario. I candidati sono account abilitati con
 `tickets.view` e `tickets.manage` sullo stesso dispositivo/sede del ticket;
 nuove assegnazioni sono ricontrollate lato server. Le modifiche sono versionate,
 auditate e incluse nell’outbox senza descrizioni o contenuti di conversazione.
-`./scripts/test.sh`: 62 test xUnit/PostgreSQL e 4 Vitest passati. Migrazione
-verificata nel database isolato della suite; upgrade del database LAN con record
-preesistenti non eseguito e nessun deploy effettuato. Restano code, SLA, categorie,
-numerazione leggibile, bulk assignment e viste operative.
+`./scripts/test.sh`: 63 test xUnit/PostgreSQL e 4 Vitest passati. Migrazioni
+verificate da schema vuoto e da uno schema isolato con ticket preesistente; upgrade
+del database LAN non eseguito e nessun deploy effettuato. Restano code, SLA,
+categorie, bulk assignment e viste operative.

@@ -15,7 +15,7 @@
 
 | Entità proposta | Campi e vincoli principali |
 | --- | --- |
-| Tickets | **Core implementato:** `SupportTickets` contiene device/sede storica, requester macchina, subject/description, state, priority (`low/normal/high/urgent`, default `normal`), `AssigneeId` Identity nullable, resolution/screenshot, version e date. FK assignee Restrict e indici dedicati. **Proposto:** Number, QueueId, workflow configurabile/versionato, CategoryId e ciclo Received/Resolved/Closed strutturato |
+| Tickets | **Core implementato:** `SupportTickets` contiene numero Identity univoco, device/sede storica, requester macchina, subject/description, state, priority (`low/normal/high/urgent`, default `normal`), `AssigneeId` Identity nullable, resolution/screenshot, version e date. FK assignee Restrict e indici dedicati. **Proposto:** QueueId, workflow configurabile/versionato, CategoryId e ciclo Received/Resolved/Closed strutturato |
 | TicketDevices | PK (TicketId, DeviceId), LinkedAt/By, snapshot nome/sede al collegamento. Almeno una riga per ticket effettivo |
 | TicketParticipants | PK ticket/utente/relazione, richiedente o follower; partecipazione non equivale a concessione RMM |
 | Queues / QueueMembers | Code/team e membri Identity; membership soggetta alle policy di ambito |

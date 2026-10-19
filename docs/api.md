@@ -50,7 +50,7 @@ Contratti ticket/screenshot, identità locale del richiedente, permessi `tickets
 
 ## Service Desk SD1
 
-`GET /api/support` restituisce i ticket visibili e include `priority`, `assigneeId`
+`GET /api/support` restituisce i ticket visibili e include il numero stabile `OD-` (campo numerico `number`), `priority`, `assigneeId`
 e `assigneeEmail`; accetta filtri `priority=low|normal|high|urgent` e `assignee=email`
 oltre a stato, ricerca, device e sede. `GET /api/support/{id}/assignees` richiede `tickets.manage`
 sull’ambito storico del ticket e restituisce fino a 200 account attivi con entrambi
