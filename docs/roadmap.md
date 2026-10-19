@@ -340,8 +340,9 @@ manuale. «Termina» revoca il link e impedisce nuovi accessi. L'endpoint server
 verifica l'utente proprietario o administration, `remote.control`, dispositivo,
 stato e policy prima di inviare l'azione. Il browser non riceve identità Mesh o
 credenziali. Build dashboard, Vitest 5/5 e API/PostgreSQL 64/64 passati. Resta
-da verificare il comando contro una sessione MeshCentral interattiva; nessun
-deploy LAN effettuato mentre sono presenti job update attivi.
+da verificare il comando contro una sessione MeshCentral interattiva. Il deploy
+LAN e la migrazione sono stati completati dopo backup e verifica di zero job e
+zero sessioni; smoke HTTPS/CA e bundle aggiornato passano.
 
 ### SD2 — ticket associati a più dispositivi — sviluppo in verifica
 
@@ -350,8 +351,8 @@ ad altri dispositivi, con snapshot nome/sede, permessi `tickets.manage` su
 entrambi i lati, limite dieci, lock per dispositivo, versione attesa, audit e
 outbox. I ticket esistenti vengono migrati mantenendo il loro dispositivo
 primario. Build dashboard, Vitest 5/5 e API/PostgreSQL 64/64 passati. La
-migrazione non è applicata al server LAN e l'interazione browser non è ancora
-collaudata.
+migrazione è applicata su LAN dopo backup e con zero sessioni/job; smoke
+HTTPS/CA passata. L'interazione autenticata ticket non è ancora collaudata.
 
 
 ### SD1 — creazione manuale ticket dalla console — sorgenti e test verificati

@@ -1090,5 +1090,18 @@ SD2 aggiunge migrazione con backfill del device primario, API link/unlink con
 permessi su ticket e dispositivo, versione concorrente, limite 10, lock,
 audit/outbox e UI ticket. Suite PostgreSQL isolata: 64/64 xUnit passati,
 includendo deny fuori ambito, link idempotente, rimozione del secondario e
-protezione del primario. Build dashboard e Vitest 5/5 passati. Nessuna migrazione
-o immagine è stata applicata al server LAN in questo incremento.
+protezione del primario. Build dashboard e Vitest 5/5 passati.
+
+Deploy LAN: backup completo in `.backups/20261019T152326Z.l2bttW`; aggiornate le
+sole immagini API e dashboard dopo aver verificato zero sessioni remote e zero
+job update. La prima sonda ha restituito readiness 503 per la migrazione
+`20261019150122_TicketDeviceLinks` ancora pendente; eseguito esplicitamente
+`docker compose run --rm api --migrate`, senza modifiche automatiche allo schema
+all'avvio. `verify-lan.py --server https://192.168.1.233:8085 --ca
+omnidesk-local-ca.crt` ora passa readiness/CA, dashboard e rifiuto anonimo; il
+bundle pubblicato contiene i controlli di disconnessione e dispositivi ticket.
+Tutti i cinque servizi risultano running e il DB resta a 0 sessioni remote / 0
+job update. Nessun login, click autenticato o comando di disconnessione reale
+MeshCentral è stato eseguito. CI Linux `39276800149` passata; il workflow
+Windows sul commit precedente all'ultimo solo-UI-label `39276440522` passato;
+Windows `39276800079` sul commit finale è ancora in esecuzione.
