@@ -94,6 +94,8 @@ try {
  const fixtureDevice=(await enrollment.json()).deviceId;
  const header=Buffer.from(JSON.stringify({alg:'RS256',typ:'JWT'})).toString('base64url');
  const agentAssertion=()=>{const now=Math.floor(Date.now()/1000);const claims=Buffer.from(JSON.stringify({iss:fixtureDevice,sub:fixtureDevice,aud:'omnidesk-agent',iat:now,nbf:now-5,exp:now+60,jti:randomBytes(16).toString('hex')})).toString('base64url');const unsigned=header+'.'+claims;return unsigned+'.'+sign('RSA-SHA256',Buffer.from(unsigned),fixtureKeys.privateKey).toString('base64url');};
+ const heartbeat=await context.request.post('https://omnidesk.test/api/agent/metrics',{headers:{Authorization:'Bearer '+agentAssertion()},data:{cpuPercent:12.5,totalMemoryBytes:16000000000,availableMemoryBytes:8000000000,networkReceivedBytes:100,networkSentBytes:200,uptimeSeconds:3600,disks:[{name:'C:',totalBytes:100000,freeBytes:50000}],agentVersion:'0.8.1'}});
+ assert.equal(heartbeat.status(),204,'Signed fixture heartbeat accepted');
  const chunk=(type,data)=>{const payload=Buffer.concat([Buffer.from(type),data]);let crc=0xffffffff;for(const b of payload){crc^=b;for(let i=0;i<8;i++)crc=(crc>>>1)^((crc&1)?0xedb88320:0);}const size=Buffer.alloc(4),sum=Buffer.alloc(4);size.writeUInt32BE(data.length);sum.writeUInt32BE((~crc)>>>0);return Buffer.concat([size,payload,sum]);};
  const pngHeader=Buffer.alloc(13);pngHeader.writeUInt32BE(1);pngHeader.writeUInt32BE(1,4);pngHeader[8]=8;pngHeader[9]=6;
  const screenshot=Buffer.concat([Buffer.from([137,80,78,71,13,10,26,10]),chunk('IHDR',pngHeader),chunk('IDAT',deflateSync(Buffer.from([0,128,128,128,255]))),chunk('IEND',Buffer.alloc(0))]).toString('base64');
@@ -134,6 +136,7 @@ try {
 
  await page.getByRole('button',{name:'Aggiorna',exact:true}).click();
  await page.getByRole('row').filter({has:page.getByRole('cell',{name:fixtureName,exact:true})}).getByRole('button',{name:'Apri',exact:true}).click();
+ assert.equal(await page.getByRole('row').filter({has:page.getByRole('cell',{name:fixtureName,exact:true})}).getByText('Online',{exact:true}).count(),1,'Recent signed heartbeat appears as Online in the device list');
  const renamed=fixtureName+' renamed';
  await page.locator('summary').filter({hasText:'Gestione dispositivo'}).click();
  await page.getByLabel('Nome dispositivo',{exact:true}).fill(renamed);
@@ -190,5 +193,5 @@ try {
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true,'No horizontal page overflow on mobile');
  await page.screenshot({path:'/previews/devices-mobile.png',fullPage:true});
  assert.deepEqual(errors,[],'No browser JavaScript exceptions');
- console.log('PASS: Chromium accounts/grants, isolated device enrollment, ticket resolution/internal note visibility, device management, protected Windows download and viewer UI permissions');
+ console.log('PASS: Chromium accounts/grants, isolated device enrollment and online badge from signed heartbeat, ticket resolution/internal note visibility, device management, protected Windows download and viewer UI permissions');
 } finally {await browser.close();}
