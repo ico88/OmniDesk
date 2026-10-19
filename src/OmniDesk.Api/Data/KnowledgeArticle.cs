@@ -9,6 +9,8 @@ public sealed class KnowledgeArticle
     public string Summary { get; set; } = "";
     public string Body { get; set; } = "";
     public bool IsPublished { get; set; }
+    public Guid? SiteId { get; set; }
+    public Guid? GroupId { get; set; }
     public long Version { get; set; } = 1;
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
@@ -24,6 +26,8 @@ public sealed class KnowledgeArticleRevision
     public string Summary { get; set; } = "";
     public string Body { get; set; } = "";
     public bool IsPublished { get; set; }
+    public Guid? SiteId { get; set; }
+    public Guid? GroupId { get; set; }
     public DateTimeOffset? PublishedAt { get; set; }
     public DateTimeOffset RecordedAt { get; set; } = DateTimeOffset.UtcNow;
     public string? RecordedBy { get; set; }

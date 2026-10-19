@@ -589,6 +589,9 @@ namespace OmniDesk.Api.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid?>("GroupId")
+                        .HasColumnType("uuid");
+
                     b.Property<bool>("IsPublished")
                         .HasColumnType("boolean");
 
@@ -599,6 +602,9 @@ namespace OmniDesk.Api.Migrations
 
                     b.Property<DateTimeOffset?>("PublishedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("SiteId")
+                        .HasColumnType("uuid");
 
                     b.Property<string>("Slug")
                         .IsRequired()
@@ -623,12 +629,19 @@ namespace OmniDesk.Api.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("GroupId");
+
                     b.HasIndex("NormalizedSlug")
                         .IsUnique();
 
+                    b.HasIndex("SiteId");
+
                     b.HasIndex("IsPublished", "UpdatedAt");
 
-                    b.ToTable("KnowledgeArticles");
+                    b.ToTable("KnowledgeArticles", t =>
+                        {
+                            t.HasCheckConstraint("CK_KnowledgeArticle_OneScope", "num_nonnulls(\"GroupId\", \"SiteId\") <= 1");
+                        });
                 });
 
             modelBuilder.Entity("OmniDesk.Api.Data.KnowledgeArticleRevision", b =>
@@ -644,6 +657,9 @@ namespace OmniDesk.Api.Migrations
                         .HasMaxLength(30000)
                         .HasColumnType("character varying(30000)");
 
+                    b.Property<Guid?>("GroupId")
+                        .HasColumnType("uuid");
+
                     b.Property<bool>("IsPublished")
                         .HasColumnType("boolean");
 
@@ -656,6 +672,9 @@ namespace OmniDesk.Api.Migrations
                     b.Property<string>("RecordedBy")
                         .HasMaxLength(450)
                         .HasColumnType("character varying(450)");
+
+                    b.Property<Guid?>("SiteId")
+                        .HasColumnType("uuid");
 
                     b.Property<string>("Slug")
                         .IsRequired()
@@ -674,7 +693,11 @@ namespace OmniDesk.Api.Migrations
 
                     b.HasKey("ArticleId", "Version");
 
+                    b.HasIndex("GroupId");
+
                     b.HasIndex("RecordedBy");
+
+                    b.HasIndex("SiteId");
 
                     b.ToTable("KnowledgeArticleRevisions");
                 });
@@ -1499,6 +1522,19 @@ namespace OmniDesk.Api.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("OmniDesk.Api.Data.KnowledgeArticle", b =>
+                {
+                    b.HasOne("OmniDesk.Api.Data.DeviceGroup", null)
+                        .WithMany()
+                        .HasForeignKey("GroupId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OmniDesk.Api.Data.Site", null)
+                        .WithMany()
+                        .HasForeignKey("SiteId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
             modelBuilder.Entity("OmniDesk.Api.Data.KnowledgeArticleRevision", b =>
                 {
                     b.HasOne("OmniDesk.Api.Data.KnowledgeArticle", null)
@@ -1507,10 +1543,20 @@ namespace OmniDesk.Api.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("OmniDesk.Api.Data.DeviceGroup", null)
+                        .WithMany()
+                        .HasForeignKey("GroupId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("OmniDesk.Api.Data.AppUser", null)
                         .WithMany()
                         .HasForeignKey("RecordedBy")
                         .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("OmniDesk.Api.Data.Site", null)
+                        .WithMany()
+                        .HasForeignKey("SiteId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("OmniDesk.Api.Data.MeshDeviceMapping", b =>

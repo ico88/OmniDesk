@@ -193,12 +193,19 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
         b.Entity<KnowledgeArticle>().Property(x => x.Body).HasMaxLength(30000);
         b.Entity<KnowledgeArticle>().HasIndex(x => x.NormalizedSlug).IsUnique();
         b.Entity<KnowledgeArticle>().HasIndex(x => new { x.IsPublished, x.UpdatedAt });
+        b.Entity<KnowledgeArticle>().ToTable(t => t.HasCheckConstraint("CK_KnowledgeArticle_OneScope", "num_nonnulls(\"GroupId\", \"SiteId\") <= 1"));
+        b.Entity<KnowledgeArticle>().HasOne<Site>().WithMany().HasForeignKey(x => x.SiteId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<KnowledgeArticle>().HasOne<DeviceGroup>().WithMany().HasForeignKey(x => x.GroupId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<KnowledgeArticle>().HasIndex(x => x.SiteId);
+        b.Entity<KnowledgeArticle>().HasIndex(x => x.GroupId);
         b.Entity<KnowledgeArticleRevision>().HasKey(x => new { x.ArticleId, x.Version });
         b.Entity<KnowledgeArticleRevision>().Property(x => x.Slug).HasMaxLength(120);
         b.Entity<KnowledgeArticleRevision>().Property(x => x.Title).HasMaxLength(160);
         b.Entity<KnowledgeArticleRevision>().Property(x => x.Summary).HasMaxLength(500);
         b.Entity<KnowledgeArticleRevision>().Property(x => x.Body).HasMaxLength(30000);
         b.Entity<KnowledgeArticleRevision>().Property(x => x.RecordedBy).HasMaxLength(450);
+        b.Entity<KnowledgeArticleRevision>().HasOne<Site>().WithMany().HasForeignKey(x => x.SiteId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<KnowledgeArticleRevision>().HasOne<DeviceGroup>().WithMany().HasForeignKey(x => x.GroupId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<KnowledgeArticleRevision>().HasOne<KnowledgeArticle>().WithMany().HasForeignKey(x => x.ArticleId).OnDelete(DeleteBehavior.Cascade);
         b.Entity<KnowledgeArticleRevision>().HasOne<AppUser>().WithMany().HasForeignKey(x => x.RecordedBy).OnDelete(DeleteBehavior.SetNull);
         foreach (var role in Security.Permissions.Roles)
