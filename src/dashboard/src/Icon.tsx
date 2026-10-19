@@ -1,7 +1,7 @@
 import {
   Activity, ArrowRight, BookOpen, Check, Clock3, Cpu, Download, Files, LayoutDashboard,
   LifeBuoy, LogOut, MessageSquare, Monitor, Palette, Plus, RefreshCw, Search, Settings2,
-  ShieldCheck, Users, X, type LucideIcon,
+  ShieldCheck, Users, X, Link2, type LucideIcon,
 } from 'lucide-react';
 
 const icons: Record<string, LucideIcon> = {
@@ -27,6 +27,7 @@ const icons: Record<string, LucideIcon> = {
   clock: Clock3,
   close: X,
   check: Check,
+  link: Link2,
 };
 
 export function Icon({ name, size = 19 }: { name: string; size?: number }) {

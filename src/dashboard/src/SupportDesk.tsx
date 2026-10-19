@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from './api';
 import { Icon } from './Icon';
+import { TicketInterventions } from './TicketInterventions';
 
 type Ticket = { id:string; number:number; deviceId:string; siteId:string; deviceName:string|null; siteName:string|null; subject:string; description:string; state:string; priority:string; category:string; origin:string; queueId:string|null; queueName:string|null; assigneeId:string|null; assigneeEmail:string|null; canManage:boolean; resolution:string|null; version:number; createdAt:string; hasScreenshot:boolean };
 type TicketSummary = { total:number; open:number; inProgress:number; urgent:number };
@@ -144,6 +145,7 @@ export function SupportDesk({visibleDeviceIds,onOpenDevice,deviceId,sites=[],dev
           <button type="submit" className="secondary compact" disabled={busy||!linkDeviceId}>Collega</button>
         </form>}
       </section>
+      <TicketInterventions ticketId={selected.id} version={selected.version} canManage={selected.canManage} onChanged={async()=>{await loadThread(selected);await load();}}/>
       {error&&<p role="alert">{error}</p>}
       <div className="conversation-log" role="log" aria-label="Messaggi del ticket" aria-live="polite">
         <article className="chat-message requester"><div className="chat-meta"><strong>{selected.origin==='operator'?'Ticket inserito da assistenza':'Richiesta dell’utente'}</strong><time>{date(selected.createdAt)}</time></div><p>{selected.description}</p>

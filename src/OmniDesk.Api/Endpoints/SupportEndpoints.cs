@@ -2,6 +2,7 @@ using System.IO.Compression;
 using System.Buffers.Binary;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 using OmniDesk.Api.Data;
 using OmniDesk.Api.Security;
 using OmniDesk.Contracts;
@@ -14,6 +15,9 @@ public sealed record SupportStaffEdit(long ExpectedVersion,string State,string? 
 public sealed record SupportInternalNote(long ExpectedVersion, string Body);
 public sealed record ManualSupportCreate(Guid RequestId, Guid DeviceId, string Subject, string Description, string Category, string Priority);
 public sealed record SupportTicketDeviceChange(long ExpectedVersion, Guid DeviceId);
+public sealed record SupportInterventionLink(long ExpectedVersion, Guid DeviceId, string ArtifactType, Guid ArtifactId);
+public sealed record SupportInterventionCandidate(Guid Id, Guid DeviceId, string DeviceName, string ArtifactType,
+    string Label, string Capability, string State, DateTimeOffset OccurredAt);
 public sealed record SupportTicketDeviceView(Guid DeviceId, string Name, Guid SiteId, string SiteName, bool IsPrimary);
 public sealed record SupportTicketVersion(Guid TicketId, long ExpectedVersion);
 public sealed record BulkQueueAssignment(SupportTicketVersion[] Tickets, Guid? QueueId);
@@ -663,13 +667,161 @@ public static class SupportEndpoints
             await tx.CommitAsync();
             return Results.NoContent();
         });
+        staff.MapPost("/{id:guid}/interventions", async (Guid id, SupportInterventionLink r, HttpContext c, AppDbContext db, PermissionService p) => {
+            if (r.ExpectedVersion < 1 || r.DeviceId == Guid.Empty || r.ArtifactId == Guid.Empty ||
+                r.ArtifactType is not ("remote_session" or "update_job")) return Results.BadRequest();
+            var userId = c.User.UserId();
+            var ticket = await db.SupportTickets.AsNoTracking().SingleOrDefaultAsync(t => t.Id == id);
+            if (ticket is null) return Results.NotFound();
+            if (!await p.Allows(userId, "tickets.manage", ticket.DeviceId, siteId: ticket.SiteId)) return Results.Forbid();
+            if (!await db.SupportTicketDevices.AnyAsync(x => x.TicketId == id && x.DeviceId == r.DeviceId)) return Results.NotFound();
+            if (!await p.Allows(userId, "tickets.manage", r.DeviceId)) return Results.Forbid();
+
+            await using var tx = await db.Database.BeginTransactionAsync();
+            foreach (var deviceId in new[] { ticket.DeviceId, r.DeviceId }.Distinct().Order())
+                await DeviceOperationLock.Acquire(db, deviceId);
+            if (!await p.Allows(userId, "tickets.manage", ticket.DeviceId, siteId: ticket.SiteId)) return Results.Forbid();
+            if (!await db.SupportTicketDevices.AnyAsync(x => x.TicketId == id && x.DeviceId == r.DeviceId)) return Results.NotFound();
+            if (!await p.Allows(userId, "tickets.manage", r.DeviceId)) return Results.Forbid();
+            ticket = await db.SupportTickets.AsNoTracking().SingleAsync(t => t.Id == id);
+
+            string capability, label, state;
+            DateTimeOffset occurredAt;
+            if (r.ArtifactType == "remote_session")
+            {
+                var session = await db.RemoteSessions.AsNoTracking().SingleOrDefaultAsync(x => x.Id == r.ArtifactId && x.DeviceId == r.DeviceId);
+                if (session is null) return Results.NotFound();
+                capability = session.Capability;
+                if (capability is not ("remote.control" or "terminal" or "files")) return Results.BadRequest();
+                label = "Sessione " + capability;
+                state = session.State;
+                occurredAt = session.CreatedAt;
+            }
+            else
+            {
+                var job = await db.UpdateJobs.AsNoTracking().SingleOrDefaultAsync(x => x.Id == r.ArtifactId && x.DeviceId == r.DeviceId);
+                if (job is null) return Results.NotFound();
+                capability = job.Kind switch
+                {
+                    "process.kill" => "processes.manage",
+                    var kind when kind.StartsWith("service.", StringComparison.Ordinal) => "services.manage",
+                    var kind when kind.StartsWith("diagnostics.", StringComparison.Ordinal) => "diagnostics.view",
+                    var kind when kind is "scan" or "install" || kind.StartsWith("updates.", StringComparison.Ordinal) || kind == "agent.update" => "updates",
+                    _ => ""
+                };
+                if (capability.Length == 0) return Results.BadRequest();
+                label = "Operazione " + job.Kind;
+                state = job.State;
+                occurredAt = job.CreatedAt;
+            }
+            if (!await p.Allows(userId, capability, r.DeviceId)) return Results.Forbid();
+            var deviceName = await db.SupportTicketDevices.AsNoTracking().Where(x => x.TicketId == id && x.DeviceId == r.DeviceId)
+                .Select(x => x.DeviceNameSnapshot).SingleAsync();
+            var payload = JsonSerializer.Serialize(new { deviceId = r.DeviceId, deviceName, artifactType = r.ArtifactType,
+                artifactId = r.ArtifactId, capability, label, state, occurredAt });
+            var artifactIdentity = $"\"artifactType\":\"{r.ArtifactType}\",\"artifactId\":\"{r.ArtifactId}\"";
+            if (await db.SupportMessages.AnyAsync(x => x.TicketId == id && x.Kind == "rmm_intervention" && x.Body.Contains(artifactIdentity)))
+            { await tx.CommitAsync(); return Results.NoContent(); }
+            if (ticket.Version != r.ExpectedVersion) return Results.Conflict(new { error = "Il ticket è stato aggiornato. Ricarica gli interventi prima di riprovare." });
+            var now = DateTimeOffset.UtcNow;
+            var changed = await db.SupportTickets.Where(x => x.Id == id && x.Version == r.ExpectedVersion)
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.Version, x => x.Version + 1).SetProperty(x => x.UpdatedAt, now));
+            if (changed == 0) return Results.Conflict(new { error = "Il ticket è stato aggiornato. Ricarica gli interventi prima di riprovare." });
+            db.SupportMessages.Add(new SupportMessage { TicketId = id, ActorId = userId, Kind = "rmm_intervention",
+                Visibility = "internal", Body = payload, CreatedAt = now });
+            db.AuditEvents.Add(new AuditEvent { ActorId = userId, Action = "ticket.intervention.link", Target = id.ToString() });
+            CoreOutbox.Add(db, "ticket.intervention.linked", "ticket", id,
+                new { ticketId = id, deviceId = r.DeviceId, artifactType = r.ArtifactType, capability }, c.TraceIdentifier);
+            await db.SaveChangesAsync();
+            await tx.CommitAsync();
+            return Results.NoContent();
+        });
+        staff.MapGet("/{id:guid}/intervention-candidates", async (Guid id, HttpContext c, AppDbContext db, PermissionService p) => {
+            var ticket = await db.SupportTickets.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id);
+            if (ticket is null) return Results.NotFound();
+            var userId = c.User.UserId();
+            if (!await p.Allows(userId, "tickets.manage", ticket.DeviceId, siteId: ticket.SiteId)) return Results.Forbid();
+            var links = await db.SupportTicketDevices.AsNoTracking().Where(x => x.TicketId == id)
+                .Select(x => new { x.DeviceId, x.DeviceNameSnapshot }).ToArrayAsync();
+            var deviceNames = links.ToDictionary(x => x.DeviceId, x => x.DeviceNameSnapshot);
+            var deviceIds = links.Select(x => x.DeviceId).ToArray();
+            var sessions = await db.RemoteSessions.AsNoTracking().Where(x => deviceIds.Contains(x.DeviceId))
+                .OrderByDescending(x => x.CreatedAt).Take(25)
+                .Select(x => new { x.Id, x.DeviceId, x.Capability, x.State, x.CreatedAt }).ToArrayAsync();
+            var jobs = await db.UpdateJobs.AsNoTracking().Where(x => deviceIds.Contains(x.DeviceId))
+                .OrderByDescending(x => x.CreatedAt).Take(25)
+                .Select(x => new { x.Id, x.DeviceId, x.Kind, x.State, x.CreatedAt }).ToArrayAsync();
+            var candidates = new List<SupportInterventionCandidate>();
+            foreach (var session in sessions)
+                if (await p.Allows(userId, "tickets.manage", session.DeviceId) &&
+                    (session.Capability is "remote.control" or "terminal" or "files") &&
+                    await p.Allows(userId, session.Capability, session.DeviceId))
+                    candidates.Add(new(session.Id, session.DeviceId, deviceNames[session.DeviceId],
+                        "remote_session", "Sessione " + session.Capability, session.Capability, session.State, session.CreatedAt));
+            foreach (var job in jobs)
+            {
+                var capability = job.Kind switch
+                {
+                    "process.kill" => "processes.manage",
+                    var kind when kind.StartsWith("service.", StringComparison.Ordinal) => "services.manage",
+                    var kind when kind.StartsWith("diagnostics.", StringComparison.Ordinal) => "diagnostics.view",
+                    var kind when kind is "scan" or "install" || kind.StartsWith("updates.", StringComparison.Ordinal) || kind == "agent.update" => "updates",
+                    _ => ""
+                };
+                if (capability.Length > 0 && await p.Allows(userId, "tickets.manage", job.DeviceId) && await p.Allows(userId, capability, job.DeviceId))
+                    candidates.Add(new(job.Id, job.DeviceId, deviceNames[job.DeviceId], "update_job",
+                        "Operazione " + job.Kind, capability, job.State, job.CreatedAt));
+            }
+            var linked = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var linkedBodies = await db.SupportMessages.AsNoTracking().Where(x => x.TicketId == id && x.Kind == "rmm_intervention")
+                .Select(x => x.Body).ToArrayAsync();
+            foreach (var body in linkedBodies)
+            {
+                try
+                {
+                    using var document = JsonDocument.Parse(body);
+                    var root = document.RootElement;
+                    linked.Add($"{root.GetProperty("artifactType").GetString()}:{root.GetProperty("deviceId").GetGuid():D}:{root.GetProperty("artifactId").GetGuid():D}");
+                }
+                catch (JsonException) { }
+                catch (KeyNotFoundException) { }
+            }
+            candidates.RemoveAll(x => linked.Contains($"{x.ArtifactType}:{x.DeviceId:D}:{x.Id:D}"));
+            c.Response.Headers.CacheControl = "no-store";
+            return Results.Ok(candidates.OrderByDescending(x => x.OccurredAt).Take(100));
+        });
+        staff.MapGet("/{id:guid}/interventions", async (Guid id, HttpContext c, AppDbContext db, PermissionService p) => {
+            var ticket = await db.SupportTickets.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id);
+            if (ticket is null) return Results.NotFound();
+            var userId = c.User.UserId();
+            if (!await p.Allows(userId, "tickets.view", ticket.DeviceId, siteId: ticket.SiteId)) return Results.Forbid();
+            var rows = await db.SupportMessages.AsNoTracking().Where(x => x.TicketId == id && x.Kind == "rmm_intervention")
+                .OrderByDescending(x => x.Id).Take(100).ToArrayAsync();
+            var visible = new List<JsonElement>();
+            foreach (var row in rows)
+            {
+                try
+                {
+                    using var document = JsonDocument.Parse(row.Body);
+                    var root = document.RootElement;
+                    var deviceId = root.GetProperty("deviceId").GetGuid();
+                    var capability = root.GetProperty("capability").GetString();
+                    if (capability is null || !await p.Allows(userId, "tickets.view", deviceId) || !await p.Allows(userId, capability, deviceId)) continue;
+                    visible.Add(root.Clone());
+                }
+                catch (JsonException) { /* Skip legacy or malformed records without exposing their body. */ }
+                catch (KeyNotFoundException) { }
+            }
+            c.Response.Headers.CacheControl = "no-store";
+            return Results.Ok(visible);
+        });
         staff.MapGet("/{id:guid}/messages",async(Guid id,long? before,HttpContext c,AppDbContext db,PermissionService p)=>{
             if(before is <=0)return Results.BadRequest();
             var ticket=await db.SupportTickets.AsNoTracking().SingleOrDefaultAsync(t=>t.Id==id);
             if(ticket is null)return Results.NotFound();
             if(!await p.Allows(c.User.UserId(),"tickets.view",ticket.DeviceId,siteId:ticket.SiteId))return Results.Forbid();
             var canViewInternal = await p.Allows(c.User.UserId(), "tickets.note.internal", ticket.DeviceId, siteId: ticket.SiteId);
-            var query=db.SupportMessages.AsNoTracking().Where(m=>m.TicketId==id && (m.Visibility=="public" || canViewInternal));
+            var query=db.SupportMessages.AsNoTracking().Where(m=>m.TicketId==id && (m.Visibility=="public" || (canViewInternal && m.Kind!="rmm_intervention")));
             if(before.HasValue)query=query.Where(m=>m.Id<before.Value);
             var rows=await query.OrderByDescending(m=>m.Id).Take(100)
                 .Select(m=>new {m.Id,m.Kind,m.Visibility,m.Body,m.FromState,m.ToState,m.CreatedAt,m.IsImported}).ToArrayAsync();
