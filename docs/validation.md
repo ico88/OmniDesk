@@ -1692,3 +1692,21 @@ Windows run `39331892158` completata con successo, inclusi contratti Tray,
 compilazione MSI, install/recovery/uninstall, upgrade/repair/rollback delle
 baseline e pubblicazione artifact non firmati. Nessun servizio LAN è stato
 modificato; l'artifact non è stato promosso né distribuito.
+
+### Restore applicativo isolato — 2026-10-19
+
+Esteso `verify-backup.sh` per verificare il manifest completo dei nuovi backup
+e, se sono presenti dump, chiavi Identity, dati Caddy e password DB, avviare un
+restore applicativo effimero. Il progetto Compose usa rete `internal`, nessuna
+porta host e volumi univoci rimossi al termine; DB e migrazioni restano in copia.
+Il secret DB è montato da una directory privata temporanea e non viene stampato.
+
+`bash scripts/verify-backup.sh .backups/20261019T153639Z.mzZpdG` passato:
+PostgreSQL ha importato il dump (29 migrazioni storiche, 1 account, 1 dispositivo),
+l'immagine API locale corrente ha applicato le migrazioni pendenti; readiness,
+diniego anonimo, CSRF e cookie Secure su HTTPS con CA Caddy ripristinata passano.
+Il test ha rilevato e corretto il mancato inoltro HTTPS nel proxy temporaneo. Il
+backup usato è storico: non contiene allegati né manifest generale, quindi la
+prova allegati/integrità generale resta aperta. Mesh non è stata ripristinata.
+`bash -n`, `docker compose config` isolato e `git diff --check` passati. Nessun
+servizio LAN modificato.
