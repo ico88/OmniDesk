@@ -84,6 +84,11 @@ public static class SupportEndpoints
             if (!global.Contains("tickets.view") && !global.Contains("tickets.manage") && !hasScoped) return Results.Forbid();
             if (siteId is not null)
             {
+                if (!await db.Sites.AnyAsync(s => s.Id == siteId)) return Results.NotFound();
+                if (await p.Allows(userId, "tickets.view", siteId: siteId))
+                    return Results.Ok(await db.SupportQueues.AsNoTracking()
+                        .Where(x => x.IsActive && (x.SiteId == null || x.SiteId == siteId))
+                        .OrderBy(x => x.Name).Select(x => new { x.Id, x.Name, x.SiteId }).ToArrayAsync());
                 var viewGlobal = global.Contains("tickets.view");
                 var viewGrants = from g in db.ScopeGrants join permission in db.RolePermissions on g.RoleId equals permission.RoleId
                     where g.UserId == userId && permission.Permission == "tickets.view" select g;
