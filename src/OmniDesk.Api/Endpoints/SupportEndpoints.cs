@@ -17,10 +17,12 @@ public sealed record SupportTicketDeviceChange(long ExpectedVersion, Guid Device
 public sealed record SupportTicketDeviceView(Guid DeviceId, string Name, Guid SiteId, string SiteName, bool IsPrimary);
 public sealed record SupportTicketVersion(Guid TicketId, long ExpectedVersion);
 public sealed record BulkQueueAssignment(SupportTicketVersion[] Tickets, Guid? QueueId);
-public sealed record PortalTicketCreate(Guid RequestId, Guid DeviceId, string Subject, string Description, string Category);
+public sealed record PortalTicketCreate(Guid RequestId, Guid DeviceId, string Subject, string Description, string Category,
+    string? ScreenshotBase64 = null, bool ScreenshotConsent = false);
 public sealed record PortalTicketReply(long ExpectedVersion, string Body);
 public sealed record PortalTicketView(Guid Id, long Number, Guid DeviceId, string DeviceName, string SiteName,
-    string Subject, string State, string Category, long Version, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt);
+    string Subject, string State, string Category, long Version, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt,
+    bool HasScreenshot = false);
 public sealed record PortalMessageView(long Id, string Kind, string Body, string? FromState, string? ToState, DateTimeOffset CreatedAt);
 public static class SupportEndpoints
 {
@@ -154,7 +156,7 @@ public static class SupportEndpoints
                     db.DeviceCredentials.Any(credential => credential.DeviceId == ticket.DeviceId && credential.RevokedAt == null)
                 orderby ticket.UpdatedAt descending
                 select new PortalTicketView(ticket.Id, ticket.Number, ticket.DeviceId, device.Name, site.Name,
-                    ticket.Subject, ticket.State, ticket.Category, ticket.Version, ticket.CreatedAt, ticket.UpdatedAt))
+                    ticket.Subject, ticket.State, ticket.Category, ticket.Version, ticket.CreatedAt, ticket.UpdatedAt, ticket.Screenshot != null))
                 .Take(100).ToArrayAsync();
             c.Response.Headers.CacheControl = "no-store";
             return Results.Ok(tickets);
@@ -169,7 +171,7 @@ public static class SupportEndpoints
                     db.PortalDeviceAccesses.Any(access => access.UserId == userId && access.DeviceId == item.DeviceId) &&
                     db.DeviceCredentials.Any(credential => credential.DeviceId == item.DeviceId && credential.RevokedAt == null)
                 select new PortalTicketView(item.Id, item.Number, item.DeviceId, device.Name, site.Name,
-                    item.Subject, item.State, item.Category, item.Version, item.CreatedAt, item.UpdatedAt))
+                    item.Subject, item.State, item.Category, item.Version, item.CreatedAt, item.UpdatedAt, item.Screenshot != null))
                 .SingleOrDefaultAsync();
             if (ticket is null) return Results.NotFound();
             var request = await db.SupportTickets.AsNoTracking().Where(x => x.Id == id)
@@ -189,6 +191,14 @@ public static class SupportEndpoints
             var category = r.Category ?? "";
             if (r.RequestId == Guid.Empty || r.DeviceId == Guid.Empty || string.IsNullOrWhiteSpace(subject) || subject.Length > 200 ||
                 string.IsNullOrWhiteSpace(description) || description.Length > 8000 || !Categories.Contains(category)) return Results.BadRequest();
+            byte[]? screenshot = null;
+            if (r.ScreenshotBase64 is not null)
+            {
+                if (!r.ScreenshotConsent || r.ScreenshotBase64.Length > 700000) return Results.BadRequest();
+                try { screenshot = Convert.FromBase64String(r.ScreenshotBase64); }
+                catch (FormatException) { return Results.BadRequest(); }
+                if (!ValidScreenshot(screenshot)) return Results.BadRequest();
+            }
             var userId = c.User.UserId();
             if (!await db.Users.AnyAsync(u => u.Id == userId && !u.IsDisabled)) return Results.Forbid();
             await using var tx = await db.Database.BeginTransactionAsync();
@@ -205,9 +215,10 @@ public static class SupportEndpoints
             var previous = await db.SupportTickets.AsNoTracking().SingleOrDefaultAsync(ticket => ticket.DeviceId == device.Id &&
                 ticket.RequesterKey == requesterKey && ticket.RequestId == r.RequestId && ticket.RequesterUserId == userId);
             if (previous is not null)
-                return previous.Subject == subject && previous.Description == description && previous.Category == r.Category
+                return previous.Subject == subject && previous.Description == description && previous.Category == r.Category &&
+                    (previous.Screenshot ?? []).SequenceEqual(screenshot ?? [])
                     ? Results.Ok(new PortalTicketView(previous.Id, previous.Number, device.Id, device.Name, device.SiteName,
-                        previous.Subject, previous.State, previous.Category, previous.Version, previous.CreatedAt, previous.UpdatedAt))
+                        previous.Subject, previous.State, previous.Category, previous.Version, previous.CreatedAt, previous.UpdatedAt, previous.Screenshot is not null))
                     : Results.Conflict();
             var cutoff = DateTimeOffset.UtcNow.AddMinutes(-5);
             if (await db.SupportTickets.CountAsync(ticket => ticket.RequesterUserId == userId && ticket.CreatedAt > cutoff) >= 10)
@@ -220,12 +231,13 @@ public static class SupportEndpoints
             var ticket = new SupportTicket {
                 DeviceId = device.Id, SiteId = device.SiteId, RequesterUserId = userId, RequesterKey = requesterKey,
                 RequestId = r.RequestId, Origin = "portal", Subject = subject, Description = description,
-                Category = category, Priority = "normal", QueueId = queueId, CreatedAt = now, UpdatedAt = now
+                Category = category, Priority = "normal", QueueId = queueId, CreatedAt = now, UpdatedAt = now, Screenshot = screenshot
             };
             db.SupportTickets.Add(ticket);
             db.SupportTicketDevices.Add(new SupportTicketDevice { TicketId = ticket.Id, DeviceId = device.Id,
                 LinkedAt = now, DeviceNameSnapshot = device.Name, SiteIdSnapshot = device.SiteId, SiteNameSnapshot = device.SiteName });
             db.AuditEvents.Add(new AuditEvent { ActorId = userId, Action = "ticket.portal.create", Target = ticket.Id.ToString() });
+            if (screenshot is not null) db.AuditEvents.Add(new AuditEvent { ActorId = userId, Action = "ticket.portal.screenshot.consent", Target = ticket.Id.ToString() });
             CoreOutbox.Add(db, "ticket.created", "ticket", ticket.Id,
                 new { ticketId = ticket.Id, deviceId = ticket.DeviceId, siteId = ticket.SiteId, state = ticket.State,
                     category = ticket.Category, queueId = ticket.QueueId, origin = ticket.Origin }, c.TraceIdentifier);
@@ -233,7 +245,23 @@ public static class SupportEndpoints
             await tx.CommitAsync();
             return Results.Created($"/api/portal/tickets/{ticket.Id}", new PortalTicketView(ticket.Id, ticket.Number,
                 device.Id, device.Name, device.SiteName, ticket.Subject, ticket.State, category,
-                ticket.Version, ticket.CreatedAt, ticket.UpdatedAt));
+                ticket.Version, ticket.CreatedAt, ticket.UpdatedAt, ticket.Screenshot is not null));
+        });
+        portal.MapGet("/tickets/{id:guid}/screenshot", async (Guid id, HttpContext c, AppDbContext db) => {
+            var userId = c.User.UserId();
+            var row = await (from ticket in db.SupportTickets.AsNoTracking()
+                join site in db.Sites.AsNoTracking() on ticket.SiteId equals site.Id
+                where ticket.Id == id && ticket.RequesterUserId == userId && !site.IsArchived &&
+                    db.Users.Any(user => user.Id == userId && !user.IsDisabled) &&
+                    db.PortalDeviceAccesses.Any(access => access.UserId == userId && access.DeviceId == ticket.DeviceId) &&
+                    db.DeviceCredentials.Any(credential => credential.DeviceId == ticket.DeviceId && credential.RevokedAt == null)
+                select new { ticket.Screenshot }).SingleOrDefaultAsync();
+            if (row is null || row.Screenshot is null) return Results.NotFound();
+            db.AuditEvents.Add(new AuditEvent { ActorId = userId, Action = "ticket.portal.screenshot.view", Target = id.ToString() });
+            await db.SaveChangesAsync();
+            c.Response.Headers.CacheControl = "no-store";
+            c.Response.Headers["X-Content-Type-Options"] = "nosniff";
+            return Results.File(row.Screenshot, "image/png");
         });
         portal.MapPost("/tickets/{id:guid}/messages", async (Guid id, PortalTicketReply r, HttpContext c, AppDbContext db) => {
             if (r.ExpectedVersion < 1 || string.IsNullOrWhiteSpace(r.Body) || r.Body.Trim().Length > 8000) return Results.BadRequest();

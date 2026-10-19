@@ -5,4 +5,5 @@
 .portal-ticket:hover,.portal-ticket.selected{border-color:var(--primary)}
 .portal-ticket>span:first-child{display:grid;gap:5px;min-width:0}.portal-ticket strong,.portal-ticket small{overflow-wrap:anywhere}.portal-ticket small{color:var(--muted)}
 .portal-create{max-width:760px;margin:auto}.portal-create h2{margin-top:4px}.portal-content>.section-heading{margin-bottom:18px}.portal-closed{padding:12px;border-radius:10px;background:var(--surface-raised);color:var(--muted)}
+.portal-create input[type=file]{padding:10px}.portal-create .portal-consent{display:flex;grid-template-columns:auto 1fr;align-items:flex-start;gap:9px;padding:12px;border:1px solid var(--border);border-radius:10px;background:var(--surface-raised);line-height:1.5}.portal-consent input{width:auto;margin-top:3px}.portal-content .chat-image-button{text-decoration:none}
 @media(max-width:900px){.portal-layout{grid-template-columns:1fr}}
