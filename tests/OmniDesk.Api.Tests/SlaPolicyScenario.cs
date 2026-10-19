@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -69,6 +70,63 @@ public sealed class SlaPolicyScenario(ApiFactory factory) : IClassFixture<ApiFac
         Assert.Equal(2, policy.CurrentVersion);
         Assert.Equal([1, 2], policy.Versions.Select(item => item.Version).ToArray());
         Assert.DoesNotContain("tickets.sla.manage", Permissions.ForRole("Operator"));
+
+        var deviceId = Guid.NewGuid();
+        var ticketId = Guid.NewGuid();
+        var createdAt = new DateTimeOffset(2026, 10, 19, 10, 0, 0, TimeSpan.Zero);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            await using var tx = await db.Database.BeginTransactionAsync();
+            var publisher = await db.Users.SingleAsync(x => x.UserName == userName);
+            var globalPolicy = new SupportSlaPolicy { ScopeKey = "global", Name = "Global fallback", CurrentVersion = 1 };
+            db.SupportSlaPolicies.Add(globalPolicy);
+            db.SupportSlaPolicyVersions.Add(new SupportSlaPolicyVersion
+            {
+                PolicyId = globalPolicy.Id, Version = 1, Name = globalPolicy.Name,
+                DefinitionJson = JsonSerializer.Serialize(Definition(30, 120), new JsonSerializerOptions(JsonSerializerDefaults.Web)),
+                PublishedBy = publisher.Id
+            });
+            db.Devices.Add(new Device { Id = deviceId, Name = "SLA target fixture", SiteId = siteId });
+            var ticket = new SupportTicket
+            {
+                Id = ticketId, DeviceId = deviceId, SiteId = siteId, RequestId = Guid.NewGuid(),
+                RequesterKey = new string('a', 64), Subject = "SLA target fixture", Description = "Fixture",
+                CreatedAt = createdAt, UpdatedAt = createdAt
+            };
+            db.SupportTickets.Add(ticket);
+            await TicketSlaTargetService.ApplyInitialTargets(db, ticket);
+            await db.SaveChangesAsync();
+            var targets = await db.SupportTicketSlaTargets.AsNoTracking().Where(x => x.TicketId == ticketId)
+                .OrderBy(x => x.TargetType).ToArrayAsync();
+            Assert.Equal(2, targets.Length);
+            Assert.All(targets, target => Assert.Equal(2, target.PolicyVersion));
+            Assert.All(targets, target => Assert.Equal(createdAt, target.StartedAt));
+            Assert.Equal(new DateTimeOffset(2026, 10, 19, 12, 0, 0, TimeSpan.Zero),
+                targets.Single(x => x.TargetType == "first_response").DueAt);
+            Assert.Equal(new DateTimeOffset(2026, 10, 26, 12, 0, 0, TimeSpan.Zero),
+                targets.Single(x => x.TargetType == "resolution").DueAt);
+
+            var fallbackSiteId = Guid.NewGuid();
+            var fallbackDeviceId = Guid.NewGuid();
+            var fallbackTicket = new SupportTicket
+            {
+                Id = Guid.NewGuid(), DeviceId = fallbackDeviceId, SiteId = fallbackSiteId, RequestId = Guid.NewGuid(),
+                RequesterKey = new string('b', 64), Subject = "Global SLA fallback fixture", Description = "Fixture",
+                CreatedAt = createdAt, UpdatedAt = createdAt
+            };
+            db.Sites.Add(new Site { Id = fallbackSiteId, Name = "SLA fallback fixture" });
+            db.Devices.Add(new Device { Id = fallbackDeviceId, Name = "SLA fallback device", SiteId = fallbackSiteId });
+            db.SupportTickets.Add(fallbackTicket);
+            await TicketSlaTargetService.ApplyInitialTargets(db, fallbackTicket);
+            await db.SaveChangesAsync();
+            var fallbackTargets = await db.SupportTicketSlaTargets.AsNoTracking()
+                .Where(x => x.TicketId == fallbackTicket.Id).ToArrayAsync();
+            Assert.Equal(2, fallbackTargets.Length);
+            Assert.All(fallbackTargets, target => Assert.Equal(globalPolicy.Id, target.PolicyId));
+            Assert.All(fallbackTargets, target => Assert.Equal(1, target.PolicyVersion));
+            await tx.RollbackAsync();
+        }
     }
 
     private static SlaPolicyDefinition Definition(int firstResponse = 60, int resolution = 480) => new(
