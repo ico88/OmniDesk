@@ -93,6 +93,43 @@ public static class SupportScenario
         requesterThread = await agent.GetFromJsonAsync<System.Text.Json.JsonElement>($"/api/agent/support/{owner}/{ticket.Id}/messages");
         Assert.Equal(2, requesterThread.GetProperty("version").GetInt64());
         Assert.Contains(requesterThread.GetProperty("messages").EnumerateArray(), m => m.GetProperty("body").GetString() == "Il problema è ancora presente.");
+        Guid remoteSessionId = Guid.NewGuid(), updateJobId = Guid.NewGuid();
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            db.RemoteSessions.Add(new RemoteSession { Id = remoteSessionId, DeviceId = device, Capability = "remote.control", State = "closed", ActorId = "fixture" });
+            db.UpdateJobs.Add(new UpdateJob { Id = updateJobId, DeviceId = device, RequestId = Guid.NewGuid(), RequestedBy = "fixture",
+                Kind = "diagnostics.processes", State = "succeeded", Result = "{\"output\":\"sensitive diagnostic output must not be exposed\"}" });
+            await db.SaveChangesAsync();
+        }
+        var interventionUrl = $"/api/support/{ticket.Id}/interventions";
+        var candidateUrl = $"/api/support/{ticket.Id}/intervention-candidates";
+        var rmmCandidates = await admin.GetFromJsonAsync<System.Text.Json.JsonElement[]>(candidateUrl);
+        Assert.Contains(rmmCandidates!, x => x.GetProperty("id").GetGuid() == remoteSessionId);
+        Assert.Contains(rmmCandidates!, x => x.GetProperty("id").GetGuid() == updateJobId);
+        var remoteLink = new { expectedVersion = 2L, deviceId = device, artifactType = "remote_session", artifactId = remoteSessionId };
+        Assert.Equal(HttpStatusCode.Forbidden, (await scoped.PostAsJsonAsync(interventionUrl, remoteLink)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await admin.PostAsJsonAsync(interventionUrl, new { expectedVersion = 2L, deviceId = Guid.NewGuid(), artifactType = remoteLink.artifactType, artifactId = remoteSessionId })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await admin.PostAsJsonAsync(interventionUrl, new { expectedVersion = 2L, deviceId = device, artifactType = "arbitrary", artifactId = remoteSessionId })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await admin.PostAsJsonAsync(interventionUrl, remoteLink)).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await admin.PostAsJsonAsync(interventionUrl, remoteLink)).StatusCode);
+        var jobLink = new { expectedVersion = 3L, deviceId = device, artifactType = "update_job", artifactId = updateJobId };
+        Assert.Equal(HttpStatusCode.NoContent, (await admin.PostAsJsonAsync(interventionUrl, jobLink)).StatusCode);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            await db.UpdateJobs.Where(x => x.Id == updateJobId).ExecuteUpdateAsync(s => s.SetProperty(x => x.State, "failed"));
+        }
+        Assert.Equal(HttpStatusCode.NoContent, (await admin.PostAsJsonAsync(interventionUrl, jobLink)).StatusCode);
+        var interventions = await admin.GetFromJsonAsync<System.Text.Json.JsonElement[]>($"/api/support/{ticket.Id}/interventions");
+        Assert.Equal(2, interventions!.Length);
+        Assert.Contains(interventions, x => x.GetProperty("artifactId").GetGuid() == remoteSessionId && x.GetProperty("capability").GetString() == "remote.control");
+        Assert.Contains(interventions, x => x.GetProperty("artifactId").GetGuid() == updateJobId && x.GetProperty("capability").GetString() == "diagnostics.view" && x.GetProperty("state").GetString() == "succeeded");
+        Assert.DoesNotContain(System.Text.Json.JsonSerializer.Serialize(interventions), "sensitive diagnostic output");
+        var remainingCandidates = await admin.GetFromJsonAsync<System.Text.Json.JsonElement[]>(candidateUrl);
+        Assert.DoesNotContain(remainingCandidates!, x => x.GetProperty("id").GetGuid() == remoteSessionId);
+        Assert.DoesNotContain(remainingCandidates!, x => x.GetProperty("id").GetGuid() == updateJobId);
+        Assert.Equal(HttpStatusCode.Forbidden, (await scoped.GetAsync($"/api/support/{ticket.Id}/interventions")).StatusCode);
         Assert.Equal(siteQueueId, (await admin.GetFromJsonAsync<System.Text.Json.JsonElement[]>($"/api/support?deviceId={device}"))!.Single().GetProperty("queueId").GetGuid());
         var availableQueues = await admin.GetFromJsonAsync<System.Text.Json.JsonElement[]>($"/api/support/{ticket.Id}/queues");
         Assert.Contains(availableQueues!, x => x.GetProperty("id").GetGuid() == siteQueueId);
@@ -142,10 +179,14 @@ public static class SupportScenario
         var scopedSiteQueues = await scoped.GetFromJsonAsync<System.Text.Json.JsonElement[]>($"/api/support/queues?siteId={siteId}");
         Assert.Contains(scopedSiteQueues!, x => x.GetProperty("id").GetGuid() == siteQueueId);
         Assert.DoesNotContain(scopedSiteQueues!, x => x.GetProperty("id").GetGuid() == otherSiteQueueId);
+        var scopedInterventions = await scoped.GetFromJsonAsync<System.Text.Json.JsonElement[]>($"/api/support/{ticket.Id}/interventions");
+        Assert.Empty(scopedInterventions!);
+        Assert.Empty(await scoped.GetFromJsonAsync<System.Text.Json.JsonElement[]>(candidateUrl));
+        Assert.Equal(HttpStatusCode.Forbidden, (await scoped.PostAsJsonAsync(interventionUrl, new { expectedVersion = 4L, deviceId = device, artifactType = "update_job", artifactId = updateJobId })).StatusCode);
         var scopedTicketQueues = await scoped.GetFromJsonAsync<System.Text.Json.JsonElement[]>($"/api/support/{ticket.Id}/queues");
         Assert.Contains(scopedTicketQueues!, x => x.GetProperty("id").GetGuid() == siteQueueId);
         Assert.DoesNotContain(scopedTicketQueues!, x => x.GetProperty("id").GetGuid() == otherSiteQueueId);
-        Assert.Equal(HttpStatusCode.BadRequest, (await admin.PutAsJsonAsync("/api/support/bulk-queue", new { queueId = otherSiteQueueId, tickets = new[] { new { ticketId = ticket.Id, expectedVersion = 2L } } })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await admin.PutAsJsonAsync("/api/support/bulk-queue", new { queueId = otherSiteQueueId, tickets = new[] { new { ticketId = ticket.Id, expectedVersion = 4L } } })).StatusCode);
         var scopedAssignees=await scoped.GetFromJsonAsync<System.Text.Json.JsonElement[]>($"/api/support/{ticket.Id}/assignees");
         Assert.DoesNotContain(scopedAssignees!,x=>x.GetProperty("id").GetString()==scopedId);
         Assert.Equal(HttpStatusCode.BadRequest,(await admin.PutAsJsonAsync($"/api/admin/support-queues/{siteQueueId}/members",new {expectedVersion=1,userIds=new[]{"unknown-user"}})).StatusCode);
@@ -194,11 +235,11 @@ public static class SupportScenario
         }
         Assert.False(await notificationWorker.ProcessNext(CancellationToken.None));
         var adminUser=(await admin.GetFromJsonAsync<System.Text.Json.JsonElement[]>("/api/admin/users"))!.Single(x=>x.GetProperty("email").GetString()=="admin@example.test").GetProperty("id").GetString();
-        Assert.Equal(HttpStatusCode.BadRequest,(await admin.PutAsJsonAsync($"/api/support/{ticket.Id}",new {expectedVersion=2,state="open",resolution=(string?)null,queueId=otherSiteQueueId,updateQueue=true})).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest,(await admin.PutAsJsonAsync($"/api/support/{ticket.Id}",new {expectedVersion=2,state="open",resolution=(string?)null,queueId=siteQueueId,updateQueue=true,assigneeId=adminUser,updateAssignment=true})).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest,(await admin.PutAsJsonAsync($"/api/support/{ticket.Id}",new {expectedVersion=2,state="open",resolution=(string?)null,priority="emergency",updatePriority=true})).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest,(await admin.PutAsJsonAsync($"/api/support/{ticket.Id}",new {expectedVersion=2,state="open",resolution=(string?)null,assigneeId="new-user-without-scope",updateAssignment=true})).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest,(await admin.PutAsJsonAsync($"/api/support/{ticket.Id}",new {expectedVersion=2,state="open",resolution=(string?)null,queueId=Guid.NewGuid(),updateQueue=true})).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,(await admin.PutAsJsonAsync($"/api/support/{ticket.Id}",new {expectedVersion=4,state="open",resolution=(string?)null,queueId=otherSiteQueueId,updateQueue=true})).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,(await admin.PutAsJsonAsync($"/api/support/{ticket.Id}",new {expectedVersion=4,state="open",resolution=(string?)null,queueId=siteQueueId,updateQueue=true,assigneeId=adminUser,updateAssignment=true})).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,(await admin.PutAsJsonAsync($"/api/support/{ticket.Id}",new {expectedVersion=4,state="open",resolution=(string?)null,priority="emergency",updatePriority=true})).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,(await admin.PutAsJsonAsync($"/api/support/{ticket.Id}",new {expectedVersion=4,state="open",resolution=(string?)null,assigneeId="new-user-without-scope",updateAssignment=true})).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,(await admin.PutAsJsonAsync($"/api/support/{ticket.Id}",new {expectedVersion=4,state="open",resolution=(string?)null,queueId=Guid.NewGuid(),updateQueue=true})).StatusCode);
         Assert.Contains((await admin.GetFromJsonAsync<SupportTicketView[]>("/api/support"))!,t=>t.Id==ticket.Id);
         var scopedSummary=await scoped.GetFromJsonAsync<System.Text.Json.JsonElement>($"/api/support/summary?deviceId={device}");
         Assert.Equal(1,scopedSummary.GetProperty("total").GetInt32());
@@ -227,7 +268,7 @@ public static class SupportScenario
         var invalid = await admin.PutAsJsonAsync($"/api/support/{ticket.Id}",new SupportEdit(1,"resolved","   "));
         Assert.Contains("Scrivi una risposta",await invalid.Content.ReadAsStringAsync());
         Assert.Equal(HttpStatusCode.BadRequest,(await admin.PutAsJsonAsync($"/api/support/{ticket.Id}",new SupportEdit(1,"resolved",null))).StatusCode);
-        Assert.Equal(HttpStatusCode.NoContent,(await admin.PutAsJsonAsync($"/api/support/{ticket.Id}",new {expectedVersion=2,state="resolved",resolution="Risolto fixture",addReply=true,priority="urgent",updatePriority=true,queueId=siteQueueId,updateQueue=true,assigneeId=scopedId,updateAssignment=true})).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent,(await admin.PutAsJsonAsync($"/api/support/{ticket.Id}",new {expectedVersion=4,state="resolved",resolution="Risolto fixture",addReply=true,priority="urgent",updatePriority=true,queueId=siteQueueId,updateQueue=true,assigneeId=scopedId,updateAssignment=true})).StatusCode);
         var assignedTicket=(await admin.GetFromJsonAsync<System.Text.Json.JsonElement[]>($"/api/support?deviceId={device}"))!.Single();
         Assert.Equal("urgent",assignedTicket.GetProperty("priority").GetString());
         Assert.Equal("software",assignedTicket.GetProperty("category").GetString());
@@ -260,11 +301,11 @@ public static class SupportScenario
         Assert.Contains(messages,m=>m.GetProperty("body").GetString()=="Risolto fixture");
         Assert.Contains(messages,m=>m.GetProperty("toState").GetString()=="resolved");
         Assert.True(conversation.GetProperty("canReply").GetBoolean());
-        Assert.Equal(3,conversation.GetProperty("version").GetInt64());
-        Assert.Equal(HttpStatusCode.NoContent, (await admin.PutAsJsonAsync("/api/support/bulk-queue", new { queueId = (Guid?)null, tickets = new[] { new { ticketId = ticket.Id, expectedVersion = 3L } } })).StatusCode);
-        Assert.Equal(HttpStatusCode.Conflict, (await admin.PutAsJsonAsync("/api/support/bulk-queue", new { queueId = (Guid?)null, tickets = new[] { new { ticketId = ticket.Id, expectedVersion = 3L } } })).StatusCode);
+        Assert.Equal(5,conversation.GetProperty("version").GetInt64());
+        Assert.Equal(HttpStatusCode.NoContent, (await admin.PutAsJsonAsync("/api/support/bulk-queue", new { queueId = (Guid?)null, tickets = new[] { new { ticketId = ticket.Id, expectedVersion = 5L } } })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await admin.PutAsJsonAsync("/api/support/bulk-queue", new { queueId = (Guid?)null, tickets = new[] { new { ticketId = ticket.Id, expectedVersion = 5L } } })).StatusCode);
         Assert.Equal(HttpStatusCode.NoContent, (await admin.PutAsJsonAsync($"/api/admin/support-queues/{siteQueueId}", new { name = "Rete", expectedName = "Rete", expectedVersion = 2, isActive = false })).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, (await admin.PutAsJsonAsync($"/api/support/{ticket.Id}", new { expectedVersion = 4, state = "resolved", resolution = "Risolto fixture", queueId = siteQueueId, updateQueue = true })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await admin.PutAsJsonAsync($"/api/support/{ticket.Id}", new { expectedVersion = 6, state = "resolved", resolution = "Risolto fixture", queueId = siteQueueId, updateQueue = true })).StatusCode);
         var older = await admin.GetFromJsonAsync<System.Text.Json.JsonElement>($"/api/support/{ticket.Id}/messages?before={messages[1].GetProperty("id").GetInt64()}");
         Assert.Single(older.GetProperty("messages").EnumerateArray());
         Assert.Equal(HttpStatusCode.BadRequest,(await admin.GetAsync($"/api/support/{ticket.Id}/messages?before=0")).StatusCode);
@@ -353,5 +394,12 @@ public static class SupportScenario
         Assert.Equal(HttpStatusCode.BadRequest, (await admin.DeleteAsync($"/api/support/{manualTicket.Id}/devices/{device}?expectedVersion=2")).StatusCode);
         Assert.Equal(HttpStatusCode.NoContent, (await admin.DeleteAsync($"/api/support/{manualTicket.Id}/devices/{sameSiteUnmanagedDevice}?expectedVersion=2")).StatusCode);
         Assert.Single(await admin.GetFromJsonAsync<System.Text.Json.JsonElement[]>($"/api/support/{manualTicket.Id}/devices"));
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            db.RemoteSessions.RemoveRange(db.RemoteSessions.Where(x => x.Id == remoteSessionId));
+            db.UpdateJobs.RemoveRange(db.UpdateJobs.Where(x => x.Id == updateJobId));
+            await db.SaveChangesAsync();
+        }
     }
 }

@@ -192,6 +192,10 @@ try {
  const ticketSubject='Browser support '+randomBytes(6).toString('hex');
  const intake=await context.request.post('https://omnidesk.test/api/agent/support',{headers:{Authorization:'Bearer '+agentAssertion()},data:{requesterKey:'A'.repeat(64),ticket:{requestId:crypto.randomUUID(),subject:ticketSubject,description:'Isolated fixture, no live user data',screenshotBase64:screenshot,screenshotConsent:true}}});
  assert.equal(intake.status(),201,'Authenticated isolated ticket intake');
+ const smokeTicketId=(await intake.json()).id;
+ const diagnosticJob=await context.request.post(`https://omnidesk.test/api/devices/${fixtureDevice}/diagnostics/processes`,{headers:csrfHeaders,data:{requestId:crypto.randomUUID()}});
+ assert.equal(diagnosticJob.status(),201,'Authorized RMM diagnostic job created for ticket correlation');
+ const diagnosticJobId=(await diagnosticJob.json()).id;
  await page.locator('.notification-trigger').click();
  await page.getByLabel('Notifiche ticket').getByRole('button',{name:'Aggiorna',exact:true}).click();
  const newTicketNotification=page.getByRole('button').filter({hasText:ticketSubject});
@@ -207,7 +211,21 @@ try {
  await page.getByLabel('Cerca richieste',{exact:true}).fill(fixtureName.toUpperCase());
  await page.getByLabel('Filtra stato richieste',{exact:true}).selectOption('open');
  await page.getByRole('button',{name:'Filtra',exact:true}).click();
+ const supportRowResponse=await context.request.get(`https://omnidesk.test/api/support?ticketId=${smokeTicketId}`);
+ assert.equal(supportRowResponse.status(),200);
+ assert.equal((await supportRowResponse.json())[0].canManage,true,'Authorized staff can manage the selected ticket');
  await page.getByRole('row').filter({has:page.getByRole('cell',{name:ticketSubject,exact:true})}).getByRole('button',{name:'Apri ticket',exact:true}).click();
+ await page.locator('.ticket-interventions').waitFor();
+ assert.equal(await page.locator('.ticket-intervention-link').isVisible(),true,'Ticket manager receives the RMM correlation control');
+ const interventionPicker=page.locator('.ticket-intervention-link select');
+ await interventionPicker.waitFor();
+ await interventionPicker.selectOption(`update_job:${diagnosticJobId}`);
+ await page.locator('.ticket-intervention-link').getByRole('button',{name:'Collega',exact:true}).click();
+ await page.getByRole('region',{name:'Interventi RMM associati'}).getByText('Operazione diagnostics.processes',{exact:true}).waitFor();
+ const correlatedInterventions=await context.request.get(`https://omnidesk.test/api/support/${smokeTicketId}/interventions`);
+ assert.equal(correlatedInterventions.status(),200);
+ assert.equal((await correlatedInterventions.json()).length,1,'RMM job is linked to the ticket');
+ assert.equal((await (await context.request.get(`https://omnidesk.test/api/support/${smokeTicketId}/intervention-candidates`)).json()).length,0,'Linked RMM job is removed from the candidate list');
  await page.getByLabel('Stato',{exact:true}).selectOption('resolved');
  assert.equal(await page.getByLabel('Risposta visibile al richiedente',{exact:true}).evaluate(e=>e.checkValidity()),false,'Resolution requires a response before submit');
  await page.getByRole('img',{name:'Screenshot allegato alla richiesta',exact:true}).evaluate(async img=>{await img.decode();if(img.naturalWidth!==1)throw Error('Screenshot not rendered');});
@@ -314,5 +332,5 @@ try {
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true,'No horizontal page overflow on mobile');
  await page.screenshot({path:'/previews/devices-mobile.png',fullPage:true});
  assert.deepEqual(errors,[],'No browser JavaScript exceptions');
- console.log('PASS: Chromium account/grant flows, favicon/shared brand mark, customer portal screenshot consent/chat/isolation/revocation, signed-heartbeat online badge, ticket notification click-through, support desk, device management and viewer permissions');
+ console.log('PASS: Chromium account/grant flows, favicon/shared brand mark, portal screenshot consent/chat/isolation/revocation, signed-heartbeat online badge, ticket notifications and RMM intervention correlation, device management and viewer permissions');
 } finally {await browser.close();}
