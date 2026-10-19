@@ -715,3 +715,21 @@ Il test end-to-end dell'updater resta aperto: l'Agent pilota 0.8.0 non include
 l'updater e deve essere installato manualmente alla 0.8.1. Poi l'amministratore
 potrà accodare la 0.8.2 e verificare stato finale/ricevuta dopo il riavvio del
 servizio. Installare direttamente la 0.8.2 non testa l'aggiornamento remoto.
+
+## Diagnostica RMM su richiesta — 19 ottobre 2026
+
+Implementate le viste processi attivi, servizi Windows e warning/errori dei
+registri System/Application. L'Agent raccoglie solo dopo richiesta autenticata;
+il backend applica `diagnostics.view` globale o scoped, rivalida il grant quando
+il dispositivo reclama il job e registra audit di accodamento/esito. I risultati
+hanno limiti di numero e lunghezza. Il worker rifiuta tipi di job sconosciuti;
+nessuna API permette di terminare processi o modificare/avviare servizi.
+
+Verifiche: `docker compose build api dashboard`, cross-publish Agent `win-x64`,
+`docker compose config -q` e `git diff --check` riusciti. `./scripts/test.sh`
+passato con 47 test xUnit PostgreSQL e 4 test Vitest; lo scenario API verifica
+deny per un utente senza il permesso, claim diagnostico e ricezione risultato.
+Non eseguito deploy né runtime
+sull'Agent Windows. Il server live non è stato riavviato mentre il dispositivo
+pilota aveva un job Windows Update `install` in corso. Queste viste richiedono
+la prossima release MSI dell'Agent.

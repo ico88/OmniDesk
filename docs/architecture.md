@@ -96,7 +96,9 @@ UI Mesh. La policy server Mesh continua a gestire consenso e comandi. Per la
 same-origin policy, selezione monitor, qualità, scaling, tastiera e clipboard
 restano i controlli nativi presenti in MeshCentral; React non manipola il DOM
 remoto. Il load della pagina non prova l'attività dello stream. Processi, servizi
-ed eventi Windows non sono simulati: richiedono endpoint Agent autorizzati e audit.
+ed eventi Windows sono raccolti on-demand dall'Agent con permesso dedicato
+`diagnostics.view`, coda e audit; non sono disponibili azioni di terminazione o
+modifica. I risultati sono limitati e la raccolta dipende dal prossimo MSI Agent.
 
 
 ## Hardening account e lifecycle corrente

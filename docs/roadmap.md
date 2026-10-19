@@ -16,9 +16,11 @@ MeshCentral è limitato a origini di framing configurate e non usa login token.
 Monitor multipli, qualità, scaling, input, clipboard e fullscreen sono affidati
 all'interfaccia nativa MeshCentral effettivamente incorporata; React non tenta
 di controllare il DOM cross-origin. La UI indica che il caricamento iframe non
-dimostra la connessione video. Processi, servizi e log per dispositivo restano
-da sviluppare lato Agent/API con permessi dedicati e audit; le metriche attuali
-sono snapshot/counter e non generano grafici storici. Build e test sono registrati
+dimostra la connessione video. Processi, servizi ed eventi hanno ora raccolta
+su richiesta in sola lettura dall'Agent, autorizzazione device/group scoped
+`diagnostics.view`, coda, rivalidazione al claim, limiti di output e audit. Le
+azioni per terminare processi o modificare servizi non esistono. Le metriche
+attuali sono snapshot/counter e non generano grafici storici. Build e test sono registrati
 in [validation.md](validation.md). Sessione Mesh reale e collaudo interattivo
 Windows restano gate separati. Il deploy live è escluso per non interrompere
 sessioni remote correnti.
