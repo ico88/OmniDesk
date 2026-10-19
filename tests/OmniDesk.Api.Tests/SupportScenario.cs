@@ -499,6 +499,50 @@ public static class SupportScenario
             Assert.Equal(globalWorkflowId, fallback.WorkflowId);
             Assert.Equal(1, fallback.WorkflowVersion);
         }
+        var summaryTicketResponse = await admin.PostAsJsonAsync("/api/support/manual", customTicketRequest with
+        { RequestId = Guid.NewGuid(), Subject = "Riepilogo intervento" });
+        Assert.Equal(HttpStatusCode.Created, summaryTicketResponse.StatusCode);
+        var summaryTicketId = (await summaryTicketResponse.Content.ReadFromJsonAsync<SupportTicketView>())!.Id;
+        Assert.Equal(HttpStatusCode.NoContent, (await admin.PostAsJsonAsync($"/api/support/{summaryTicketId}/interventions",
+            new { expectedVersion = 1L, deviceId = device, artifactType = "remote_session", artifactId = remoteSessionId })).StatusCode);
+        var summariesUrl = $"/api/support/{summaryTicketId}/intervention-summaries";
+        Assert.Equal(HttpStatusCode.BadRequest, (await admin.PostAsJsonAsync(summariesUrl, new
+        { expectedVersion = 2L, deviceId = device, artifactType = "remote_session", artifactId = remoteSessionId,
+            summary = " ", outcome = "follow_up", followUp = (string?)null })).StatusCode);
+        var followUpSummary = new { expectedVersion = 2L, deviceId = device, artifactType = "remote_session", artifactId = remoteSessionId,
+            summary = "Verificato il collegamento e riavviata la sessione autorizzata.", outcome = "follow_up", followUp = "Confermare con il richiedente che l'accesso sia stabile." };
+        Assert.Equal(HttpStatusCode.Created, (await admin.PostAsJsonAsync(summariesUrl, followUpSummary)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await admin.PostAsJsonAsync(summariesUrl, followUpSummary)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await scoped.GetAsync(summariesUrl)).StatusCode);
+        Assert.Empty((await scoped.GetFromJsonAsync<System.Text.Json.JsonElement[]>(summariesUrl))!);
+        var summaryHistory = await admin.GetFromJsonAsync<System.Text.Json.JsonElement[]>(summariesUrl);
+        Assert.Single(summaryHistory!);
+        Assert.Equal("follow_up", summaryHistory![0].GetProperty("outcome").GetString());
+        Assert.Equal("Confermare con il richiedente che l'accesso sia stabile.", summaryHistory[0].GetProperty("followUp").GetString());
+        Assert.Equal("remote_session", summaryHistory[0].GetProperty("artifactType").GetString());
+        Assert.True(summaryHistory[0].GetProperty("recordedAt").GetDateTimeOffset() <= DateTimeOffset.UtcNow);
+        Assert.Equal(HttpStatusCode.Created, (await admin.PostAsJsonAsync(summariesUrl, new
+        { expectedVersion = 3L, deviceId = device, artifactType = "remote_session", artifactId = remoteSessionId,
+            summary = "Nessun nuovo errore rilevato.", outcome = "no_change", followUp = (string?)null })).StatusCode);
+        summaryHistory = await admin.GetFromJsonAsync<System.Text.Json.JsonElement[]>(summariesUrl);
+        Assert.Equal(2, summaryHistory!.Length);
+        Assert.Equal(HttpStatusCode.Forbidden, (await scoped.PostAsJsonAsync(summariesUrl, new
+        { expectedVersion = 4L, deviceId = device, artifactType = "remote_session", artifactId = remoteSessionId,
+            summary = "Tentativo senza capability RMM", outcome = "completed", followUp = (string?)null })).StatusCode);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var saved = await db.SupportInterventionSummaries.Where(x => x.TicketId == summaryTicketId).ToArrayAsync();
+            Assert.Equal(2, saved.Length);
+            Assert.All(saved, x => Assert.Equal(remoteSessionId, x.ArtifactId));
+            var audits = await db.AuditEvents.Where(x => x.Action == "ticket.intervention.summary.created" && x.Target == summaryTicketId.ToString()).ToArrayAsync();
+            Assert.Equal(2, audits.Length);
+            Assert.All(audits, x => Assert.Equal(adminUser, x.ActorId));
+            var events = await db.CoreOutboxEvents.Where(x => x.EventType == "ticket.intervention.summary.created" && x.AggregateId == summaryTicketId).ToArrayAsync();
+            Assert.Equal(2, events.Length);
+            Assert.All(events, evt => Assert.DoesNotContain("Verificato il collegamento", evt.Payload));
+            Assert.All(events, evt => Assert.DoesNotContain("Confermare con il richiedente", evt.Payload));
+        }
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();

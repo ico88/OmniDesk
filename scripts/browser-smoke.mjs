@@ -248,6 +248,16 @@ try {
  const linkedIntervention=page.getByRole('region',{name:'Interventi RMM associati'}).locator('li').filter({hasText:'Operazione diagnostics.processes'});
  await linkedIntervention.getByText('Operazione diagnostics.processes',{exact:true}).waitFor();
  await linkedIntervention.getByText(/Avvio:/).waitFor();
+ await linkedIntervention.getByRole('button',{name:'Aggiungi riepilogo',exact:true}).click();
+ await page.getByLabel('Riepilogo dell’intervento',{exact:true}).fill('Verificati i processi e confermato il ripristino con il richiedente.');
+ await page.getByLabel('Esito intervento',{exact:true}).selectOption('follow_up');
+ await page.getByLabel('Attività successive',{exact:true}).fill('Controllare nuovamente il dispositivo domani.');
+ await page.getByRole('button',{name:'Salva riepilogo',exact:true}).click();
+ await page.locator('.intervention-summary-history').getByText('Verificati i processi e confermato il ripristino con il richiedente.',{exact:true}).waitFor();
+ const interventionSummaries=await (await context.request.get(`https://omnidesk.test/api/support/${smokeTicketId}/intervention-summaries`)).json();
+ assert.equal(interventionSummaries.length,1,'Structured intervention summary is persisted');
+ assert.equal(interventionSummaries[0].outcome,'follow_up');
+ assert.equal(interventionSummaries[0].followUp,'Controllare nuovamente il dispositivo domani.');
  const correlatedInterventions=await context.request.get(`https://omnidesk.test/api/support/${smokeTicketId}/interventions`);
  assert.equal(correlatedInterventions.status(),200);
  assert.equal((await correlatedInterventions.json()).length,1,'RMM job is linked to the ticket');
