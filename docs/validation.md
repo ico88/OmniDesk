@@ -1521,5 +1521,10 @@ poi verificano i flussi UI esistenti. `git diff --check` passato.
 
 Nessuna migrazione o immagine è stata applicata al server LAN; nessun servizio
 live è stato riavviato. Questa registrazione copre solo la suite isolata e non
-è attestazione runtime del server Windows/LAN. La pipeline GitHub sul nuovo
-commit deve ancora passare prima della consegna remota.
+è attestazione runtime del server Windows/LAN. Sul commit `df011c8`,
+[build-and-test 39319355985](https://github.com/ico88/OmniDesk/actions/runs/39319355985)
+è passato, inclusi test, build immagini e browser smoke. Il workflow
+[Windows 39319355926](https://github.com/ico88/OmniDesk/actions/runs/39319355926)
+ha completato con successo build MSI, installazione/recovery/disinstallazione e
+build console; il controllo upgrade/repair/rollback dalle baseline è ancora in
+corso, quindi il gate Windows complessivo resta aperto.
