@@ -42,6 +42,7 @@ builder.Services.ConfigureApplicationCookie(o => {
     o.SlidingExpiration = false;
     o.Events.OnRedirectToLogin = c => { c.Response.StatusCode = 401; return Task.CompletedTask; };
     o.Events.OnRedirectToAccessDenied = c => { c.Response.StatusCode = 403; return Task.CompletedTask; };
+    o.Events.OnValidatePrincipal = ActiveAccountCookie.Validate;
 });
 builder.Services.Configure<SecurityStampValidatorOptions>(o => o.ValidationInterval = TimeSpan.FromMinutes(1));
 builder.Services.AddAntiforgery(o => {
@@ -57,6 +58,7 @@ builder.Services.AddScoped<PermissionService>();
 builder.Services.AddSingleton<IMeshCentralClient>(new MeshCentralClient(new MeshCentralOptions(builder.Configuration["MeshCentral:Origin"], builder.Configuration["MeshCentral:Username"], builder.Configuration["MeshCentral:PasswordFile"])));
 builder.Services.AddAuthentication().AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, DeviceAuthentication>(DeviceAuthentication.SchemeName, _ => {});
 builder.Services.AddHostedService<AssertionCleanup>();
+builder.Services.AddHostedService<RemoteSessionGuard>();
 builder.Services.AddAuthorization();
 var trustedProxyNetwork = builder.Configuration["Proxy:Network"];
 if (!string.IsNullOrEmpty(trustedProxyNetwork))
@@ -110,6 +112,15 @@ app.Use(async (c, next) => {
     await next();
 });
 if (!string.IsNullOrEmpty(trustedProxyNetwork)) app.UseForwardedHeaders();
+app.Use(async (c, next) => {
+    if (c.Request.Path.StartsWithSegments("/api/agent/support"))
+    {
+        var limit = c.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpMaxRequestBodySizeFeature>();
+        if (limit is { IsReadOnly: false }) limit.MaxRequestBodySize = 750000;
+        if (c.Request.ContentLength > 750000) { c.Response.StatusCode = 413; return; }
+    }
+    await next();
+});
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
@@ -129,8 +140,11 @@ app.MapGet("/api/health/ready", async (AppDbContext db) => {
 });
 app.MapAuthEndpoints();
 app.MapManagementEndpoints();
+app.MapUserLifecycleEndpoints();
 app.MapAgentEndpoints();
+app.MapDeviceManagementEndpoints();
 app.MapRemoteEndpoints();
+app.MapSupportEndpoints();
 app.MapUpdateEndpoints();
 app.MapAccountEndpoints();
 app.MapDashboardEndpoints();

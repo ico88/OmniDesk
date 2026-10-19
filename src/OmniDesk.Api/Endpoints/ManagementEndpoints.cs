@@ -50,9 +50,9 @@ public static class ManagementEndpoints
             return Results.Created($"/api/admin/roles/{role.Id}", new { role.Id, role.Name });
         });
         admin.MapGet("/users", async (AppDbContext db) => {
-            var users = await db.Users.AsNoTracking().Select(x => new { x.Id, x.Email }).ToListAsync();
+            var users = await db.Users.AsNoTracking().OrderBy(x => x.Email).Select(x => new { x.Id, x.Email, x.IsDisabled }).ToListAsync();
             var roles = await (from ur in db.UserRoles join role in db.Roles on ur.RoleId equals role.Id select new { ur.UserId, role.Name }).ToListAsync();
-            return Results.Ok(users.Select(u => new { u.Id, u.Email, roles = roles.Where(r => r.UserId == u.Id).Select(r => r.Name) }));
+            return Results.Ok(users.Select(u => new { u.Id, u.Email, u.IsDisabled, roles = roles.Where(r => r.UserId == u.Id).Select(r => r.Name) }));
         });
         admin.MapPost("/users", async (CreateUserRequest r, HttpContext c, AppDbContext db, UserManager<AppUser> users) => {
             if ((r.Role is not null && !await db.Roles.AnyAsync(x => x.Name == r.Role)) || string.IsNullOrWhiteSpace(r.Email) || r.Email.Length > 254 || string.IsNullOrEmpty(r.Password) || r.Password.Length > 1024) return Results.BadRequest();

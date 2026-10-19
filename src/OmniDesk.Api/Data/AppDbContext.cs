@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace OmniDesk.Api.Data;
 
-public sealed class AppUser : IdentityUser { }
+public sealed class AppUser : IdentityUser { public bool IsDisabled { get; set; } }
 public sealed class DeviceGroup { public Guid Id { get; set; } public string Name { get; set; } = ""; }
 public sealed class Device { public Guid Id { get; set; } public string Name { get; set; } = ""; public Guid? GroupId { get; set; } }
 public sealed class RolePermission { public string RoleId { get; set; } = ""; public string Permission { get; set; } = ""; }
@@ -35,6 +35,7 @@ public sealed class AuditEvent
 }
 public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbContext<AppUser>(options)
 {
+    public DbSet<SupportTicket> SupportTickets => Set<SupportTicket>();
     public DbSet<DeviceGroup> DeviceGroups => Set<DeviceGroup>();
     public DbSet<Device> Devices => Set<Device>();
     public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
@@ -53,6 +54,15 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
     protected override void OnModelCreating(ModelBuilder b)
     {
         base.OnModelCreating(b);
+        b.Entity<SupportTicket>().HasOne<Device>().WithMany().HasForeignKey(x => x.DeviceId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<SupportTicket>().HasIndex(x => new { x.DeviceId, x.RequesterKey, x.RequestId }).IsUnique();
+        b.Entity<SupportTicket>().HasIndex(x => new { x.DeviceId, x.CreatedAt });
+        b.Entity<SupportTicket>().Property(x => x.RequesterKey).HasMaxLength(64);
+        b.Entity<SupportTicket>().Property(x => x.Subject).HasMaxLength(200);
+        b.Entity<SupportTicket>().Property(x => x.Description).HasMaxLength(8000);
+        b.Entity<SupportTicket>().Property(x => x.Resolution).HasMaxLength(8000);
+        b.Entity<SupportTicket>().Property(x => x.State).HasMaxLength(20);
+
         b.Entity<DashboardLayout>().HasKey(x => x.UserId);
         b.Entity<DashboardLayout>().HasOne<AppUser>().WithOne().HasForeignKey<DashboardLayout>(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
         b.Entity<DashboardLayout>().Property(x => x.Widgets).HasColumnType("jsonb");

@@ -6,11 +6,11 @@ namespace OmniDesk.Api.Security;
 public static class Permissions
 {
     public static readonly string[] Roles = ["Administrator", "Operator", "Viewer"];
-    public static readonly string[] All = ["view", "remote.control", "terminal", "files", "updates", "administration"];
+    public static readonly string[] All = ["view", "remote.control", "terminal", "files", "updates", "administration", "tickets.view", "tickets.manage"];
     public static string[] ForRole(string role) => role switch
     {
         "Administrator" => All,
-        "Operator" => ["view", "remote.control", "terminal", "files", "updates"],
+        "Operator" => ["view", "remote.control", "terminal", "files", "updates", "tickets.view", "tickets.manage"],
         "Viewer" => ["view"],
         _ => []
     };
@@ -19,12 +19,14 @@ public sealed class PermissionService(AppDbContext db)
 {
     public Task<string[]> Global(string userId) => (
         from ur in db.UserRoles
+        join u in db.Users on ur.UserId equals u.Id
         join rp in db.RolePermissions on ur.RoleId equals rp.RoleId
-        where ur.UserId == userId
+        where ur.UserId == userId && !u.IsDisabled
         select rp.Permission).Distinct().ToArrayAsync();
 
     public async Task<bool> Allows(string userId, string permission, Guid? deviceId = null, Guid? groupId = null)
     {
+        if (!await db.Users.AnyAsync(u => u.Id == userId && !u.IsDisabled)) return false;
         if ((await Global(userId)).Contains(permission)) return true;
         if (deviceId is not null)
         {
@@ -39,12 +41,12 @@ public sealed class PermissionService(AppDbContext db)
                       ((deviceId != null && g.DeviceId == deviceId) || (groupId != null && g.GroupId == groupId))
                       select g.Id).AnyAsync();
     }
-    public IQueryable<Device> VisibleDevices(string userId) => db.Devices.Where(d =>
+    public IQueryable<Device> VisibleDevices(string userId) => db.Devices.Where(d => db.Users.Any(u => u.Id == userId && !u.IsDisabled) && (
         (from ur in db.UserRoles join rp in db.RolePermissions on ur.RoleId equals rp.RoleId
          where ur.UserId == userId && rp.Permission == "view" select ur.RoleId).Any() ||
         (from g in db.ScopeGrants join rp in db.RolePermissions on g.RoleId equals rp.RoleId
          where g.UserId == userId && rp.Permission == "view" &&
-         (g.DeviceId == d.Id || (d.GroupId != null && g.GroupId == d.GroupId)) select g.Id).Any());
+         (g.DeviceId == d.Id || (d.GroupId != null && g.GroupId == d.GroupId)) select g.Id).Any()));
 }
 public static class UserIdentity
 {

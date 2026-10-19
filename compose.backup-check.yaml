@@ -1,0 +1,17 @@
+name: omnidesk-backup-check
+services:
+  db:
+    image: postgres:17-alpine
+    network_mode: none
+    environment:
+      POSTGRES_DB: omnidesk_verify
+      POSTGRES_HOST_AUTH_METHOD: trust
+    tmpfs:
+      - /var/lib/postgresql/data
+    volumes:
+      - ${BACKUP_CHECK_FILE:?Set backup dump path}:/backup/database.dump:ro
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U postgres -d omnidesk_verify]
+      interval: 2s
+      timeout: 3s
+      retries: 30

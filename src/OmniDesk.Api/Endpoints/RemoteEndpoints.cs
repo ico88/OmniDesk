@@ -20,6 +20,15 @@ public static class RemoteEndpoints
             db.AuditEvents.Add(Event(c, "mesh.mapping", id)); await db.SaveChangesAsync(); return Results.NoContent();
         }).RequireAuthorization();
         var devices = app.MapGroup("/api/devices/{id:guid}/remote-sessions").RequireAuthorization();
+        devices.MapGet("/availability", async (Guid id, HttpContext c, AppDbContext db, PermissionService p, IMeshCentralClient mesh) => {
+            if (!await p.Allows(c.User.UserId(), "view", id)) return Results.Forbid();
+            if (!await db.Devices.AnyAsync(d => d.Id == id)) return Results.NotFound();
+            var mapping = await db.MeshDeviceMappings.AsNoTracking().SingleOrDefaultAsync(m => m.DeviceId == id);
+            var revoked = await db.DeviceCredentials.AnyAsync(x => x.DeviceId == id && x.RevokedAt != null);
+            var admin = await p.Allows(c.User.UserId(), "administration");
+            return Results.Ok(new { configured = mesh.Configured, mapped = mapping != null, revoked,
+                nodeId = admin ? mapping?.NodeId : null });
+        });
         devices.MapGet("", async (Guid id, HttpContext c, AppDbContext db, PermissionService p) => {
             if (!await p.Allows(c.User.UserId(), "view", id)) return Results.Forbid();
             return Results.Ok(await db.RemoteSessions.AsNoTracking().Where(x => x.DeviceId == id).OrderByDescending(x => x.CreatedAt).Take(100)
@@ -29,6 +38,7 @@ public static class RemoteEndpoints
             if (!Capabilities.Contains(r.Capability)) return Results.BadRequest();
             if (!await p.Allows(c.User.UserId(), r.Capability, id)) return Results.Forbid();
             if (!await db.Devices.AnyAsync(x => x.Id == id)) return Results.NotFound();
+            if (await db.DeviceCredentials.AnyAsync(x => x.DeviceId == id && x.RevokedAt != null)) return Results.Forbid();
             var mapping = await db.MeshDeviceMappings.AsNoTracking().SingleOrDefaultAsync(x => x.DeviceId == id);
             if (!mesh.Configured || mapping is null) return Results.Problem("MeshCentral or device mapping unavailable", statusCode:503);
             var session = new RemoteSession { DeviceId = id, NodeId = mapping.NodeId, ActorId = c.User.UserId(), Capability = r.Capability };
@@ -39,16 +49,23 @@ public static class RemoteEndpoints
                 created = await mesh.Create(mapping.NodeId, r.Capability, c.User.UserId(), c.RequestAborted);
                 session.PublicId = created.PublicId; session.ExpiresAt = created.ExpiresAt; session.State = "active";
                 db.AuditEvents.Add(Event(c, "remote.create", session.Id)); await db.SaveChangesAsync();
+                if (!await p.Allows(c.User.UserId(), r.Capability, id) || await db.DeviceCredentials.AnyAsync(x => x.DeviceId == id && x.RevokedAt != null))
+                {
+                    session.State = "revocation_pending";
+                    db.AuditEvents.Add(Event(c, "remote.authorization.changed", session.Id)); await db.SaveChangesAsync();
+                    return Results.Forbid();
+                }
                 return Results.Created($"/api/devices/{id}/remote-sessions/{session.Id}", new { session.Id, created.Url, created.ExpiresAt });
             }
             catch (Exception e)
             {
+                var cleanupPending = false;
                 if (created is not null)
                 {
                     try { await mesh.Revoke(mapping.NodeId, created.PublicId, CancellationToken.None); }
-                    catch (Exception cleanup) { logs.CreateLogger("Remote").LogWarning("Mesh compensation failed: {Type}", cleanup.GetType().Name); }
+                    catch (Exception cleanup) { cleanupPending = true; logs.CreateLogger("Remote").LogWarning("Mesh compensation failed: {Type}", cleanup.GetType().Name); }
                 }
-                session.State = "failed"; db.AuditEvents.Add(Event(c, "remote.failed", session.Id)); await db.SaveChangesAsync();
+                session.State = cleanupPending ? "revocation_pending" : "failed"; db.AuditEvents.Add(Event(c, "remote.failed", session.Id)); await db.SaveChangesAsync();
                 logs.CreateLogger("Remote").LogWarning("Mesh session request failed: {Type}", e.GetType().Name);
                 return Results.Problem("Remote engine unavailable", statusCode:503);
             }
@@ -58,12 +75,42 @@ public static class RemoteEndpoints
             if (session is null) return Results.NotFound();
             if (!await p.Allows(c.User.UserId(), "administration") && session.ActorId != c.User.UserId()) return Results.Forbid();
             if (session.State is "revoked" or "failed") return Results.NoContent();
-            var mapping = await db.MeshDeviceMappings.AsNoTracking().SingleOrDefaultAsync(x => x.DeviceId == id);
-            var nodeId = string.IsNullOrEmpty(session.NodeId) ? mapping?.NodeId : session.NodeId;
-            if (nodeId is null || session.PublicId is null) return Results.Conflict();
-            try { await mesh.Revoke(nodeId, session.PublicId, c.RequestAborted); }
-            catch { return Results.Problem("Remote revocation failed; session expires automatically", statusCode:503); }
-            session.State = "revoked"; db.AuditEvents.Add(Event(c, "remote.revoke", session.Id)); await db.SaveChangesAsync(); return Results.NoContent();
+            // Creation has not returned an engine identity yet; do not race its pending-to-active commit.
+            if (session.State == "pending") return Results.Conflict();
+            // Persist intent before contacting the engine. A timeout, request cancellation or API
+            // restart must not discard an operator's request to close an existing session.
+            await using (var intent = await db.Database.BeginTransactionAsync())
+            {
+                var changed = await db.RemoteSessions.Where(x => x.Id == sessionId && x.DeviceId == id &&
+                    x.State != "revoked" && x.State != "failed" && x.State != "revocation_pending")
+                    .ExecuteUpdateAsync(s => s.SetProperty(x => x.State, "revocation_pending"));
+                if (changed > 0)
+                {
+                    db.AuditEvents.Add(Event(c, "remote.revoke.request", session.Id));
+                    await db.SaveChangesAsync();
+                }
+                await intent.CommitAsync();
+            }
+            // The tracked object predates ExecuteUpdate; avoid overwriting newer durable state.
+            await db.Entry(session).ReloadAsync();
+            if (session.State is "revoked" or "failed") return Results.NoContent();
+            if (string.IsNullOrEmpty(session.NodeId) || session.PublicId is null)
+                return Results.Accepted(value: new { session.Id, state = "revocation_pending" });
+            try { await mesh.Revoke(session.NodeId, session.PublicId, c.RequestAborted); }
+            catch
+            {
+                return Results.Accepted(value: new { session.Id, state = "revocation_pending" });
+            }
+            await using var tx = await db.Database.BeginTransactionAsync();
+            var completed = await db.RemoteSessions.Where(x => x.Id == sessionId && x.State == "revocation_pending")
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.State, "revoked"));
+            if (completed > 0)
+            {
+                db.AuditEvents.Add(Event(c, "remote.revoke", session.Id));
+                await db.SaveChangesAsync();
+            }
+            await tx.CommitAsync();
+            return Results.NoContent();
         });
     }
     private static AuditEvent Event(HttpContext c, string action, Guid id) => new() { ActorId = c.User.UserId(), Action = action, Target = id.ToString() };

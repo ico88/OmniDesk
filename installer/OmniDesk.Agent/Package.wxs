@@ -1,16 +1,27 @@
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
-  <Package Name="OmniDesk Agent" Manufacturer="OmniDesk" Version="0.5.1" UpgradeCode="2B357D2E-F3D9-4BBD-B7E4-68E4E279FA82" Scope="perMachine">
+  <Package Name="OmniDesk Agent" Manufacturer="OmniDesk" Version="0.6.0" UpgradeCode="2B357D2E-F3D9-4BBD-B7E4-68E4E279FA82" Scope="perMachine">
     <MajorUpgrade DowngradeErrorMessage="A newer OmniDesk Agent is already installed." />
     <MediaTemplate EmbedCab="yes" />
     <StandardDirectory Id="ProgramFiles64Folder">
       <Directory Id="INSTALLFOLDER" Name="OmniDesk Agent">
         <Component Id="AgentService" Guid="9AF7FC11-4137-4B08-894A-CB42F6D22657">
           <File Id="AgentExe" Source="$(var.AgentPublishDir)\OmniDesk.Agent.Windows.exe" KeyPath="yes" />
-          <ServiceInstall Id="InstallService" Name="OmniDeskAgent" DisplayName="OmniDesk Agent" Description="OmniDesk monitoring and inventory agent" Type="ownProcess" Start="auto" ErrorControl="normal" Account="LocalSystem" />
+          <ServiceInstall Id="InstallService" Name="OmniDeskAgent" DisplayName="OmniDesk Agent" Description="OmniDesk monitoring and inventory agent" Type="ownProcess" Start="auto" ErrorControl="normal" Account="LocalSystem">
+            <PermissionEx Sddl="D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;CCLCRC;;;IU)" />
+            <ServiceConfigFailureActions OnInstall="yes" OnReinstall="yes" ResetPeriod="86400">
+              <Failure Action="restartService" Delay="5000" />
+              <Failure Action="restartService" Delay="30000" />
+              <Failure Action="restartService" Delay="120000" />
+            </ServiceConfigFailureActions>
+          </ServiceInstall>
           <ServiceControl Id="ControlService" Name="OmniDeskAgent" Start="install" Stop="both" Remove="uninstall" Wait="yes" />
+        </Component>
+        <Component Id="TrayApplication" Guid="CBA6002A-45B8-448A-BD69-9BE73651B096">
+          <File Id="TrayExe" Source="$(var.TrayPublishDir)\OmniDesk.Tray.Windows.exe" KeyPath="yes" />
+          <RegistryValue Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\Run" Name="OmniDeskTray" Value="&quot;[#TrayExe]&quot;" Type="string" />
         </Component>
       </Directory>
     </StandardDirectory>
-    <Feature Id="Main" Title="OmniDesk Agent" Level="1"><ComponentRef Id="AgentService" /></Feature>
+    <Feature Id="Main" Title="OmniDesk Agent and Tray" Level="1"><ComponentRef Id="AgentService" /><ComponentRef Id="TrayApplication" /></Feature>
   </Package>
 </Wix>

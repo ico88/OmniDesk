@@ -53,16 +53,18 @@ public static class AccountEndpoints
             db.AuditEvents.Add(Event(user, "auth.totp.disable")); await db.SaveChangesAsync(); await tx.CommitAsync();
             await signIn.RefreshSignInAsync(user); return Results.NoContent();
         });
-        totp.MapPost("/recovery-codes", async (ReauthenticateRequest r, HttpContext c, UserManager<AppUser> users, AppDbContext db) => {
+        totp.MapPost("/recovery-codes", async (ReauthenticateRequest r, HttpContext c, UserManager<AppUser> users, SignInManager<AppUser> signIn, AppDbContext db) => {
             var user = await users.GetUserAsync(c.User); if (user is null || !user.TwoFactorEnabled || !await Reauthenticate(users, user, r.Password, r.Code, true)) return Results.Unauthorized();
             await using var tx = await db.Database.BeginTransactionAsync();
             var recoveryCodes = await users.GenerateNewTwoFactorRecoveryCodesAsync(user, 10);
-            db.AuditEvents.Add(Event(user, "auth.totp.recovery.rotate")); await db.SaveChangesAsync(); await tx.CommitAsync(); return Results.Ok(new { recoveryCodes });
+            Check(await users.UpdateSecurityStampAsync(user));
+            db.AuditEvents.Add(Event(user, "auth.totp.recovery.rotate")); await db.SaveChangesAsync(); await tx.CommitAsync();
+            await signIn.RefreshSignInAsync(user); return Results.Ok(new { recoveryCodes });
         });
     }
     private static async Task<bool> Reauthenticate(UserManager<AppUser> users, AppUser user, string password, string? code, bool requireTotp)
     {
-        if (await users.IsLockedOutAsync(user) || string.IsNullOrEmpty(password) || password.Length > 1024) return false;
+        if (user.IsDisabled || await users.IsLockedOutAsync(user) || string.IsNullOrEmpty(password) || password.Length > 1024) return false;
         var valid = await users.CheckPasswordAsync(user, password);
         if (valid && requireTotp) valid = code is { Length: <= 20 } && await users.VerifyTwoFactorTokenAsync(user, TokenOptions.DefaultAuthenticatorProvider, Normalize(code));
         if (!valid) { await users.AccessFailedAsync(user); return false; }

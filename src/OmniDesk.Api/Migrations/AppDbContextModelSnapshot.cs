@@ -196,6 +196,9 @@ namespace OmniDesk.Api.Migrations
                     b.Property<bool>("EmailConfirmed")
                         .HasColumnType("boolean");
 
+                    b.Property<bool>("IsDisabled")
+                        .HasColumnType("boolean");
+
                     b.Property<bool>("LockoutEnabled")
                         .HasColumnType("boolean");
 
@@ -575,6 +578,16 @@ namespace OmniDesk.Api.Migrations
                         },
                         new
                         {
+                            RoleId = "Administrator",
+                            Permission = "tickets.view"
+                        },
+                        new
+                        {
+                            RoleId = "Administrator",
+                            Permission = "tickets.manage"
+                        },
+                        new
+                        {
                             RoleId = "Operator",
                             Permission = "view"
                         },
@@ -597,6 +610,16 @@ namespace OmniDesk.Api.Migrations
                         {
                             RoleId = "Operator",
                             Permission = "updates"
+                        },
+                        new
+                        {
+                            RoleId = "Operator",
+                            Permission = "tickets.view"
+                        },
+                        new
+                        {
+                            RoleId = "Operator",
+                            Permission = "tickets.manage"
                         },
                         new
                         {
@@ -643,6 +666,64 @@ namespace OmniDesk.Api.Migrations
                         {
                             t.HasCheckConstraint("CK_ScopeGrant_OneScope", "(\"GroupId\" IS NOT NULL) <> (\"DeviceId\" IS NOT NULL)");
                         });
+                });
+
+            modelBuilder.Entity("OmniDesk.Api.Data.SupportTicket", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(8000)
+                        .HasColumnType("character varying(8000)");
+
+                    b.Property<Guid>("DeviceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("RequestId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("RequesterKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Resolution")
+                        .HasMaxLength(8000)
+                        .HasColumnType("character varying(8000)");
+
+                    b.Property<byte[]>("Screenshot")
+                        .HasColumnType("bytea");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("Version")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DeviceId", "CreatedAt");
+
+                    b.HasIndex("DeviceId", "RequesterKey", "RequestId")
+                        .IsUnique();
+
+                    b.ToTable("SupportTickets");
                 });
 
             modelBuilder.Entity("OmniDesk.Api.Data.UpdateJob", b =>
@@ -852,6 +933,15 @@ namespace OmniDesk.Api.Migrations
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("OmniDesk.Api.Data.SupportTicket", b =>
+                {
+                    b.HasOne("OmniDesk.Api.Data.Device", null)
+                        .WithMany()
+                        .HasForeignKey("DeviceId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 

@@ -1,5 +1,6 @@
 {
     auto_https disable_redirects
+    default_sni {$OMNIDESK_LAN_IP}
 }
 https://{$OMNIDESK_LAN_IP}, https://{$OMNIDESK_DOMAIN} {
     tls internal

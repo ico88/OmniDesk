@@ -11,13 +11,7 @@ public sealed record AgentIdentity(string ServerUrl, Guid DeviceId, string Encry
 {
     public static string Folder => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "OmniDesk");
     public static string ConfigPath => Path.Combine(Folder, "agent.json");
-    public static Uri ValidateServer(string value)
-    {
-        if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) || uri.Scheme != "https" || !string.IsNullOrEmpty(uri.UserInfo) ||
-            !string.IsNullOrEmpty(uri.Query) || !string.IsNullOrEmpty(uri.Fragment) || uri.AbsolutePath != "/")
-            throw new ArgumentException("Server must be an HTTPS origin without credentials, path, query or fragment.");
-        return uri;
-    }
+    public static Uri ValidateServer(string value) => AgentConnection.ValidateServer(value);
     public static AgentIdentity? Load()
     {
         if (!File.Exists(ConfigPath)) return null;

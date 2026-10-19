@@ -14,7 +14,7 @@ public static class AuthEndpoints
             if (string.IsNullOrWhiteSpace(r.Email) || r.Email.Length > 254 || string.IsNullOrEmpty(r.Password) || r.Password.Length > 1024) return Results.BadRequest();
             var user = await users.FindByEmailAsync(r.Email);
             var success = false;
-            if (user is not null)
+            if (user is { IsDisabled: false })
             {
                 var result = await signIn.CheckPasswordSignInAsync(user, r.Password, lockoutOnFailure: true);
                 success = result.Succeeded;

@@ -39,11 +39,6 @@ public static class AgentEndpoints
             token.RevokedAt = DateTimeOffset.UtcNow; db.AuditEvents.Add(Audit(c.User.UserId(), "enrollment.revoke", id));
             await db.SaveChangesAsync(); return Results.NoContent();
         });
-        admin.MapPost("/devices/{id:guid}/revoke", async (Guid id, HttpContext c, AppDbContext db) => {
-            var credential = await db.DeviceCredentials.FindAsync(id); if (credential is null) return Results.NotFound();
-            credential.RevokedAt = DateTimeOffset.UtcNow; db.AuditEvents.Add(Audit(c.User.UserId(), "device.revoke", id));
-            await db.SaveChangesAsync(); return Results.NoContent();
-        });
         var machine = app.MapGroup("/api/agent").WithMetadata(new MachineRequest());
         machine.MapPost("/enroll", async (EnrollmentRequest r, AppDbContext db) => {
             if (r.Token is null || r.Token.Length != 64 || !r.Token.All(Uri.IsHexDigit) || string.IsNullOrWhiteSpace(r.Name) || r.Name.Length > 200 || r.PublicKeyPem is null || r.PublicKeyPem.Length > 4096) return Results.BadRequest();

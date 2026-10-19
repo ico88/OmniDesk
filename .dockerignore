@@ -4,6 +4,12 @@
 .codex
 .env*
 .secrets
+.backups
+*.crt
+*.key
+*.pem
+*.pfx
+*.dump
 **/node_modules
 **/bin
 **/obj

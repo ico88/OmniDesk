@@ -11,7 +11,7 @@ public sealed class UpdateWorker(ILogger<UpdateWorker> logger) : BackgroundServi
     private static readonly JsonSerializerOptions Json = new() { PropertyNameCaseInsensitive = true };
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        using var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false }) { Timeout = TimeSpan.FromSeconds(30) };
+        using var client = AgentConnection.CreateClient();
         var receiptPath = Path.Combine(AgentIdentity.Folder, "update-receipt.json");
         while (!stoppingToken.IsCancellationRequested)
         {
