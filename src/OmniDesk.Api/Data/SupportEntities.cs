@@ -6,7 +6,16 @@ public sealed class SupportQueue
     public string Name { get; set; } = "";
     public string NormalizedName { get; set; } = "";
     public bool IsActive { get; set; } = true;
+    public long Version { get; set; } = 1;
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
+public sealed class SupportQueueMember
+{
+    public Guid QueueId { get; set; }
+    public string UserId { get; set; } = "";
+    public DateTimeOffset AddedAt { get; set; } = DateTimeOffset.UtcNow;
+    public string? AddedBy { get; set; }
 }
 
 public sealed class SupportTicket

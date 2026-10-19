@@ -124,6 +124,12 @@ public static class SupportEndpoints
             if (r.QueueId is not null && !await db.SupportQueues.AnyAsync(x => x.Id == r.QueueId && x.IsActive)) return Results.BadRequest(new { error = "La coda selezionata non è attiva." });
             rows = await db.SupportTickets.AsNoTracking().Where(x => versions.Keys.Contains(x.Id)).ToArrayAsync();
             if (rows.Any(x => x.Version != versions[x.Id])) return Results.Conflict(new { error = "Almeno un ticket è stato aggiornato. Ricarica la lista e riprova." });
+            if (r.QueueId is not null)
+            {
+                var assignedIds = rows.Where(t => t.AssigneeId is not null).Select(t => t.AssigneeId!).Distinct().ToArray();
+                var memberIds = await db.SupportQueueMembers.Where(m => m.QueueId == r.QueueId && assignedIds.Contains(m.UserId)).Select(m => m.UserId).ToArrayAsync();
+                if (memberIds.Length != assignedIds.Length) return Results.BadRequest(new { error = "Almeno un assegnatario non appartiene alla coda selezionata." });
+            }
             foreach (var ticket in rows.Where(x => x.QueueId != r.QueueId))
             {
                 var nextVersion = ticket.Version + 1;
@@ -136,10 +142,21 @@ public static class SupportEndpoints
             }
             await db.SaveChangesAsync(); await tx.CommitAsync(); return Results.NoContent();
         });
-        staff.MapGet("/{id:guid}/assignees", async (Guid id, HttpContext c, AppDbContext db, PermissionService p) => {
+        staff.MapGet("/{id:guid}/assignees", async (Guid id, string? queue, HttpContext c, AppDbContext db, PermissionService p) => {
             var ticket = await db.SupportTickets.AsNoTracking().SingleOrDefaultAsync(t => t.Id == id);
             if (ticket is null) return Results.NotFound();
             if (!await p.Allows(c.User.UserId(), "tickets.manage", ticket.DeviceId, siteId: ticket.SiteId)) return Results.Forbid();
+            var candidateQueueId = ticket.QueueId;
+            if (queue is not null)
+            {
+                if (queue == "none") candidateQueueId = null;
+                else if (Guid.TryParse(queue, out var requestedQueue))
+                {
+                    if (!await db.SupportQueues.AnyAsync(x => x.Id == requestedQueue && x.IsActive)) return Results.BadRequest();
+                    candidateQueueId = requestedQueue;
+                }
+                else return Results.BadRequest();
+            }
             var deviceGroupId = await db.Devices.Where(d => d.Id == ticket.DeviceId).Select(d => d.GroupId).SingleOrDefaultAsync();
             IQueryable<string> WithPermission(string permission)
             {
@@ -156,7 +173,8 @@ public static class SupportEndpoints
             }
             var visible = WithPermission("tickets.view");
             var manageable = WithPermission("tickets.manage");
-            var candidates = db.Users.AsNoTracking().Where(u => !u.IsDisabled && visible.Contains(u.Id) && manageable.Contains(u.Id))
+            var candidates = db.Users.AsNoTracking().Where(u => !u.IsDisabled && visible.Contains(u.Id) && manageable.Contains(u.Id) &&
+                    (candidateQueueId == null || db.SupportQueueMembers.Any(m => m.QueueId == candidateQueueId && m.UserId == u.Id)))
                 .OrderBy(u => u.Email).Take(200).Select(u => new { id = u.Id, email = u.Email });
             return Results.Ok(await candidates.ToListAsync());
         });
@@ -177,6 +195,8 @@ public static class SupportEndpoints
             if(ticket.Version!=r.ExpectedVersion)return Results.Conflict(new {error="Il ticket e stato aggiornato. Ricarica la conversazione prima di salvare."});
             if (r.UpdateQueue && r.QueueId is not null && !await db.SupportQueues.AnyAsync(q => q.Id == r.QueueId && q.IsActive))
                 return Results.BadRequest(new { error = "La coda selezionata non è attiva." });
+            var queueId = r.UpdateQueue ? r.QueueId : ticket.QueueId;
+            var assigneeId = r.UpdateAssignment ? r.AssigneeId : ticket.AssigneeId;
             if (r.UpdateAssignment && r.AssigneeId is not null)
             {
                 if (!await db.Users.AnyAsync(u => u.Id == r.AssigneeId && !u.IsDisabled)) return Results.BadRequest(new { error = "L’assegnatario selezionato non è disponibile." });
@@ -184,12 +204,10 @@ public static class SupportEndpoints
                     !await p.Allows(r.AssigneeId, "tickets.manage", ticket.DeviceId, siteId: ticket.SiteId))
                     return Results.BadRequest(new { error = "L’assegnatario non dispone dei permessi per questa richiesta." });
             }
-            if (r.UpdateQueue && r.QueueId is not null && !await db.SupportQueues.AnyAsync(q => q.Id == r.QueueId && q.IsActive))
-                return Results.BadRequest(new { error = "La coda selezionata non è attiva." });
+            if ((r.UpdateQueue || r.UpdateAssignment) && queueId is not null && assigneeId is not null && !await db.SupportQueueMembers.AnyAsync(m => m.QueueId == queueId && m.UserId == assigneeId))
+                return Results.BadRequest(new { error = "L’assegnatario deve appartenere alla coda selezionata." });
             var body=r.Resolution?.Trim();
             var priority = r.UpdatePriority ? r.Priority! : ticket.Priority;
-            var assigneeId = r.UpdateAssignment ? r.AssigneeId : ticket.AssigneeId;
-            var queueId = r.UpdateQueue ? r.QueueId : ticket.QueueId;
             var updated = await db.SupportTickets.Where(t => t.Id == id && t.Version == r.ExpectedVersion)
                 .ExecuteUpdateAsync(s => s.SetProperty(t => t.State, r.State).SetProperty(t => t.Resolution, body)
                     .SetProperty(t => t.Priority, priority).SetProperty(t => t.AssigneeId, assigneeId).SetProperty(t => t.QueueId, queueId)

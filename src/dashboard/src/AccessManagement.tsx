@@ -6,7 +6,8 @@ type Role = { id: string; name: string; permissions: string[] };
 type Target = { id: string; name: string };
 type Site = Target & { isArchived: boolean; deviceCount: number; ticketCount: number };
 type Grant = { id: string; userId: string; roleId: string; groupId: string | null; deviceId: string | null; siteId: string | null };
-type SupportQueue = { id: string; name: string; isActive: boolean; ticketCount: number };
+type SupportQueue = { id: string; name: string; isActive: boolean; version: number; ticketCount: number };
+type QueueMember = { id: string; email: string; isDisabled: boolean };
 
 export function AccessManagement({ currentUserId }: { currentUserId: string }) {
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -16,6 +17,9 @@ export function AccessManagement({ currentUserId }: { currentUserId: string }) {
   const [sites, setSites] = useState<Site[]>([]);
   const [grants, setGrants] = useState<Grant[]>([]);
   const [supportQueues, setSupportQueues] = useState<SupportQueue[]>([]);
+  const [selectedQueueId, setSelectedQueueId] = useState('');
+  const [selectedQueueVersion, setSelectedQueueVersion] = useState(0);
+  const [queueMemberIds, setQueueMemberIds] = useState<string[]>([]);
   const [scope, setScope] = useState('group');
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState('');
@@ -77,7 +81,8 @@ export function AccessManagement({ currentUserId }: { currentUserId: string }) {
     </section>
     <section className="panel"><h2>Code di assistenza</h2><p>Le code organizzano il lavoro senza cambiare i permessi di visibilità del ticket. Disattivare una coda non rimuove le assegnazioni storiche.</p>
       <form className="settings" onSubmit={e => { e.preventDefault(); const form = e.currentTarget; const values = new FormData(form); void run(async () => { await api('/admin/support-queues', 'POST', { name: values.get('name') }); form.reset(); await load(); setMessage('Coda creata'); }); }}><label>Nuova coda<input name="name" required maxLength={100}/></label><button disabled={busy}>Crea coda</button></form>
-      <div className="table-wrap"><table><thead><tr><th>Coda</th><th>Ticket</th><th>Stato</th><th></th></tr></thead><tbody>{supportQueues.map(queue => <tr key={queue.id}><td>{queue.name}</td><td>{queue.ticketCount}</td><td>{queue.isActive ? 'Attiva' : 'Disattivata'}</td><td><button className="secondary compact" disabled={busy} onClick={() => void run(async () => { await api(`/admin/support-queues/${queue.id}`, 'PUT', { name: queue.name, expectedName: queue.name, isActive: !queue.isActive }); await load(); setMessage(queue.isActive ? 'Coda disattivata' : 'Coda riattivata'); })}>{queue.isActive ? 'Disattiva' : 'Riattiva'}</button></td></tr>)}</tbody></table></div>
+      <div className="table-wrap"><table><thead><tr><th>Coda</th><th>Ticket</th><th>Stato</th><th>Azioni</th></tr></thead><tbody>{supportQueues.map(queue => <tr key={queue.id}><td>{queue.name}</td><td>{queue.ticketCount}</td><td>{queue.isActive ? 'Attiva' : 'Disattivata'}</td><td><button className="secondary compact" disabled={busy||!queue.isActive} onClick={() => void run(async () => { const data=await api<{version:number;members:QueueMember[]}>(`/admin/support-queues/${queue.id}/members`);setQueueMemberIds(data.members.filter(m=>!m.isDisabled).map(m=>m.id));setSelectedQueueVersion(data.version);setSelectedQueueId(queue.id); })}>Gestisci membri</button> <button className="secondary compact" disabled={busy} onClick={() => void run(async () => { await api(`/admin/support-queues/${queue.id}`, 'PUT', { name: queue.name, expectedName: queue.name, expectedVersion:queue.version, isActive: !queue.isActive }); await load(); setMessage(queue.isActive ? 'Coda disattivata' : 'Coda riattivata'); })}>{queue.isActive ? 'Disattiva' : 'Riattiva'}</button></td></tr>)}</tbody></table></div>
+      {selectedQueueId&&<form className="settings" onSubmit={e=>{e.preventDefault();const queue=supportQueues.find(x=>x.id===selectedQueueId);if(!queue)return;void run(async()=>{await api(`/admin/support-queues/${queue.id}/members`,'PUT',{expectedVersion:selectedQueueVersion,userIds:queueMemberIds});await load();setSelectedQueueId('');setQueueMemberIds([]);setMessage('Membri della coda aggiornati');});}}><h3>Membri della coda {supportQueues.find(x=>x.id===selectedQueueId)?.name}</h3><p>L’appartenenza organizza il lavoro e limita gli assegnatari proposti; non concede accesso ai ticket o ai dispositivi.</p>{accounts.filter(a=>!a.isDisabled).map(a=><label key={a.id}><input type="checkbox" style={{width:'auto'}} disabled={busy} checked={queueMemberIds.includes(a.id)} onChange={e=>setQueueMemberIds(ids=>e.target.checked?[...ids,a.id]:ids.filter(id=>id!==a.id))}/>{a.email}</label>)}<button disabled={busy}>Salva membri</button><button className="secondary" type="button" disabled={busy} onClick={()=>{setSelectedQueueId('');setQueueMemberIds([]);}}>Annulla</button></form>}
     </section>
     <form className="panel settings" onSubmit={e => {
       e.preventDefault(); const form = e.currentTarget; const values = new FormData(form);

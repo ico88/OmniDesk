@@ -12,7 +12,8 @@ public sealed record GrantRequest(string UserId, string Role, Guid? GroupId, Gui
 public sealed record SiteRequest(string Name);
 public sealed record SiteEditRequest(string Name, string ExpectedName, bool IsArchived);
 public sealed record SupportQueueRequest(string Name);
-public sealed record SupportQueueEditRequest(string Name, string ExpectedName, bool IsActive);
+public sealed record SupportQueueEditRequest(string Name, string ExpectedName, long ExpectedVersion, bool IsActive);
+public sealed record SupportQueueMembersRequest(long ExpectedVersion, string[] UserIds);
 public static class ManagementEndpoints
 {
     public static void MapManagementEndpoints(this WebApplication app)
@@ -37,7 +38,7 @@ public static class ManagementEndpoints
             return await p.Allows(ctx.HttpContext.User.UserId(), "administration") ? await next(ctx) : Results.Forbid();
         });
         admin.MapGet("/sites", async (AppDbContext db) => Results.Ok(await db.Sites.AsNoTracking().OrderBy(x => x.Name).Select(x => new { x.Id, x.Name, x.IsArchived, deviceCount = db.Devices.Count(d => d.SiteId == x.Id), ticketCount = db.SupportTickets.Count(t => t.SiteId == x.Id) }).ToListAsync()));
-        admin.MapGet("/support-queues", async (AppDbContext db) => Results.Ok(await db.SupportQueues.AsNoTracking().OrderBy(x => x.Name).Select(x => new { x.Id, x.Name, x.IsActive, ticketCount = db.SupportTickets.Count(t => t.QueueId == x.Id) }).ToListAsync()));
+        admin.MapGet("/support-queues", async (AppDbContext db) => Results.Ok(await db.SupportQueues.AsNoTracking().OrderBy(x => x.Name).Select(x => new { x.Id, x.Name, x.IsActive, x.Version, ticketCount = db.SupportTickets.Count(t => t.QueueId == x.Id) }).ToListAsync()));
         admin.MapPost("/support-queues", async (SupportQueueRequest r, HttpContext c, AppDbContext db) => {
             var name = r.Name?.Trim();
             if (string.IsNullOrWhiteSpace(name) || name.Length > 100) return Results.BadRequest();
@@ -47,23 +48,50 @@ public static class ManagementEndpoints
             db.SupportQueues.Add(queue); db.AuditEvents.Add(Event(c, "support.queue.create", queue.Id.ToString()));
             CoreOutbox.Add(db, "support.queue.created", "support-queue", queue.Id, new { queueId = queue.Id, queue.Name }, c.TraceIdentifier);
             try { await db.SaveChangesAsync(); } catch (DbUpdateException e) when (e.InnerException is Npgsql.PostgresException { SqlState: "23505" }) { return Results.Conflict(); }
-            return Results.Created($"/api/admin/support-queues/{queue.Id}", new { queue.Id, queue.Name, queue.IsActive });
+            return Results.Created($"/api/admin/support-queues/{queue.Id}", new { queue.Id, queue.Name, queue.IsActive, queue.Version });
         });
         admin.MapPut("/support-queues/{id:guid}", async (Guid id, SupportQueueEditRequest r, HttpContext c, AppDbContext db) => {
             var queue = await db.SupportQueues.SingleOrDefaultAsync(x => x.Id == id);
             if (queue is null) return Results.NotFound();
-            if (string.IsNullOrWhiteSpace(r.ExpectedName) || queue.Name != r.ExpectedName) return Results.Conflict();
+            if (string.IsNullOrWhiteSpace(r.ExpectedName) || queue.Name != r.ExpectedName || queue.Version != r.ExpectedVersion) return Results.Conflict();
             var name = r.Name?.Trim();
             if (string.IsNullOrWhiteSpace(name) || name.Length > 100) return Results.BadRequest();
             var normalized = name.ToUpperInvariant();
             if (await db.SupportQueues.AnyAsync(x => x.Id != id && x.NormalizedName == normalized)) return Results.Conflict();
             if (queue.Name == name && queue.IsActive == r.IsActive) return Results.NoContent();
-            queue.Name = name; queue.NormalizedName = normalized; queue.IsActive = r.IsActive;
+            queue.Name = name; queue.NormalizedName = normalized; queue.IsActive = r.IsActive; queue.Version++;
             db.AuditEvents.Add(Event(c, r.IsActive ? "support.queue.update" : "support.queue.deactivate", id.ToString()));
             CoreOutbox.Add(db, r.IsActive ? "support.queue.updated" : "support.queue.deactivated", "support-queue", id,
                 new { queueId = id, queue.Name, queue.IsActive }, c.TraceIdentifier);
             try { await db.SaveChangesAsync(); } catch (DbUpdateException e) when (e.InnerException is Npgsql.PostgresException { SqlState: "23505" }) { return Results.Conflict(); }
             return Results.NoContent();
+        });
+        admin.MapGet("/support-queues/{id:guid}/members", async (Guid id, AppDbContext db) => {
+            var queue = await db.SupportQueues.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id);
+            if (queue is null) return Results.NotFound();
+            var members = await (from m in db.SupportQueueMembers.AsNoTracking()
+                join u in db.Users.AsNoTracking() on m.UserId equals u.Id
+                where m.QueueId == id orderby u.Email
+                select new { id = u.Id, email = u.Email, isDisabled = u.IsDisabled }).ToArrayAsync();
+            return Results.Ok(new { queue.Id, queue.Version, members });
+        });
+        admin.MapPut("/support-queues/{id:guid}/members", async (Guid id, SupportQueueMembersRequest r, HttpContext c, AppDbContext db) => {
+            if (r.UserIds is null || r.UserIds.Length > 500 || r.UserIds.Any(string.IsNullOrWhiteSpace) || r.UserIds.Distinct().Count() != r.UserIds.Length) return Results.BadRequest();
+            var queue = await db.SupportQueues.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id);
+            if (queue is null) return Results.NotFound();
+            if (!queue.IsActive) return Results.Conflict(new { error = "Riattiva la coda prima di modificarne i membri." });
+            if (queue.Version != r.ExpectedVersion) return Results.Conflict(new { error = "La coda è stata aggiornata. Ricarica i membri e riprova." });
+            if (r.UserIds.Length > 0 && await db.Users.CountAsync(u => r.UserIds.Contains(u.Id) && !u.IsDisabled) != r.UserIds.Length) return Results.BadRequest(new { error = "Tutti i membri devono essere account attivi." });
+            await using var tx = await db.Database.BeginTransactionAsync();
+            var updated = await db.SupportQueues.Where(x => x.Id == id && x.IsActive && x.Version == r.ExpectedVersion)
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.Version, x => x.Version + 1));
+            if (updated == 0) return Results.Conflict(new { error = "La coda è stata aggiornata. Ricarica i membri e riprova." });
+            await db.SupportQueueMembers.Where(x => x.QueueId == id).ExecuteDeleteAsync();
+            db.SupportQueueMembers.AddRange(r.UserIds.Select(userId => new SupportQueueMember { QueueId = id, UserId = userId, AddedBy = c.User.UserId() }));
+            db.AuditEvents.Add(Event(c, "support.queue.members.update", id.ToString()));
+            CoreOutbox.Add(db, "support.queue.members.updated", "support-queue", id,
+                new { queueId = id, memberCount = r.UserIds.Length, version = r.ExpectedVersion + 1 }, c.TraceIdentifier);
+            await db.SaveChangesAsync(); await tx.CommitAsync(); return Results.NoContent();
         });
         admin.MapPost("/sites", async (SiteRequest r, HttpContext c, AppDbContext db) => {
             var name = r.Name?.Trim();

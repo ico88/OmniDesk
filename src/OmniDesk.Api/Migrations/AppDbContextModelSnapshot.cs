@@ -894,12 +894,38 @@ namespace OmniDesk.Api.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<long>("Version")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(1L);
+
                     b.HasKey("Id");
 
                     b.HasIndex("NormalizedName")
                         .IsUnique();
 
                     b.ToTable("SupportQueues");
+                });
+
+            modelBuilder.Entity("OmniDesk.Api.Data.SupportQueueMember", b =>
+                {
+                    b.Property<Guid>("QueueId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("UserId")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("AddedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("AddedBy")
+                        .HasColumnType("text");
+
+                    b.HasKey("QueueId", "UserId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("SupportQueueMembers");
                 });
 
             modelBuilder.Entity("OmniDesk.Api.Data.SupportTicket", b =>
@@ -1242,6 +1268,21 @@ namespace OmniDesk.Api.Migrations
                         .WithMany()
                         .HasForeignKey("TicketId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("OmniDesk.Api.Data.SupportQueueMember", b =>
+                {
+                    b.HasOne("OmniDesk.Api.Data.SupportQueue", null)
+                        .WithMany()
+                        .HasForeignKey("QueueId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("OmniDesk.Api.Data.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 
