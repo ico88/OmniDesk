@@ -30,6 +30,10 @@ export function RemoteSessions({deviceId,admin,onAvailability}:{deviceId:string;
       await api(`/admin/devices/${deviceId}/remote-provisioning`,enabled?'DELETE':'POST');await load();
       setMessage(enabled?'Disattivazione richiesta: il servizio remoto perde il rinnovo dell’autorizzazione.':'Approvato: Agent 0.7 recupera la configurazione e registra il nodo.');
     })}><Icon name="devices" size={16}/>{enabled?'Disattiva motore sul dispositivo':'Abilita motore sul dispositivo'}</button></p>}
+    {admin&&enabled&&<button className="secondary compact" disabled={busy||!availability?.configured||availability.revoked} onClick={()=>{
+      if(!confirm('Rigenerare la configurazione del motore remoto? Le sessioni attive saranno revocate e il servizio remoto sul dispositivo si riconnetterà. La policy di accesso resta invariata.'))return;
+      void work(async()=>{await api(`/admin/devices/${deviceId}/remote-provisioning/refresh`,'POST');await load();setMessage('Configurazione rigenerata. Attendi la riconnessione del motore e aggiorna lo stato prima di riaprire una sessione.');});
+    }}><Icon name="refresh" size={15}/>Rigenera configurazione remota</button>}
     {admin&&enabled&&<div className="panel">
       <strong>{policy.unattendedAllowed?'Accesso non presidiato abilitato':'Conferma locale richiesta'}</strong>
       <p>Desktop, terminale e file mantengono permessi separati. Le sessioni mostrano le notifiche del motore e vengono registrate nello storico.</p>

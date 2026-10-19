@@ -46,6 +46,34 @@ public static class RemoteProvisioningEndpoints
                 return Results.Problem("Remote provisioning unavailable",statusCode:503);
             }
         });
+        admin.MapPost("/refresh", async (Guid id,HttpContext c,AppDbContext db,PermissionService p,IMeshProvisioningClient mesh,IDataProtectionProvider protection,ILoggerFactory logs) => {
+            if (!await p.Allows(c.User.UserId(),"administration")) return Results.Forbid();
+            if (!mesh.Configured) return Results.Problem("Remote engine unavailable",statusCode:503);
+            await using var tx=await db.Database.BeginTransactionAsync();
+            await DeviceOperationLock.Acquire(db,id);
+            if (!await p.Allows(c.User.UserId(),"administration")) return Results.Forbid();
+            var row=await db.RemoteProvisionings.SingleOrDefaultAsync(x=>x.DeviceId==id&&x.Enabled);
+            if (row is null || !await db.DeviceCredentials.AnyAsync(x=>x.DeviceId==id&&x.RevokedAt==null)) return Results.Conflict();
+            try {
+                var previousMeshId=protection.CreateProtector("OmniDesk.RemoteProvisioning.v1").Unprotect(row.ProtectedMeshId);
+                var result=await mesh.Provision(id,c.RequestAborted);
+                if (!await p.Allows(c.User.UserId(),"administration")) return Results.Forbid();
+                if (result.MeshId!=previousMeshId) return Results.Conflict(new { error="L'identità del gruppo MeshCentral è cambiata; eseguire una nuova associazione amministrativa." });
+                var protector=protection.CreateProtector("OmniDesk.RemoteProvisioning.v1");
+                row.Id=Guid.NewGuid();
+                row.ProtectedSettings=protector.Protect(result.Settings);
+                row.ProtectedMeshId=protector.Protect(result.MeshId);
+                row.AccessPolicyVersion=checked(row.AccessPolicyVersion+1);
+                await db.RemoteSessions.Where(x=>x.DeviceId==id&&x.State=="active")
+                    .ExecuteUpdateAsync(s=>s.SetProperty(x=>x.State,"revocation_pending"));
+                db.AuditEvents.Add(new AuditEvent {ActorId=c.User.UserId(),Action="remote.provision.refresh",Target=id.ToString()});
+                await db.SaveChangesAsync();await tx.CommitAsync();return Results.NoContent();
+            }
+            catch(Exception e) when(e is not OperationCanceledException) {
+                logs.CreateLogger("RemoteProvisioning").LogWarning("Remote refresh unavailable: {Type}",e.GetType().Name);
+                return Results.Problem("Remote provisioning refresh unavailable",statusCode:503);
+            }
+        });
         admin.MapPut("/access-policy",async(Guid id,RemoteAccessPolicyRequest r,HttpContext c,AppDbContext db,PermissionService p,IMeshProvisioningClient mesh,IDataProtectionProvider protection,ILoggerFactory logs)=>{
             if(!await p.Allows(c.User.UserId(),"administration"))return Results.Forbid();
             await using var tx=await db.Database.BeginTransactionAsync();await DeviceOperationLock.Acquire(db,id);
