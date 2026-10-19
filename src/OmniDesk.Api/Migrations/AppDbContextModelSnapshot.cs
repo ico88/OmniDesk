@@ -616,6 +616,11 @@ namespace OmniDesk.Api.Migrations
                         new
                         {
                             RoleId = "Administrator",
+                            Permission = "diagnostics.view"
+                        },
+                        new
+                        {
+                            RoleId = "Administrator",
                             Permission = "administration"
                         },
                         new
@@ -652,6 +657,11 @@ namespace OmniDesk.Api.Migrations
                         {
                             RoleId = "Operator",
                             Permission = "updates"
+                        },
+                        new
+                        {
+                            RoleId = "Operator",
+                            Permission = "diagnostics.view"
                         },
                         new
                         {

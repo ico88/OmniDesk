@@ -5,6 +5,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Management;
 using OmniDesk.Contracts;
 namespace OmniDesk.Agent.Windows;
 internal sealed record UpdateReceipt(Guid JobId, Guid LeaseId, UpdateResultRequest? Result, string? Kind = null,
@@ -86,11 +87,30 @@ public sealed class UpdateWorker(ILogger<UpdateWorker> logger) : BackgroundServi
                                 if (outcome is not null) Save(receiptPath, new UpdateReceipt(job.Id, job.LeaseId, outcome, "agent.update"));
                                 else logger.LogInformation("Agent MSI update launched; the protected receipt will be reported when Windows Installer completes.");
                             }
-                            else
+                            else if (job.Kind is "diagnostics.processes" or "diagnostics.services" or "diagnostics.events")
+                            {
+                                try
+                                {
+                                    var diagnostic = DiagnosticCollector.Collect(job.Kind);
+                                    var result = new UpdateResultRequest(job.LeaseId, true, false, [], DiagnosticJson: JsonSerializer.Serialize(diagnostic));
+                                    Save(receiptPath, new UpdateReceipt(job.Id, job.LeaseId, result, job.Kind));
+                                }
+                                catch (Exception e) when (e is ManagementException or UnauthorizedAccessException or InvalidOperationException or TimeoutException or System.Runtime.InteropServices.COMException)
+                                {
+                                    var result = new UpdateResultRequest(job.LeaseId, false, false, [], $"Diagnostic collection failed ({e.GetType().Name})");
+                                    Save(receiptPath, new UpdateReceipt(job.Id, job.LeaseId, result, job.Kind));
+                                }
+                            }
+                            else if (job.Kind is "scan" or "install")
                             {
                                 Save(receiptPath, new UpdateReceipt(job.Id, job.LeaseId, null));
                                 var result = await Execute(job, stoppingToken);
                                 Save(receiptPath, new UpdateReceipt(job.Id, job.LeaseId, result));
+                            }
+                            else
+                            {
+                                var result = new UpdateResultRequest(job.LeaseId, false, false, [], "Unsupported job kind");
+                                Save(receiptPath, new UpdateReceipt(job.Id, job.LeaseId, result, job.Kind));
                             }
                         }
                     }

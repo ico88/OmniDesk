@@ -5,4 +5,10 @@ public sealed record AgentUpdatePackage(string Version, string Sha256, long Size
 public sealed record AgentUpdateRequest(Guid RequestId);
 public sealed record UpdateLease(Guid Id, Guid LeaseId, string Kind, UpdateSelection[] Updates, DateTimeOffset LeaseExpiresAt, AgentUpdatePackage? AgentUpdate = null);
 public sealed record UpdateItem(Guid UpdateId, int Revision, string Title, string[] Kb, bool Downloaded, int? ResultCode = null);
-public sealed record UpdateResultRequest(Guid LeaseId, bool Succeeded, bool RebootRequired, UpdateItem[] Updates, string? Error = null);
+public sealed record UpdateResultRequest(Guid LeaseId, bool Succeeded, bool RebootRequired, UpdateItem[] Updates, string? Error = null, string? DiagnosticJson = null);
+public sealed record DiagnosticRequest(Guid RequestId);
+public sealed record DiagnosticLease(Guid JobId, Guid LeaseId, string Kind);
+public sealed record ProcessDiagnostic(int ProcessId, string Name);
+public sealed record ServiceDiagnostic(string Name, string DisplayName, string State, string StartType);
+public sealed record EventDiagnostic(string Log, DateTime TimeCreated, int Id, string Level, string Source, string Message);
+public sealed record DiagnosticResult(string Kind, DateTimeOffset CollectedAt, ProcessDiagnostic[]? Processes = null, ServiceDiagnostic[]? Services = null, EventDiagnostic[]? Events = null);

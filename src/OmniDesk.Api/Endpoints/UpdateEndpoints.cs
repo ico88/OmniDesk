@@ -72,6 +72,29 @@ public static class UpdateEndpoints
             if (changed != 1) return Results.Conflict();
             db.AuditEvents.Add(Event(c.User.UserId(), "update.cancel", jobId)); await db.SaveChangesAsync(); await tx.CommitAsync(); return Results.NoContent();
         });
+        var diagnostics = app.MapGroup("/api/devices/{id:guid}/diagnostics").RequireAuthorization().AddEndpointFilter(async (c, next) => {
+            var id = Guid.Parse(c.HttpContext.Request.RouteValues["id"]!.ToString()!);
+            return await c.HttpContext.RequestServices.GetRequiredService<PermissionService>().Allows(c.HttpContext.User.UserId(), "diagnostics.view", id) ? await next(c) : Results.Forbid();
+        });
+        diagnostics.MapGet("", async (Guid id, AppDbContext db) => Results.Ok(await db.UpdateJobs.AsNoTracking()
+            .Where(x => x.DeviceId == id && x.Kind.StartsWith("diagnostics."))
+            .OrderByDescending(x => x.CreatedAt).Take(30)
+            .Select(x => new { x.Id, x.Kind, x.State, x.CreatedAt, x.CompletedAt, x.Result }).ToListAsync()));
+        diagnostics.MapPost("/{kind}", async (Guid id, string kind, DiagnosticRequest r, HttpContext c, AppDbContext db, PermissionService permissions) => {
+            if (kind is not ("processes" or "services" or "events") || r.RequestId == Guid.Empty) return Results.BadRequest();
+            await using var tx = await db.Database.BeginTransactionAsync();
+            await DeviceOperationLock.Acquire(db, id);
+            if (!await permissions.Allows(c.User.UserId(), "diagnostics.view", id)) return Results.Forbid();
+            if (!await db.DeviceCredentials.AnyAsync(x => x.DeviceId == id && x.RevokedAt == null)) return Results.Conflict();
+            var jobKind = "diagnostics." + kind;
+            var existing = await db.UpdateJobs.AsNoTracking().SingleOrDefaultAsync(x => x.DeviceId == id && x.RequestId == r.RequestId);
+            if (existing is not null) return existing.Kind == jobKind ? Results.Ok(new { existing.Id, existing.State }) : Results.Conflict();
+            if (await db.UpdateJobs.AnyAsync(x => x.DeviceId == id && (x.State == "queued" || x.State == "leased"))) return Results.Conflict(new { code = "job_active", message = "È già in corso un lavoro per questo dispositivo." });
+            var job = new UpdateJob { DeviceId = id, RequestId = r.RequestId, RequestedBy = c.User.UserId(), Kind = jobKind, Payload = "[]" };
+            db.UpdateJobs.Add(job); db.AuditEvents.Add(Event(c.User.UserId(), jobKind + ".queue", job.Id));
+            try { await db.SaveChangesAsync(); } catch (DbUpdateException e) when (e.InnerException is Npgsql.PostgresException { SqlState: "23505" }) { return Results.Conflict(); }
+            await tx.CommitAsync(); return Results.Created($"/api/devices/{id}/diagnostics/{job.Id}", new { job.Id, job.State });
+        });
         var agent = app.MapGroup("/api/agent/jobs").WithMetadata(new MachineRequest()).RequireAuthorization(new AuthorizeAttribute { AuthenticationSchemes = DeviceAuthentication.SchemeName });
         agent.MapPost("/claim", async (HttpContext c, AppDbContext db, PermissionService permissions) => {
             var id = Guid.Parse(c.User.UserId()); var now = DateTimeOffset.UtcNow;
@@ -86,6 +109,8 @@ public static class UpdateEndpoints
             if (job is null) { await db.SaveChangesAsync(); await tx.CommitAsync(); return Results.NoContent(); }
             var authorized = job.Kind == "agent.update"
                 ? (await permissions.Global(job.RequestedBy)).Contains("administration")
+                : job.Kind.StartsWith("diagnostics.")
+                    ? (job.Kind is "diagnostics.processes" or "diagnostics.services" or "diagnostics.events") && await permissions.Allows(job.RequestedBy, "diagnostics.view", id)
                 : await permissions.Allows(job.RequestedBy, "updates", id);
             if (!authorized)
             {
@@ -96,7 +121,7 @@ public static class UpdateEndpoints
             var lease = Guid.NewGuid(); var expiry = now.AddMinutes(65);
             var changed = await db.UpdateJobs.Where(x => x.Id == job.Id && x.State == "queued").ExecuteUpdateAsync(s => s.SetProperty(x => x.State, "leased").SetProperty(x => x.LeaseId, lease).SetProperty(x => x.LeaseExpiresAt, expiry));
             if (changed != 1) return Results.NoContent();
-            db.AuditEvents.Add(Event(null, "update.claim", job.Id)); await db.SaveChangesAsync(); await tx.CommitAsync();
+            db.AuditEvents.Add(Event(null, job.Kind.StartsWith("diagnostics.") ? "diagnostics.claim" : "update.claim", job.Id)); await db.SaveChangesAsync(); await tx.CommitAsync();
             var updatePackage = job.Kind == "agent.update" ? JsonSerializer.Deserialize<AgentUpdatePackage>(job.Payload) : null;
             return Results.Ok(new UpdateLease(job.Id, lease, job.Kind, job.Kind == "agent.update" ? [] : JsonSerializer.Deserialize<UpdateSelection[]>(job.Payload)!, expiry, updatePackage));
         });
@@ -130,18 +155,38 @@ public static class UpdateEndpoints
             content.Position = 0; return Results.File(content, "application/octet-stream", $"OmniDesk.Agent-{requested.Version}.msi");
         });
         agent.MapPost("/{jobId:guid}/result", async (Guid jobId, UpdateResultRequest r, HttpContext c, AppDbContext db) => {
-            if (r.Updates is null || r.Updates.Length > 2000 || r.Error?.Length > 1000 || r.Updates.Any(x => x is null || x.UpdateId == Guid.Empty || x.Revision < 0 || x.Title is null || x.Title.Length > 500 || x.Kb is null || x.Kb.Length > 30 || x.Kb.Any(k => k is null || k.Length > 50))) return Results.BadRequest();
+            if (r.Updates is null || r.Updates.Length > 2000 || r.Error?.Length > 1000 || r.DiagnosticJson?.Length > 1_000_000 || r.Updates.Any(x => x is null || x.UpdateId == Guid.Empty || x.Revision < 0 || x.Title is null || x.Title.Length > 500 || x.Kb is null || x.Kb.Length > 30 || x.Kb.Any(k => k is null || k.Length > 50))) return Results.BadRequest();
             var id = Guid.Parse(c.User.UserId()); var now = DateTimeOffset.UtcNow;
             var job = await db.UpdateJobs.AsNoTracking().SingleOrDefaultAsync(x => x.Id == jobId && x.DeviceId == id && x.LeaseId == r.LeaseId);
             if (job is null) return Results.NotFound();
+            if (job.Kind.StartsWith("diagnostics.") && (r.Succeeded ? r.DiagnosticJson is null || !ValidDiagnostic(job.Kind, r.DiagnosticJson) : r.DiagnosticJson is not null)) return Results.BadRequest();
+            if (!job.Kind.StartsWith("diagnostics.") && r.DiagnosticJson is not null) return Results.BadRequest();
             if ((job.State is "succeeded" or "failed") && job.Result is not null) return Results.NoContent();
             await using var tx = await db.Database.BeginTransactionAsync();
             var payload = JsonSerializer.Serialize(r); var state = r.Succeeded ? "succeeded" : "failed";
             var changed = await db.UpdateJobs.Where(x => x.Id == jobId && x.DeviceId == id && x.State == "leased" && x.LeaseId == r.LeaseId && x.LeaseExpiresAt > now)
                 .ExecuteUpdateAsync(s => s.SetProperty(x => x.State, state).SetProperty(x => x.Result, payload).SetProperty(x => x.CompletedAt, now));
             if (changed != 1) return Results.Conflict();
-            db.AuditEvents.Add(Event(null, "update.result." + state, jobId)); await db.SaveChangesAsync(); await tx.CommitAsync(); return Results.NoContent();
+            db.AuditEvents.Add(Event(null, (job.Kind.StartsWith("diagnostics.") ? "diagnostics.result." : "update.result.") + state, jobId)); await db.SaveChangesAsync(); await tx.CommitAsync(); return Results.NoContent();
         });
     }
     private static AuditEvent Event(string? actor, string action, Guid id) => new() { ActorId = actor, Action = action, Target = id.ToString() };
+    private static bool ValidDiagnostic(string kind, string json)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(json, new JsonDocumentOptions { MaxDepth = 8 });
+            var root = doc.RootElement;
+            if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("Kind", out var k) || k.GetString() != kind || !root.TryGetProperty("CollectedAt", out _)) return false;
+            var property = kind switch { "diagnostics.processes" => "Processes", "diagnostics.services" => "Services", "diagnostics.events" => "Events", _ => "" };
+            if (!root.TryGetProperty(property, out var items) || items.ValueKind != JsonValueKind.Array || items.GetArrayLength() > (kind == "diagnostics.events" ? 100 : 500)) return false;
+            foreach (var item in items.EnumerateArray())
+            {
+                if (item.ValueKind != JsonValueKind.Object) return false;
+                foreach (var value in item.EnumerateObject()) if (value.Value.ValueKind == JsonValueKind.String && value.Value.GetString() is { Length: > 1000 }) return false;
+            }
+            return true;
+        }
+        catch (JsonException) { return false; }
+    }
 }
