@@ -31,6 +31,8 @@ public sealed class RemoteProvisioningGuard(IServiceScopeFactory scopes,ILogger<
             row.Enabled=false;
             // Persist disable independently of a failed engine operation; removal is retried.
             await db.SaveChangesAsync(ct);await tx.CommitAsync(ct);
+            // Revoke known live shares first so their explicit confirmations remain available.
+            if(await db.RemoteSessions.AnyAsync(s=>s.DeviceId==device&&(s.State=="active"||s.State=="revocation_pending"),ct))continue;
             await using var removal=await db.Database.BeginTransactionAsync(ct);await DeviceOperationLock.Acquire(db,device);
             await db.Entry(row).ReloadAsync(ct);if(row.Enabled||row.GroupRemoved)continue;
             await mesh.RemoveGroup(protector.Unprotect(row.ProtectedMeshId),ct);
