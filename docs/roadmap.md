@@ -408,3 +408,18 @@ build Docker e configurazione Compose passati. Pubblicato sull'istanza LAN dopo
 backup e verifica di zero sessioni/job; readiness, CA, bundle e rifiuto anonimo
 verificati. Lo smoke Chromium isolato verifica il badge Online con account
 autenticato e heartbeat firmato; resta la verifica manuale sull'istanza LAN.
+
+### Inbox notifiche ticket — sorgenti e test verificati
+
+La dashboard include un inbox aggiornato ogni 30 secondi per nuovi ticket
+instradati a una coda dell'operatore, risposte dei richiedenti e nuove
+assegnazioni. Selezionare una notifica la marca letta e apre il ticket; l'API
+rivalida `tickets.view` sia quando materializza il destinatario sia quando
+restituisce o marca letta una notifica. Non vengono copiati testo della
+conversazione o screenshot nella notifica. Il consumer usa ricevute persistenti
+per evento/consumer, retry progressivo e dead-letter dopo dieci errori;
+l'elaborazione non modifica il checkpoint globale dell'outbox. Test API/PostgreSQL
+verificano destinatari, lettura, isolamento tra utenti, idempotenza, retry e
+dead-letter. Build API/dashboard, Vitest e smoke Chromium isolato passano.
+Questa milestone non invia email/push e non è stata pubblicata sull'istanza LAN;
+il comportamento runtime live resta da provare dopo la finestra di test attiva.

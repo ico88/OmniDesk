@@ -1191,3 +1191,18 @@ invia il comando MeshCentral senza attesa di risposta: il test non dimostra che
 il viewer Windows abbia effettivamente chiuso lo stream. La prova interattiva
 MeshCentral resta aperta; nessun deploy LAN è stato eseguito. In questa verifica
 i container LAN sono rimasti attivi, senza ricrearli.
+
+### Inbox notifiche ticket — 2026-10-19
+
+`./scripts/test.sh` passato con 64/64 test xUnit/PostgreSQL e 5/5 Vitest. Gli
+scenari verificano proiezione del ticket alla coda, risposta al responsabile o
+alla coda, assegnazione, verifica permessi corrente, lettura proprietario-only,
+idempotenza, retry con backoff e dead-letter dopo dieci errori. I payload e i
+testi delle conversazioni non vengono registrati nei log della consumer.
+`docker compose config --quiet` e `docker compose build api dashboard` passati.
+`./scripts/smoke.sh --browser` passato su stack Compose isolato con Chromium:
+creazione ticket fixture, ricezione inbox, click-through al ticket, flussi
+esistenti supporto e device; i container temporanei sono stati rimossi dal trap.
+Questa esecuzione non ha ricreato o aggiornato container, schema o dati LAN; non
+è una verifica runtime sull'istanza `192.168.1.233:8085`. Non sono previsti invii
+email o push in questa implementazione.
