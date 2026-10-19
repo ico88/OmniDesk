@@ -113,6 +113,10 @@ try {
  await page.reload(); await page.getByRole('heading',{name:'Panoramica',exact:true}).waitFor();
  await page.getByRole('button',{name:'Dispositivi',exact:true}).click();
  await page.getByRole('row').filter({has:page.getByRole('cell',{name:renamed,exact:true})}).getByRole('button',{name:'Apri',exact:true}).click();
+ await page.setViewportSize({width:1440,height:1000});
+ await page.getByRole('heading',{name:renamed,exact:true}).waitFor();
+ await page.waitForFunction(()=>document.querySelector('main.content')?.getAttribute('aria-busy')==='false');
+ await page.screenshot({path:'/previews/devices-admin-desktop.png',fullPage:true});
  await page.locator('summary').filter({hasText:'Gestione dispositivo'}).click();
  assert.equal(await page.getByLabel('Gruppo dispositivo',{exact:true}).inputValue(),'','Group change persisted');
  page.once('dialog',dialog=>dialog.accept());
