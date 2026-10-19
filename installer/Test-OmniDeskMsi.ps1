@@ -32,6 +32,15 @@ try {
     foreach ($file in @('OmniDesk.Agent.Windows.exe','OmniDesk.Tray.Windows.exe')) {
         if (-not (Test-Path (Join-Path $directory $file))) { throw "Componente mancante: $file" }
     }
+    $remote = Get-CimInstance Win32_Service -Filter "Name='OmniDeskRemote'"
+    if (-not $remote -or $remote.StartMode -ne 'Manual' -or $remote.State -ne 'Stopped' -or $remote.StartName -ne 'LocalSystem') { throw 'Servizio remoto non conforme o avviato senza approvazione.' }
+    $remoteDirectory = Join-Path $directory 'Remote'
+    $remoteExe = Join-Path $remoteDirectory 'MeshService64.exe'
+    if ((Get-FileHash $remoteExe -Algorithm SHA256).Hash -ne 'CBF10A37FC01F74F2473AECA0A4B391DCA6F9D0A8D0300AA7181DBCE7BACC51E') { throw 'Vendor remoto non verificato.' }
+    $folderAcl = Get-Acl $remoteDirectory
+    foreach ($rule in $folderAcl.Access) {
+        if ($rule.AccessControlType -eq 'Allow' -and $rule.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value -notin @('S-1-5-18','S-1-5-32-544')) { throw 'Directory dati remoto leggibile da principal standard.' }
+    }
     $run = Get-ItemPropertyValue 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run' -Name OmniDeskTray
     if ($run -ne ('"'+(Join-Path $directory 'OmniDesk.Tray.Windows.exe')+'"')) { throw 'Startup Tray non conforme.' }
     $output = & sc.exe sdshow OmniDeskAgent
@@ -65,6 +74,7 @@ finally {
         $uninstall = Start-Process msiexec.exe -ArgumentList @('/x',('"'+$msi+'"'),'/qn','/norestart','/l*v',('"'+$uninstallLog+'"')) -Wait -PassThru
         if ($uninstall.ExitCode -notin @(0,1605,3010)) { throw "Disinstallazione MSI fallita: $($uninstall.ExitCode)" }
         if (Get-Service OmniDeskAgent -ErrorAction SilentlyContinue) { throw 'Servizio residuo dopo uninstall.' }
+        if (Get-Service OmniDeskRemote -ErrorAction SilentlyContinue) { throw 'Servizio remoto residuo dopo uninstall.' }
         if (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run' -Name OmniDeskTray -ErrorAction SilentlyContinue) { throw 'Startup Tray residuo dopo uninstall.' }
     }
 }

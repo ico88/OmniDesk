@@ -4,11 +4,14 @@ using System.Text.Json;
 using OmniDesk.Remote.MeshCentral;
 using Xunit;
 namespace OmniDesk.Api.Tests;
-public sealed class FakeMesh : IMeshCentralClient
+public sealed class FakeMesh : IMeshCentralClient, IMeshProvisioningClient
 {
     public bool Configured => true;
     public List<string> Calls { get; } = [];
     public List<string> RevokedNodes { get; } = [];
+    public bool ValidNode { get; set; }
+    public Task<MeshAgentProvisioning> Provision(Guid deviceId,CancellationToken ct) => Task.FromResult(new MeshAgentProvisioning("mesh//fixture", "MeshName=encrypted-fixture"));
+    public Task<bool> ContainsNode(string meshId,string nodeId,CancellationToken ct) => Task.FromResult(ValidNode);
     public bool FailRevocation { get; set; }
     public Task<MeshSession> Create(string node, string capability, string actor, CancellationToken ct)
     { Calls.Add(capability); return Task.FromResult(new MeshSession(Guid.NewGuid().ToString(), "https://mesh.example.test/sharing?c=fixture", DateTimeOffset.UtcNow.AddMinutes(5))); }
