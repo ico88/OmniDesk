@@ -21,6 +21,8 @@ su richiesta in sola lettura dall'Agent, autorizzazione device/group scoped
 `diagnostics.view`, coda, rivalidazione al claim, limiti di output e audit.
 Terminazione processi e controllo stop/start/restart servizi sono operazioni
 separate con permessi `processes.manage` e `services.manage`, conferma e audit.
+Le API restituiscono un 409 strutturato se l'identità Agent manca o è revocata,
+così la dashboard può spiegare perché una raccolta o un controllo è negato.
 Le metriche
 attuali sono snapshot/counter e non generano grafici storici. Build e test sono registrati
 in [validation.md](validation.md). Sessione Mesh reale e collaudo interattivo
