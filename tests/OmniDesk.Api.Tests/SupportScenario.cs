@@ -34,15 +34,17 @@ public static class SupportScenario
     {
         void Auth() => agent.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer",assertion());
         var owner = new string('A',64); var other = new string('B',64);
-        var create = new SupportCreate(Guid.NewGuid(),"Problema fixture","Descrizione privata",Convert.ToBase64String(Screenshot()),true);
+        var create = new SupportCreate(Guid.NewGuid(),"Problema fixture","Descrizione privata",Convert.ToBase64String(Screenshot()),true,"software");
         Auth(); Assert.Equal(HttpStatusCode.BadRequest,(await agent.PostAsJsonAsync("/api/agent/support",new SupportIntake(owner,create with { ScreenshotConsent = false }))).StatusCode);
         Auth(); Assert.Equal(HttpStatusCode.BadRequest,(await agent.PostAsJsonAsync("/api/agent/support",new SupportIntake(owner,create with { ScreenshotBase64 = Convert.ToBase64String(new byte[80]) }))).StatusCode);
         var corrupt = Screenshot(); corrupt[^1] ^= 1;
         Auth(); Assert.Equal(HttpStatusCode.BadRequest,(await agent.PostAsJsonAsync("/api/agent/support",new SupportIntake(owner,create with { ScreenshotBase64 = Convert.ToBase64String(corrupt) }))).StatusCode);
+        Auth(); Assert.Equal(HttpStatusCode.BadRequest,(await agent.PostAsJsonAsync("/api/agent/support",new SupportIntake(owner,create with { RequestId=Guid.NewGuid(), Category="unlisted" }))).StatusCode);
         Auth(); var response = await agent.PostAsJsonAsync("/api/agent/support",new SupportIntake(owner,create));
         Assert.Equal(HttpStatusCode.Created,response.StatusCode);
         var ticket = (await response.Content.ReadFromJsonAsync<SupportTicketView>())!;
         Assert.True(ticket.Number > 0);
+        Assert.Equal("software", ticket.Category);
         Assert.Equal(device,ticket.DeviceId); Assert.True(ticket.HasScreenshot);
         using (var scope = factory.Services.CreateScope())
         {
@@ -79,6 +81,7 @@ public static class SupportScenario
         Assert.Empty((await admin.GetFromJsonAsync<SupportTicketView[]>("/api/support?search=%25"))!);
         Assert.Equal(HttpStatusCode.BadRequest,(await admin.GetAsync("/api/support?state=invalid")).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest,(await admin.GetAsync("/api/support?priority=emergency")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,(await admin.GetAsync("/api/support?category=unlisted")).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest,(await admin.GetAsync("/api/support?search="+new string('a',201))).StatusCode);
         var image = await admin.GetAsync($"/api/support/{ticket.Id}/screenshot");
         Assert.Equal(HttpStatusCode.OK,image.StatusCode); Assert.Equal("attachment",image.Content.Headers.ContentDisposition!.DispositionType);
@@ -95,9 +98,12 @@ public static class SupportScenario
         Assert.Equal(HttpStatusCode.NoContent,(await admin.PutAsJsonAsync($"/api/support/{ticket.Id}",new {expectedVersion=1,state="resolved",resolution="Risolto fixture",addReply=true,priority="urgent",updatePriority=true,assigneeId=scopedId,updateAssignment=true})).StatusCode);
         var assignedTicket=(await admin.GetFromJsonAsync<System.Text.Json.JsonElement[]>($"/api/support?deviceId={device}"))!.Single();
         Assert.Equal("urgent",assignedTicket.GetProperty("priority").GetString());
+        Assert.Equal("software",assignedTicket.GetProperty("category").GetString());
         Assert.True(assignedTicket.GetProperty("number").GetInt64() > 0);
         Assert.Equal(scopedId,assignedTicket.GetProperty("assigneeId").GetString());
         Assert.Single((await admin.GetFromJsonAsync<System.Text.Json.JsonElement[]>($"/api/support?priority=urgent"))!);
+        Assert.Single((await admin.GetFromJsonAsync<System.Text.Json.JsonElement[]>("/api/support?category=software"))!);
+        Assert.Empty((await admin.GetFromJsonAsync<System.Text.Json.JsonElement[]>("/api/support?category=hardware"))!);
         Assert.Single((await admin.GetFromJsonAsync<System.Text.Json.JsonElement[]>($"/api/support?assignee={Uri.EscapeDataString("scoped@example.test")}"))!);
         using (var scope = factory.Services.CreateScope())
         {

@@ -34,11 +34,13 @@ public sealed class MigrationTests
                 await db.Database.MigrateAsync();
                 var existing = await db.SupportTickets.AsNoTracking().SingleAsync(x => x.Id == ticketId);
                 Assert.True(existing.Number > 0);
+                Assert.Equal("general", existing.Category);
                 var next = new SupportTicket { RequestId = Guid.NewGuid(), DeviceId = deviceId, SiteId = siteId,
                     RequesterKey = new string('D', 64), Subject = "New ticket", Description = "After upgrade" };
                 db.SupportTickets.Add(next);
                 await db.SaveChangesAsync();
                 Assert.True(next.Number > existing.Number);
+                Assert.Equal("general", next.Category);
             }
         }
         finally
