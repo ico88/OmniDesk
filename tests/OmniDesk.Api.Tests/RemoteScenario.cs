@@ -11,6 +11,7 @@ public sealed class FakeMesh : IMeshCentralClient, IMeshProvisioningClient
     public List<string> RevokedNodes { get; } = [];
     public int GroupsRemoved { get; private set; }
     public List<bool> ConsentRequests {get;}=[];
+    public List<string> OperatorNames { get; } = [];
     public bool FailPolicy {get;set;}
     public string ProvisionedSettings { get; set; } = "MeshName=encrypted-fixture";
     public int ProvisionCalls { get; private set; }
@@ -23,7 +24,7 @@ public sealed class FakeMesh : IMeshCentralClient, IMeshProvisioningClient
     public Func<Task>? DuringCreate {get;set;}
     public bool FailRevocation { get; set; }
     public async Task<MeshSession> Create(string node, string capability, string actor, bool consentRequired, CancellationToken ct)
-    { ConsentRequests.Add(consentRequired); Calls.Add(capability); var callback=DuringCreate;DuringCreate=null;if(callback is not null)await callback();return new MeshSession(Guid.NewGuid().ToString(), "https://mesh.example.test/sharing?c=fixture", DateTimeOffset.UtcNow.AddMinutes(5)); }
+    { ConsentRequests.Add(consentRequired); OperatorNames.Add(actor); Calls.Add(capability); var callback=DuringCreate;DuringCreate=null;if(callback is not null)await callback();return new MeshSession(Guid.NewGuid().ToString(), "https://mesh.example.test/sharing?c=fixture", DateTimeOffset.UtcNow.AddMinutes(5)); }
     public Task Revoke(string node, string publicId, CancellationToken ct) { if (FailRevocation) throw new InvalidOperationException("Fixture revocation failure"); Calls.Add("revoke"); RevokedNodes.Add(node); return Task.CompletedTask; }
 }
 public static class RemoteScenario
@@ -43,6 +44,7 @@ public static class RemoteScenario
             Assert.Equal(HttpStatusCode.NoContent, (await scoped.DeleteAsync($"/api/devices/{device}/remote-sessions/{body.GetProperty("id").GetGuid()}")).StatusCode);
         }
         Assert.Contains("remote.control", mesh.Calls); Assert.Contains("terminal", mesh.Calls); Assert.Contains("files", mesh.Calls);
+        Assert.All(mesh.OperatorNames, name => Assert.Equal("Federico Operatore", name));
         Assert.All(mesh.RevokedNodes, node => Assert.Equal("node//abcdefghijk", node));
         Assert.Equal(3, mesh.Calls.Count(x => x == "revoke"));
         var pendingResponse = await scoped.PostAsJsonAsync($"/api/devices/{device}/remote-sessions", new { capability = "remote.control" });
