@@ -568,6 +568,30 @@ public static class SupportEndpoints
             try { return Results.File(storage.OpenRead(row.StorageKey), "application/octet-stream", SafeAttachmentName(row.OriginalFileName)); }
             catch (FileNotFoundException) { return Results.StatusCode(410); }
         });
+        staff.MapPost("/{id:guid}/attachments/{attachmentId:guid}/retry-scan", async (Guid id, Guid attachmentId,
+            HttpContext c, AppDbContext db, PermissionService p, CancellationToken ct) => {
+            var ticket = await db.SupportTickets.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, ct);
+            if (ticket is null) return Results.NotFound();
+            var actorId = c.User.UserId();
+            if (!await CanViewManageTicket(p, actorId, ticket)) return Results.Forbid();
+            await using var tx = await db.Database.BeginTransactionAsync(ct);
+            await DeviceOperationLock.Acquire(db, ticket.DeviceId);
+            var state = await db.SupportAttachments.AsNoTracking().Where(x => x.Id == attachmentId && x.TicketId == id)
+                .Select(x => x.ScanState).SingleOrDefaultAsync(ct);
+            if (state is null) return Results.NotFound();
+            if (state != "scan_failed") return Results.Conflict(new { error = "È possibile riprovare solo una scansione fallita; i file infetti restano bloccati." });
+            var now = DateTimeOffset.UtcNow;
+            var retried = await db.SupportAttachments.Where(x => x.Id == attachmentId && x.TicketId == id && x.ScanState == "scan_failed")
+                .ExecuteUpdateAsync(update => update.SetProperty(x => x.ScanState, "quarantined")
+                    .SetProperty(x => x.ScanAttempts, 0).SetProperty(x => x.NextScanAt, now)
+                    .SetProperty(x => x.ScanLeaseUntil, (DateTimeOffset?)null).SetProperty(x => x.ScannedAt, (DateTimeOffset?)null)
+                    .SetProperty(x => x.ScannerVersion, (string?)null).SetProperty(x => x.LastScanErrorType, (string?)null), ct);
+            if (retried == 0) return Results.Conflict(new { error = "La scansione è cambiata. Aggiorna il ticket e riprova." });
+            db.AuditEvents.Add(new AuditEvent { ActorId = actorId, Action = "ticket.attachment.scan.retry", Target = attachmentId.ToString() });
+            await db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+            return Results.Accepted($"/api/support/{id}/attachments/{attachmentId}");
+        });
         staff.MapPost("/{id:guid}/attachments", async (Guid id, HttpContext c, AppDbContext db, PermissionService p,
             AttachmentStorage storage, CancellationToken ct) => {
             if (!c.Request.HasFormContentType) return Results.BadRequest(new { error = "Carica un file multipart valido." });
