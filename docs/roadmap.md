@@ -231,11 +231,12 @@ Aggiunta `CoreOutboxEvents` con versione schema, aggregate/event type, payload
 JSONB minimizzato, correlation ID, contatore retry, lease e timestamp
 di pubblicazione. Enrollment device, create/update sede, metadata device e
 create/update ticket scrivono l’evento nella stessa unità transazionale della
-modifica. Gli eventi ticket escludono descrizione, screenshot e testo risposta;
-sono verificati con test API e PostgreSQL. Nessun dispatcher/consumer è ancora
-attivo: gli eventi restano persistenti nel DB finché la fase worker non ne
-implementa consegna idempotente, backoff, dead-letter e retention. Non dichiarare
-notifiche o integrazioni asincrone operative.
+modifica. Il consumer `ticket-notifications.v1` proietta in modo idempotente le
+notifiche ticket con retry, backoff e dead-letter. Una policy auditata rimuove
+dopo 180 giorni solo eventi con almeno una consegna e tutte completate; eventi
+senza consumer, retry e dead-letter sono preservati. Restano consumer per altri
+eventi di dominio e policy di retention per contenuti. La prova locale è passata;
+la CI del commit `da91205` è ancora in corso.
 
 
 ### RMM — controllo servizi Windows autorizzato — sorgenti e test Linux verificati
