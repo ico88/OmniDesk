@@ -1040,3 +1040,8 @@ e dashboard. `verify-lan.py` ha passato HTTPS/CA, readiness, dashboard e rifiuto
 anonimo; il bundle JS pubblicato contiene il form ticket manuale e l'etichetta
 dell'origine. Nessun login o ticket è stato creato sull'istanza. Prova
 interattiva autenticata dal browser ancora aperta.
+
+Retry UI ticket manuali: il modulo conserva lo stesso `RequestId` se il browser
+ritenta senza modificare i campi; ogni modifica al payload genera una nuova chiave
+di richiesta. Build TypeScript/Vite e Vitest 5/5 passati. Pubblicazione LAN
+della sola dashboard ancora da eseguire.

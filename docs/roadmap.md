@@ -333,5 +333,6 @@ contenuto descrittivo e rende l'operazione idempotente per utente/dispositivo
 tramite RequestId. `Origin` distingue ticket Agent da quelli inseriti
 dall'operatore. Test API/PostgreSQL verificano grant scoped, deny fuori ambito,
 retry e conflitto per payload diverso. Build API/dashboard e Vitest passati. Deploy su LAN completato dopo backup
-verificato e migrazione applicata; readiness e bundle aggiornato verificati.
-Prova interattiva autenticata ancora da completare.
+verificato e migrazione applicata; readiness e bundle aggiornato verificati. La UI
+riusa RequestId per retry senza modifiche e ne genera una nuova se i campi cambiano.
+Resta da pubblicare quest’ultimo affinamento UI e da fare la prova interattiva autenticata.
