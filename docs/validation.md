@@ -357,3 +357,14 @@ idempotente e rifiuto nodo inesistente, rimozione gruppo diagnostico. Nessun
 mapping dispositivo o autorizzazione amministrativa scritti fuori dagli endpoint.
 Attendere nuovo tentativo UI dell'operatore e mapping Agent per verificare il
 provisioning del PC; nessuna sessione desktop ancora attestata.
+
+### Diagnosi PC reale: payload remoto assente dopo aggiornamento
+
+Operatore conferma Agent 0.7.1+e88a5c8, cartella Remote owner SYSTEM e sole ACL
+SYSTEM/Administrators, ma MeshService64.exe assente e nessun servizio
+OmniDeskRemote. TCP LAN 8086 riuscito. Questo distingue il problema dal trust
+server e dal difetto SID Tray. Non ancora attribuito con certezza a upgrade o
+rimozione successiva sul PC. Prevista riparazione MSI con log, senza cancellare
+identita o allargare ACL. Estesa CI: upgrade sia da baseline 0.6 sia da 0.7.0,
+verifica esplicita servizio/payload dopo upgrade; fixture con eliminazione di
+servizio e payload sul runner e verifica ripristino mediante /fa. Esito pendente.

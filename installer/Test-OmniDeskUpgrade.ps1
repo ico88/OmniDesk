@@ -32,10 +32,16 @@ function Install-Package([string]$path,[string]$operation,[string]$name) {
     $p.Refresh()
     return $p.ExitCode
 }
-function Assert-Installed {
+function Assert-Installed([switch]$RequireRemote) {
     $deadline=[DateTime]::UtcNow.AddSeconds(45)
     do {Start-Sleep -Seconds 1;$s=Get-Service OmniDeskAgent -ErrorAction SilentlyContinue} while ((!$s -or $s.Status -ne 'Running') -and [DateTime]::UtcNow -lt $deadline)
     if (!$s -or $s.Status -ne 'Running') {throw 'Servizio non attivo dopo upgrade/repair.'}
+    if ($RequireRemote) {
+        $remote=Get-CimInstance Win32_Service -Filter "Name='OmniDeskRemote'"
+        if (!$remote -or $remote.StartMode -ne 'Manual' -or $remote.StartName -ne 'LocalSystem') {throw 'Servizio remoto perso dopo upgrade/repair.'}
+        $exe=Join-Path $env:ProgramFiles 'OmniDesk Agent/Remote/MeshService64.exe'
+        if (!(Test-Path $exe) -or (Get-FileHash $exe -Algorithm SHA256).Hash -ne 'CBF10A37FC01F74F2473AECA0A4B391DCA6F9D0A8D0300AA7181DBCE7BACC51E') {throw 'Payload remoto perso/alterato dopo upgrade/repair.'}
+    }
 }
 $oldCode=Get-ProductCode $baseline
 $newCode=Get-ProductCode $current
@@ -51,14 +57,18 @@ try {
     $marker=Join-Path $state 'upgrade-fixture.txt'
     [IO.File]::WriteAllText($marker,'isolated-upgrade-fixture')
     if ((Install-Package $current '/i' 'upgrade') -notin @(0,3010)) {throw 'Upgrade fallito.'}
-    Assert-Installed
+    Assert-Installed -RequireRemote
     $oldState=Get-ProductState $oldCode
     if ($oldState -ne -1) {throw ('Baseline ancora registrata dopo major upgrade: ' + $oldCode + ' state=' + $oldState)}
     if ([IO.File]::ReadAllText($marker) -ne 'isolated-upgrade-fixture') {throw 'Stato locale perso durante upgrade.'}
     & sc.exe sdset OmniDeskAgent 'D:P(A;;0xF01FF;;;SY)(A;;0xF01FF;;;BA)(A;;0xF01FF;;;IU)' | Out-Null
     if ($LASTEXITCODE -ne 0) {throw 'Preparazione fixture ACL fallita.'}
+    # Reproduce the real client symptom on the disposable runner only.
+    & sc.exe delete OmniDeskRemote | Out-Null
+    if ($LASTEXITCODE -ne 0) {throw 'Preparazione fixture servizio mancante fallita.'}
+    Remove-Item (Join-Path $env:ProgramFiles 'OmniDesk Agent/Remote/MeshService64.exe')
     if ((Install-Package $current '/fa' 'repair') -notin @(0,3010)) {throw 'Repair fallito.'}
-    Assert-Installed
+    Assert-Installed -RequireRemote
     $sddl=((& sc.exe sdshow OmniDeskAgent) | Where-Object {$_ -match '^D:'}) -join ''
     $descriptor=[Security.AccessControl.CommonSecurityDescriptor]::new($false,$false,$sddl)
     foreach($ace in $descriptor.DiscretionaryAcl) {

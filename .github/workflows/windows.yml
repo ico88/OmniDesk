@@ -41,16 +41,23 @@ jobs:
       - name: Build pinned baseline and verify upgrade, repair and rollback
         shell: powershell
         run: |
-          $baseline = Join-Path $env:RUNNER_TEMP 'OmniDesk-baseline'
-          git fetch origin 98bba683420ff6ecdc14f9f401495b17291606b3 --depth=1
-          if ($LASTEXITCODE -ne 0) { throw "Baseline source fetch failed" }
-          git worktree add --detach $baseline FETCH_HEAD
-          if ($LASTEXITCODE -ne 0) { throw "Baseline worktree failed" }
-          & (Join-Path $baseline 'installer/Build-OmniDeskWindows.ps1')
-          $old = Join-Path $baseline 'artifacts/windows-0.6.0/OmniDesk.Agent.msi'
-          $new = @(Get-ChildItem artifacts/windows-*/OmniDesk.Agent.msi)
-          if ($new.Count -ne 1) { throw "Expected a single current MSI" }
-          & .\installer\Test-OmniDeskUpgrade.ps1 -BaselineMsi $old -NewMsi $new[0].FullName
+          $baselines = @(
+            @{ Commit='98bba683420ff6ecdc14f9f401495b17291606b3'; Version='0.6.0' },
+            @{ Commit='742d13f1c6a82dc035613e2ee86d9b1e0c0df2b0'; Version='0.7.0' }
+          )
+          foreach ($spec in $baselines) {
+            $baseline = Join-Path $env:RUNNER_TEMP ('OmniDesk-baseline-' + $spec.Version)
+            git fetch origin $spec.Commit --depth=1
+            if ($LASTEXITCODE -ne 0) { throw "Baseline source fetch failed" }
+            git worktree add --detach $baseline FETCH_HEAD
+            if ($LASTEXITCODE -ne 0) { throw "Baseline worktree failed" }
+            & (Join-Path $baseline 'installer/Build-OmniDeskWindows.ps1')
+            $old = Join-Path $baseline ('artifacts/windows-' + $spec.Version + '/OmniDesk.Agent.msi')
+            $new = @(Get-ChildItem artifacts/windows-*/OmniDesk.Agent.msi)
+            if ($new.Count -ne 1) { throw "Expected a single current MSI" }
+            & .\installer\Test-OmniDeskUpgrade.ps1 -BaselineMsi $old -NewMsi $new[0].FullName
+            Get-ChildItem artifacts/msi-*.log | Rename-Item -NewName { $_.BaseName + '-from-' + $spec.Version + $_.Extension }
+          }
       - name: Upload isolated MSI diagnostics
         if: always()
         uses: actions/upload-artifact@v4
