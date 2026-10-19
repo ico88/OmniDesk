@@ -34,6 +34,8 @@ public static class SupportScenario
         var create = new SupportCreate(Guid.NewGuid(),"Problema fixture","Descrizione privata",Convert.ToBase64String(Screenshot()),true);
         Auth(); Assert.Equal(HttpStatusCode.BadRequest,(await agent.PostAsJsonAsync("/api/agent/support",new SupportIntake(owner,create with { ScreenshotConsent = false }))).StatusCode);
         Auth(); Assert.Equal(HttpStatusCode.BadRequest,(await agent.PostAsJsonAsync("/api/agent/support",new SupportIntake(owner,create with { ScreenshotBase64 = Convert.ToBase64String(new byte[80]) }))).StatusCode);
+        var corrupt = Screenshot(); corrupt[^1] ^= 1;
+        Auth(); Assert.Equal(HttpStatusCode.BadRequest,(await agent.PostAsJsonAsync("/api/agent/support",new SupportIntake(owner,create with { ScreenshotBase64 = Convert.ToBase64String(corrupt) }))).StatusCode);
         Auth(); var response = await agent.PostAsJsonAsync("/api/agent/support",new SupportIntake(owner,create));
         Assert.Equal(HttpStatusCode.Created,response.StatusCode);
         var ticket = (await response.Content.ReadFromJsonAsync<SupportTicketView>())!;
@@ -54,6 +56,12 @@ public static class SupportScenario
         Assert.Equal(HttpStatusCode.Conflict,(await admin.PutAsJsonAsync($"/api/support/{ticket.Id}",new SupportEdit(1,"closed","Stale"))).StatusCode);
         Auth(); var updated = (await agent.GetFromJsonAsync<SupportTicketView[]>($"/api/agent/support/{owner}"))!.Single();
         Assert.Equal("resolved",updated.State); Assert.Equal("Risolto fixture",updated.Resolution);
+        for (var i=0;i<9;i++)
+        {
+            Auth(); Assert.Equal(HttpStatusCode.Created,(await agent.PostAsJsonAsync("/api/agent/support",new SupportIntake(owner,create with { RequestId=Guid.NewGuid(), ScreenshotBase64=null, ScreenshotConsent=false }))).StatusCode);
+        }
+        Auth(); Assert.Equal(HttpStatusCode.TooManyRequests,(await agent.PostAsJsonAsync("/api/agent/support",new SupportIntake(owner,create with { RequestId=Guid.NewGuid() }))).StatusCode);
+        Auth(); Assert.Equal(HttpStatusCode.OK,(await agent.PostAsJsonAsync("/api/agent/support",new SupportIntake(owner,create))).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized,(await admin.GetAsync($"/api/agent/support/{owner}")).StatusCode);
     }
 }
