@@ -33,6 +33,38 @@ public static class RemoteProvisioningScenario
         Auth();Assert.Equal(HttpStatusCode.Forbidden,(await agent.PostAsJsonAsync("/api/agent/remote/node",report with {ConfigurationId=Guid.NewGuid()})).StatusCode);
         Auth();Assert.Equal(HttpStatusCode.NoContent,(await agent.PostAsJsonAsync("/api/agent/remote/node",report)).StatusCode);
         Auth();Assert.Equal(HttpStatusCode.NoContent,(await agent.PostAsJsonAsync("/api/agent/remote/node",report)).StatusCode);
+        var policyRoute=route+"/access-policy";
+        async Task<long> Version()=> (await admin.GetFromJsonAsync<System.Text.Json.JsonElement>(route)).GetProperty("accessPolicyVersion").GetInt64();
+        var version=await Version();
+        Assert.False((await admin.GetFromJsonAsync<System.Text.Json.JsonElement>(route)).GetProperty("unattendedAllowed").GetBoolean());
+        Assert.Equal(HttpStatusCode.Forbidden,(await scoped.PutAsJsonAsync(policyRoute,new {unattendedAllowed=true,expectedVersion=version})).StatusCode);
+        factory.Mesh.FailPolicy=true;
+        Assert.Equal(HttpStatusCode.ServiceUnavailable,(await admin.PutAsJsonAsync(policyRoute,new {unattendedAllowed=true,expectedVersion=version})).StatusCode);
+        Assert.Equal(version,await Version());factory.Mesh.FailPolicy=false;
+        Assert.Equal(HttpStatusCode.Created,(await admin.PostAsJsonAsync($"/api/devices/{device}/remote-sessions",new {capability="remote.control",consentRequired=false})).StatusCode);
+        Assert.True(factory.Mesh.ConsentRequests.Last());
+        Assert.Equal(HttpStatusCode.NoContent,(await admin.PutAsJsonAsync(policyRoute,new {unattendedAllowed=true,expectedVersion=version})).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict,(await admin.PutAsJsonAsync(policyRoute,new {unattendedAllowed=false,expectedVersion=version})).StatusCode);
+        version=await Version();
+        foreach(var capability in new[]{"remote.control","terminal","files"}) {
+            Assert.Equal(HttpStatusCode.Created,(await admin.PostAsJsonAsync($"/api/devices/{device}/remote-sessions",new {capability})).StatusCode);
+            Assert.False(factory.Mesh.ConsentRequests.Last());
+        }
+        Assert.Equal(HttpStatusCode.NoContent,(await admin.PutAsJsonAsync(policyRoute,new {unattendedAllowed=false,expectedVersion=version})).StatusCode);
+        version=await Version();
+        Assert.Equal(HttpStatusCode.NoContent,(await admin.PutAsJsonAsync(policyRoute,new {unattendedAllowed=true,expectedVersion=version})).StatusCode);
+        var inflightVersion=await Version();
+        factory.Mesh.DuringCreate=async()=>Assert.Equal(HttpStatusCode.NoContent,(await admin.PutAsJsonAsync(policyRoute,new {unattendedAllowed=false,expectedVersion=inflightVersion})).StatusCode);
+        var changedDuringCreation=await admin.PostAsJsonAsync($"/api/devices/{device}/remote-sessions",new {capability="remote.control"});
+        Assert.Equal(HttpStatusCode.Forbidden,changedDuringCreation.StatusCode);
+        var sessionGuard=new RemoteSessionGuard(factory.Services.GetRequiredService<IServiceScopeFactory>(),NullLogger<RemoteSessionGuard>.Instance);
+        await sessionGuard.Sweep(CancellationToken.None);
+        using(var scope=factory.Services.CreateScope()) {
+            var db=scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.False(await db.RemoteSessions.AnyAsync(x=>x.DeviceId==device&&(x.State=="active"||x.State=="revocation_pending")));
+            Assert.True(await db.AuditEvents.AnyAsync(x=>x.Action=="remote.unattended.enable"&&x.Target==device.ToString()));
+            Assert.True(await db.AuditEvents.AnyAsync(x=>x.Action=="remote.unattended.disable"&&x.Target==device.ToString()));
+        }
         Assert.Equal(HttpStatusCode.NoContent,(await admin.DeleteAsync(route)).StatusCode);
         var guard=new RemoteProvisioningGuard(factory.Services.GetRequiredService<IServiceScopeFactory>(),NullLogger<RemoteProvisioningGuard>.Instance);
         await guard.Sweep(CancellationToken.None);

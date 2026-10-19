@@ -10,14 +10,18 @@ public sealed class FakeMesh : IMeshCentralClient, IMeshProvisioningClient
     public List<string> Calls { get; } = [];
     public List<string> RevokedNodes { get; } = [];
     public int GroupsRemoved { get; private set; }
+    public List<bool> ConsentRequests {get;}=[];
+    public bool FailPolicy {get;set;}
+    public Task ApplySessionConsentPolicy(string meshId,CancellationToken ct) { if(FailPolicy)throw new InvalidOperationException("Fixture policy failure");return Task.CompletedTask; }
     public Task CheckReady(CancellationToken ct)=>Task.CompletedTask;
     public Task RemoveGroup(string meshId,CancellationToken ct){GroupsRemoved++;return Task.CompletedTask;}
     public bool ValidNode { get; set; }
     public Task<MeshAgentProvisioning> Provision(Guid deviceId,CancellationToken ct) => Task.FromResult(new MeshAgentProvisioning("mesh//fixture", "MeshName=encrypted-fixture"));
     public Task<bool> ContainsNode(string meshId,string nodeId,CancellationToken ct) => Task.FromResult(ValidNode);
+    public Func<Task>? DuringCreate {get;set;}
     public bool FailRevocation { get; set; }
-    public Task<MeshSession> Create(string node, string capability, string actor, CancellationToken ct)
-    { Calls.Add(capability); return Task.FromResult(new MeshSession(Guid.NewGuid().ToString(), "https://mesh.example.test/sharing?c=fixture", DateTimeOffset.UtcNow.AddMinutes(5))); }
+    public async Task<MeshSession> Create(string node, string capability, string actor, bool consentRequired, CancellationToken ct)
+    { ConsentRequests.Add(consentRequired); Calls.Add(capability); var callback=DuringCreate;DuringCreate=null;if(callback is not null)await callback();return new MeshSession(Guid.NewGuid().ToString(), "https://mesh.example.test/sharing?c=fixture", DateTimeOffset.UtcNow.AddMinutes(5)); }
     public Task Revoke(string node, string publicId, CancellationToken ct) { if (FailRevocation) throw new InvalidOperationException("Fixture revocation failure"); Calls.Add("revoke"); RevokedNodes.Add(node); return Task.CompletedTask; }
 }
 public static class RemoteScenario

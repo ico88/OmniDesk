@@ -103,6 +103,7 @@ try {
  await page.getByRole('button',{name:'Aggiorna',exact:true}).click();
  await page.getByRole('row').filter({has:page.getByRole('cell',{name:fixtureName,exact:true})}).getByRole('button',{name:'Apri',exact:true}).click();
  const renamed=fixtureName+' renamed';
+ await page.locator('summary').filter({hasText:'Gestione dispositivo'}).click();
  await page.getByLabel('Nome dispositivo',{exact:true}).fill(renamed);
  await page.getByLabel('Gruppo dispositivo',{exact:true}).selectOption('');
  page.once('dialog',dialog=>dialog.accept());
@@ -112,12 +113,14 @@ try {
  await page.reload(); await page.getByRole('heading',{name:'Panoramica',exact:true}).waitFor();
  await page.getByRole('button',{name:'Dispositivi',exact:true}).click();
  await page.getByRole('row').filter({has:page.getByRole('cell',{name:renamed,exact:true})}).getByRole('button',{name:'Apri',exact:true}).click();
+ await page.locator('summary').filter({hasText:'Gestione dispositivo'}).click();
  assert.equal(await page.getByLabel('Gruppo dispositivo',{exact:true}).inputValue(),'','Group change persisted');
  page.once('dialog',dialog=>dialog.accept());
  await page.getByRole('button',{name:'Revoca identità dispositivo',exact:true}).click();
  await page.getByText('Identità dispositivo revocata',{exact:true}).waitFor();
  assert.equal(await page.getByRole('button',{name:'Identità già revocata',exact:true}).isDisabled(),true);
  assert.equal(await page.getByRole('button',{name:'Controllo remoto',exact:true}).isDisabled(),true);
+ await page.locator('summary').filter({hasText:'Windows Update'}).click();
  assert.equal(await page.getByRole('button',{name:'Avvia scansione',exact:true}).isDisabled(),true);
  await page.getByRole('button',{name:'Esci',exact:true}).click();
  await page.getByRole('button',{name:'Accedi',exact:true}).waitFor();
@@ -132,6 +135,14 @@ try {
  assert.equal(await page.getByRole('heading',{name:'Gestione dispositivo',exact:true}).count(),0);
  assert.equal(await page.getByRole('link',{name:'Scarica Agent Windows',exact:true}).count(),0);
  assert.equal((await context.request.get('https://omnidesk.test/api/admin/downloads/windows/kit')).status(),403);
+ await page.getByLabel('Cerca dispositivo',{exact:true}).fill('no-matching-device');
+ await page.getByText('Nessun dispositivo corrisponde alla ricerca.',{exact:true}).waitFor();
+ await page.getByLabel('Cerca dispositivo',{exact:true}).fill('');
+ await page.setViewportSize({width:1440,height:1000});
+ await page.screenshot({path:'/previews/devices-desktop.png',fullPage:true});
+ await page.setViewportSize({width:390,height:844});
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true,'No horizontal page overflow on mobile');
+ await page.screenshot({path:'/previews/devices-mobile.png',fullPage:true});
  assert.deepEqual(errors,[],'No browser JavaScript exceptions');
  console.log('PASS: Chromium accounts/grants, isolated device enrollment, rename/group persistence/revocation, ticket resolution, protected Windows download and viewer UI permissions');
 } finally {await browser.close();}

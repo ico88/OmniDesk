@@ -67,6 +67,7 @@ services:
     profiles: [browser]
     volumes:
       - ./scripts/browser-smoke.mjs:/work/browser-smoke.mjs:ro
+      - ./artifacts/ui-preview:/previews
     secrets: [bootstrap_password]
     command: [sh, -c, 'cd /tmp && npm install --no-audit --no-fund --ignore-scripts playwright@1.58.2 && node /work/browser-smoke.mjs']
     depends_on: [caddy]
