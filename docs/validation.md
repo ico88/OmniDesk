@@ -1722,3 +1722,26 @@ verifica che la revoca dell'accesso portale non elimini il file visibile allo
 staff. Il trasferimento del fixture legge i volumi con gli UID dei container,
 senza allargare ACL. Questo prova il percorso software con dati sintetici; il
 restore di una fotografia LAN/off-site e i dati Mesh restano non verificati.
+
+### Retention outbox e restore CI — 2026-10-19
+
+Implementata retention configurabile degli eventi outbox consegnati (default
+180 giorni, 0 per disabilitare): sono eliminati solo gli eventi con almeno una
+consegna e senza consegne pendenti o dead-letter; notifiche collegate e ricevute
+vengono eliminate nella stessa transazione e il conteggio è auditato. Retry,
+dead-letter, eventi senza consumer e tutti i contenuti di ticket/allegati restano
+conservati. Il test PostgreSQL dedicato verifica le ricevute collegate, i casi
+esclusi e il record di audit; la cascade delle notifiche è definita dalla FK.
+
+`./scripts/test.sh` è passato localmente: 83/83 test API, build production della
+dashboard e 6/6 Vitest. La CI Linux `39336034038` ha rilevato un difetto di
+ambiente nel restore completo: il container `alpine:3.22` usato dal passaggio
+restore-seed non veniva scaricato perché aveva `pull_policy: never`. Il comando
+ora richiede il pull solo quando l'immagine manca (`--pull missing`); lo smoke
+locale di questa revisione è passato: `./scripts/smoke.sh --browser` ha eseguito
+browser Chromium, scansioni ClamAV clean/EICAR, backup con allegato e restore
+completo DB/blob/chiavi/CA con probe HTTPS/CSRF/anonimo. La suite completa passa
+83/83 API e 6/6 Vitest con build production. Il workflow Windows
+`39336034027` è terminato con successo, inclusi upgrade/repair/rollback MSI. La
+nuova CI Linux deve ancora verificare la correzione dopo il push.
+Nessun servizio LAN è stato modificato.
