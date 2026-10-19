@@ -662,9 +662,34 @@ Verifiche eseguite:
 - Fixture isolata `package-lan-kit.py`: manifest MSI SHA-256/dimensione verificati; `py_compile` riuscito.
 - `git diff --check`: riuscito.
 
-Non eseguiti MSI upgrade/repair reali su Windows, esecuzione del servizio come
-LocalSystem, update/restart sul PC pilota o deploy server. Questi richiedono il
-workflow GitHub Actions Windows e poi la prova interattiva. La release pubblica
-non è firmata Authenticode; i checksum non attestano l’editore. La versione
-0.8.0 installata deve ricevere una prima installazione MSI 0.8.1 manuale prima
-di poter auto-aggiornarsi.
+Il test update/restart sul PC pilota resta da eseguire. La release pubblica non
+è firmata Authenticode; i checksum non attestano l’editore. La versione 0.8.0
+installata deve ricevere una prima installazione MSI 0.8.1 manuale prima di
+poter auto-aggiornarsi.
+
+## Aggiornamento remoto Agent Windows — workflow e test LAN — 19 ottobre 2026
+
+GitHub Actions Windows run 39236894238 completata con esito positivo. Il runner
+ha compilato MSI e Setup nativo; ha verificato installazione, recovery e
+disinstallazione, poi upgrade/repair/rollback partendo da baseline 0.6.0 e 0.7.0.
+Artifact unsigned `omnidesk-agent-unsigned` scaricato dal run e verificato dal
+packager tramite SHA256SUMS. Kit LAN 0.8.1 generato in
+`artifacts/windows-lan/OmniDesk.Windows.LAN-0.8.1.zip`; SHA-256 ZIP
+`2ca42cb0467b581394cfa0e51abba6d0634817909adcc6c9abdc78202bedad51`, MSI
+SHA-256 `234c06b20e52746cb617f3c97473d3d255a1b1a89ae09f94b30792844d9aad47`.
+
+Deploy di test: backup `.backups/20261019T102208Z.YoY9yM` eseguito prima del
+riavvio dei soli container API e dashboard. Database, Caddy e MeshCentral non
+sono stati ricreati. Verifiche runtime dopo il riavvio: `scripts/verify-lan.py`
+passato (readiness HTTPS con CA, dashboard/asset e rifiuto anonimo); MeshCentral
+HTTPS su `192.168.1.233:8086` ha risposto 200; il dispositivo ha inviato un
+heartbeat negli ultimi tre minuti. La release 0.8.1 viene letta dal volume
+`/packages` senza riavvio aggiuntivo. Le route `/api/admin/downloads/windows`
+e `/api/admin/downloads/windows/kit` restituiscono entrambe 401 senza sessione.
+
+Non è stato eseguito il download autenticato tramite browser, né un update
+remoto sul PC pilota: l'Agent 0.8.0 installato non include l'updater. Serve
+installare manualmente il kit 0.8.1 dalla UI come bootstrap; un aggiornamento a
+una release successiva sarà poi necessario per collaudare end-to-end job,
+download autenticato, installazione silenziosa e ricevuta dopo il riavvio
+dell'Agent. Il pacchetto resta unsigned: checksum e TLS non attestano l'editore.
