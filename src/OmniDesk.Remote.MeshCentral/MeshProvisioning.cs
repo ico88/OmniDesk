@@ -57,10 +57,19 @@ public sealed partial class MeshCentralClient : IMeshProvisioningClient
     public async Task<bool> ContainsNode(string meshId, string nodeId, CancellationToken ct)
     {
         var reply = await Command(new() { ["action"] = "nodes", ["meshid"] = meshId },ct);
-        if (!reply.TryGetProperty("nodes",out var groups) || !groups.TryGetProperty(meshId,out var nodes)) return false;
+        return MatchesOnlineNode(reply, meshId, nodeId);
+    }
+    internal static bool MatchesOnlineNode(JsonElement reply, string meshId, string nodeId)
+    {
+        // Upstream groups nodes under their meshid and removes meshid from each node.
+        if (!reply.TryGetProperty("nodes",out var groups) || groups.ValueKind != JsonValueKind.Object ||
+            !groups.TryGetProperty(meshId,out var nodes) || nodes.ValueKind != JsonValueKind.Array) return false;
         var list = nodes.EnumerateArray().ToArray();
-        return list.Length == 1 && list[0].GetProperty("_id").GetString() == nodeId &&
-            list[0].TryGetProperty("meshid",out var parent) && parent.GetString() == meshId &&
-            list[0].TryGetProperty("conn",out var connection) && (connection.GetInt32() & 1) == 1;
+        if (list.Length != 1 || list[0].ValueKind != JsonValueKind.Object) return false;
+        var node = list[0];
+        return node.TryGetProperty("_id",out var id) && id.ValueKind == JsonValueKind.String && id.GetString() == nodeId &&
+            (!node.TryGetProperty("meshid",out var parent) || (parent.ValueKind == JsonValueKind.String && parent.GetString() == meshId)) &&
+            node.TryGetProperty("conn",out var connection) && connection.ValueKind == JsonValueKind.Number &&
+            connection.TryGetInt32(out var flags) && (flags & 1) == 1;
     }
 }
