@@ -71,6 +71,11 @@ try {
  await page.getByText('Sessioni web revocate',{exact:true}).waitFor();
  await page.getByRole('button',{name:'Dispositivi',exact:true}).click();
  await page.getByLabel('Gruppo',{exact:true}).selectOption({label:group});
+ const downloadWait=page.waitForEvent('download');
+ await page.getByRole('link',{name:'Scarica Agent Windows',exact:true}).click();
+ const kitDownload=await downloadWait;
+ assert.equal(kitDownload.suggestedFilename(),'OmniDesk.Windows.LAN-0.0.1.zip');
+ assert.equal(await kitDownload.failure(),null,'Authenticated package download succeeded');
  await page.getByRole('button',{name:'Genera token monouso (30 minuti)',exact:true}).click();
  const enrollmentToken=await page.getByLabel('Token enrollment',{exact:true}).inputValue();
  const fixtureKeys=generateKeyPairSync('rsa',{modulusLength:2048});
@@ -125,6 +130,8 @@ try {
  await page.getByRole('button',{name:'Dispositivi',exact:true}).click();
  await page.getByRole('row').filter({has:page.getByRole('cell',{name:renamed,exact:true})}).getByRole('button',{name:'Apri',exact:true}).click();
  assert.equal(await page.getByRole('heading',{name:'Gestione dispositivo',exact:true}).count(),0);
+ assert.equal(await page.getByRole('link',{name:'Scarica Agent Windows',exact:true}).count(),0);
+ assert.equal((await context.request.get('https://omnidesk.test/api/admin/downloads/windows/kit')).status(),403);
  assert.deepEqual(errors,[],'No browser JavaScript exceptions');
- console.log('PASS: Chromium accounts/grants, isolated device enrollment, rename/group persistence/revocation, ticket resolution and viewer UI permissions');
+ console.log('PASS: Chromium accounts/grants, isolated device enrollment, rename/group persistence/revocation, ticket resolution, protected Windows download and viewer UI permissions');
 } finally {await browser.close();}

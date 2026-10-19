@@ -56,6 +56,24 @@ try {
         $allowed = @($acl.DiscretionaryAcl | Where-Object { $_.AceQualifier -eq [Security.AccessControl.AceQualifier]::AccessAllowed -and $_.SecurityIdentifier.Value -eq $sid -and ($_.AccessMask -band 0xF01FF) -eq 0xF01FF })
         if ($allowed.Count -eq 0) { throw 'SYSTEM/Administrators non hanno SERVICE_ALL_ACCESS esplicito.' }
     }
+    Stop-Service OmniDeskAgent
+    $fixtureId = [Guid]::NewGuid().ToString('N')
+    $fixtureSettings = "MeshName=OmniDesk:$fixtureId`r`nMeshType=2`r`nMeshID=0x$('0'*96)`r`nServerID=$('0'*96)`r`nMeshServer=wss://127.0.0.1:9/agent.ashx`r`nmeshServiceName=OmniDeskRemote`r`ndisableUpdate=1`r`nTag=$fixtureId`r`n"
+    [IO.File]::WriteAllText((Join-Path $remoteDirectory 'MeshService64.msh'),$fixtureSettings,[Text.Encoding]::ASCII)
+    Start-Service OmniDeskRemote
+    $node = ''
+    $nodeDeadline = [DateTime]::UtcNow.AddSeconds(45)
+    do {
+        Start-Sleep -Seconds 2
+        $node = (& $remoteExe -nodeid | Out-String).Trim()
+    } while ($node -notmatch '^[0-9A-Fa-f]{96}$' -and [DateTime]::UtcNow -lt $nodeDeadline)
+    if ($node -notmatch '^[0-9A-Fa-f]{96}$') { throw 'Identita nativa non generata o formato inatteso.' }
+    Start-Service OmniDeskAgent
+    $stopDeadline = [DateTime]::UtcNow.AddSeconds(30)
+    do { Start-Sleep -Seconds 1; $remoteState = (Get-Service OmniDeskRemote).Status } while ($remoteState -ne 'Stopped' -and [DateTime]::UtcNow -lt $stopDeadline)
+    if ($remoteState -ne 'Stopped') { throw 'Agent non registrato non ha arrestato il motore non autorizzato.' }
+    $service = Wait-Agent
+    Write-Host 'PASS native engine: SCM startup, private data directory, hex node identity, fail closed without enrollment. No remote session tested.'
     $previous = [uint32]$service.ProcessId
     Stop-Process -Id $previous -Force
     $null = Wait-Agent -PreviousPid $previous

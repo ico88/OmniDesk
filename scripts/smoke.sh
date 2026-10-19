@@ -7,11 +7,20 @@ SMOKE_SECRETS=$(mktemp -d /tmp/omnidesk-smoke.XXXXXX)
 trap 'docker compose -f compose.smoke.yaml logs --no-color api caddy > "$SMOKE_SECRETS/runtime.log"; docker compose -f compose.smoke.yaml down' EXIT
 python3 - <<'PY'
 from pathlib import Path
-import os, secrets
+import os, secrets, json, hashlib, zipfile
 for name in ('db_password','bootstrap_password'):
     p=Path(os.environ['SMOKE_SECRETS'])/name
     p.write_text('Od!9'+secrets.token_urlsafe(32))
     p.chmod(0o444)
+folder=Path(os.environ['SMOKE_SECRETS'])/'downloads'
+folder.mkdir(mode=0o755)
+package=folder/'OmniDesk.Windows.LAN-0.0.1.zip'
+with zipfile.ZipFile(package,'w') as archive:
+    archive.writestr('fixture.txt','Isolated browser download fixture; not an installer')
+package.chmod(0o444)
+manifest=folder/'windows-release.json'
+manifest.write_text(json.dumps(dict(version='0.0.1',commit='a'*40,sha256=hashlib.sha256(package.read_bytes()).hexdigest(),size=package.stat().st_size,fileName=package.name,remoteEngineIncluded=False)))
+manifest.chmod(0o444)
 PY
 docker compose -f compose.smoke.yaml up -d db
 docker compose -f compose.smoke.yaml run --rm migrate

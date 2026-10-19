@@ -9,6 +9,9 @@ public sealed class FakeMesh : IMeshCentralClient, IMeshProvisioningClient
     public bool Configured => true;
     public List<string> Calls { get; } = [];
     public List<string> RevokedNodes { get; } = [];
+    public int GroupsRemoved { get; private set; }
+    public Task CheckReady(CancellationToken ct)=>Task.CompletedTask;
+    public Task RemoveGroup(string meshId,CancellationToken ct){GroupsRemoved++;return Task.CompletedTask;}
     public bool ValidNode { get; set; }
     public Task<MeshAgentProvisioning> Provision(Guid deviceId,CancellationToken ct) => Task.FromResult(new MeshAgentProvisioning("mesh//fixture", "MeshName=encrypted-fixture"));
     public Task<bool> ContainsNode(string meshId,string nodeId,CancellationToken ct) => Task.FromResult(ValidNode);
