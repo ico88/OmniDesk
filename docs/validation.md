@@ -1206,3 +1206,23 @@ esistenti supporto e device; i container temporanei sono stati rimossi dal trap.
 Questa esecuzione non ha ricreato o aggiornato container, schema o dati LAN; non
 è una verifica runtime sull'istanza `192.168.1.233:8085`. Non sono previsti invii
 email o push in questa implementazione.
+
+### Icona prodotto Tray/Setup e favicon — 2026-10-19
+
+Creato `assets/omnidesk.ico` con frame 16/24/32/48/256 px e `favicon.svg` con
+lo stesso simbolo. La Tray incorpora l'ICO nel binario e non sostituisce più il
+marchio con icone generiche di stato; il suo tooltip e menu continuano a
+riportare connessione e ultimo heartbeat. Tray e Setup impostano anche l'icona
+Windows dell'eseguibile e Setup usa il marchio nella finestra. La dashboard
+collega la favicon e riutilizza l'SVG nel login e nel marchio predefinito.
+Pacchetto sincronizzato a 0.8.9. `./scripts/test.sh` passato con 64/64 xUnit e
+5/5 Vitest; `docker compose build dashboard` è riuscito e
+`./scripts/smoke.sh --browser` ha verificato favicon e marchio condiviso in
+Chromium. Cross-build `dotnet build OmniDesk.sln -c Release
+-p:EnableWindowsTargeting=true` riuscito: Tray incluso, 0 errori; il progetto
+Setup Windows separato compila con 0 warning/errori. La soluzione segnala tre
+warning nullable già presenti nei test API. CI Windows 39288092279 ha passato
+il pacchetto precedente 0.8.8, incluse installazione, recovery e upgrade; la
+verifica del nuovo MSI 0.8.9 e dell'icona estratta dal binario deve seguire il
+push di questo incremento. `docker compose config --quiet` e `git diff --check`
+passati. Nessun deployment o aggiornamento sulla LAN.

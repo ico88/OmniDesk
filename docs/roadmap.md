@@ -423,3 +423,15 @@ verificano destinatari, lettura, isolamento tra utenti, idempotenza, retry e
 dead-letter. Build API/dashboard, Vitest e smoke Chromium isolato passano.
 Questa milestone non invia email/push e non è stata pubblicata sull'istanza LAN;
 il comportamento runtime live resta da provare dopo la finestra di test attiva.
+
+### Marchio condiviso Tray, installer e favicon
+
+Creato un asset OmniDesk multi-risoluzione con monitor bianco su fondo blu. La
+Tray lo usa stabilmente anche quando mostra un errore: la connessione resta
+visibile nel tooltip/menu, mentre l’icona identifica sempre il prodotto. Lo
+stesso `.ico` è incorporato negli eseguibili Tray e Setup e definisce la loro
+icona Windows; il SVG condiviso è usato nella favicon, nella schermata login e
+nel marchio predefinito della dashboard. Pacchetto aggiornato a 0.8.9. Build
+dashboard, smoke browser e cross-build dei progetti Tray/Setup sono passati;
+resta la verifica Windows CI dell'MSI 0.8.9. Nessun kit è stato pubblicato né
+installato sulla LAN in questo incremento.
