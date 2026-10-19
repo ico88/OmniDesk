@@ -7,7 +7,7 @@ using Xunit;
 namespace OmniDesk.Api.Tests;
 public static class UpdateScenario
 {
-    public static async Task Run(HttpClient admin, HttpClient scoped, HttpClient agent, Func<string> assertion, Guid device)
+    public static async Task Run(HttpClient admin, HttpClient scoped, HttpClient agent, string scopedId, Func<string> assertion, Guid device, Guid group)
     {
         var request = new UpdateJobRequest(Guid.NewGuid());
         Assert.Equal(HttpStatusCode.Forbidden, (await scoped.PostAsJsonAsync($"/api/devices/{device}/updates/scan", request)).StatusCode);
@@ -54,5 +54,25 @@ public static class UpdateScenario
         Assert.Equal(HttpStatusCode.NoContent, (await agent.PostAsJsonAsync($"/api/agent/jobs/{diagnosticLease.Id}/result", diagnosticResult)).StatusCode);
         var diagnostics = await admin.GetFromJsonAsync<JsonElement[]>($"/api/devices/{device}/diagnostics");
         Assert.Single(diagnostics!);
+
+        var serviceAction = new ServiceControlRequest(Guid.NewGuid(), "Spooler", "stop");
+        Assert.Equal(HttpStatusCode.Forbidden, (await scoped.PostAsJsonAsync($"/api/devices/{device}/services/actions", serviceAction)).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await admin.PostAsJsonAsync($"/api/devices/{device}/services/actions", serviceAction with { ServiceName = "../../cmd" })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await admin.PostAsJsonAsync($"/api/devices/{device}/services/actions", serviceAction with { ServiceName = "OmniDeskAgent" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Created, (await admin.PostAsJsonAsync("/api/admin/roles", new { name = "Service Technician", permissions = new[] { "services.manage" } })).StatusCode);
+        Assert.Equal(HttpStatusCode.Created, (await admin.PostAsJsonAsync("/api/admin/grants", new { userId = scopedId, role = "Service Technician", groupId = group, deviceId = (Guid?)null })).StatusCode);
+        var actionQueued = await scoped.PostAsJsonAsync($"/api/devices/{device}/services/actions", serviceAction);
+        Assert.Equal(HttpStatusCode.Created, actionQueued.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await scoped.PostAsJsonAsync($"/api/devices/{device}/services/actions", serviceAction)).StatusCode);
+        agent.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", assertion());
+        var serviceClaim = await agent.PostAsync("/api/agent/jobs/claim", null);
+        Assert.Equal(HttpStatusCode.OK, serviceClaim.StatusCode);
+        var serviceLease = (await serviceClaim.Content.ReadFromJsonAsync<UpdateLease>())!;
+        Assert.Equal("service.stop", serviceLease.Kind);
+        Assert.Equal("Spooler", serviceLease.ServiceControl!.ServiceName);
+        Assert.Equal("stop", serviceLease.ServiceControl.Action);
+        agent.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", assertion());
+        Assert.Equal(HttpStatusCode.NoContent, (await agent.PostAsJsonAsync($"/api/agent/jobs/{serviceLease.Id}/result", new UpdateResultRequest(serviceLease.LeaseId, true, false, []))).StatusCode);
+        Assert.Single(await admin.GetFromJsonAsync<JsonElement[]>($"/api/devices/{device}/services/jobs"));
     }
 }
