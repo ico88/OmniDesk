@@ -1797,3 +1797,11 @@ deve ancora essere inclusa nella CI con il prossimo push. Il worker breach è
 stato validato con la suite PostgreSQL e il rebuild API; il successivo smoke
 Chromium ha verificato migrazioni, UI SLA e restore. Nessun servizio LAN è stato
 modificato.
+
+### SLA breach notification — 2026-10-19
+
+- `./scripts/test.sh` — passed: 88 API/PostgreSQL tests, production dashboard build, 6/6 Vitest. The SLA scenario forces an overdue target, verifies one durable breach audit/outbox event and confirms the notification is projected to a scoped, active `tickets.view` recipient.
+- `docker build -t omnidesk-api:local -f src/OmniDesk.Api/Dockerfile .` — passed.
+- `docker build -t omnidesk-dashboard:local -f src/dashboard/Dockerfile .` — passed. (The Docker build context is the repository root because the Dockerfile copies `deploy/dashboard.Caddyfile`.)
+- `docker compose config --quiet`, `docker compose -f compose.test.yaml config --quiet`, and `git diff --check` — passed.
+- `./scripts/smoke.sh --browser` — passed with isolated containers: migrations, HTTPS/UI, ClamAV, Chromium portal/ticket/SLA workflows and full isolated DB/blob/identity-key/CA restore. The live LAN service was not touched. Runtime worker delivery of an actual expired SLA notification was not separately observed; that path is covered by the PostgreSQL integration test.
