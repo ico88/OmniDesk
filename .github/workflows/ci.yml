@@ -19,9 +19,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: bash -n setup.sh scripts/test.sh scripts/smoke.sh scripts/backup.sh scripts/verify-backup.sh scripts/validate-release.sh
+      - run: node --check scripts/restore-runtime-smoke.mjs
       - run: ./scripts/test.sh
       - run: docker compose -f compose.test.yaml config --quiet
       - run: BACKUP_CHECK_FILE=/tmp/omnidesk-test-backup.dump docker compose -f compose.backup-check.yaml config --quiet
+      - run: RESTORE_BACKUP_PATH="$GITHUB_WORKSPACE" RESTORE_CHECK_DIR=/tmp docker compose -f compose.restore-check.yaml config --quiet
       - run: docker build -t omnidesk-api:local -f src/OmniDesk.Api/Dockerfile .
       - run: docker build -t omnidesk-dashboard:local -f src/dashboard/Dockerfile .
       - run: ./scripts/smoke.sh --browser
