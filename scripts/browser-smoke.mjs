@@ -1,3 +1,4 @@
+import { deflateSync } from 'node:zlib';
 import {chromium} from '/tmp/node_modules/playwright/index.mjs';
 import {readFileSync} from 'node:fs';
 import {randomBytes, generateKeyPairSync, sign} from 'node:crypto';
@@ -89,8 +90,11 @@ try {
  const claims=Buffer.from(JSON.stringify({iss:fixtureDevice,sub:fixtureDevice,aud:'omnidesk-agent',iat:now,nbf:now-5,exp:now+60,jti:randomBytes(16).toString('hex')})).toString('base64url');
  const unsigned=header+'.'+claims;
  const assertion=unsigned+'.'+sign('RSA-SHA256',Buffer.from(unsigned),fixtureKeys.privateKey).toString('base64url');
+ const chunk=(type,data)=>{const payload=Buffer.concat([Buffer.from(type),data]);let crc=0xffffffff;for(const b of payload){crc^=b;for(let i=0;i<8;i++)crc=(crc>>>1)^((crc&1)?0xedb88320:0);}const size=Buffer.alloc(4),sum=Buffer.alloc(4);size.writeUInt32BE(data.length);sum.writeUInt32BE((~crc)>>>0);return Buffer.concat([size,payload,sum]);};
+ const pngHeader=Buffer.alloc(13);pngHeader.writeUInt32BE(1);pngHeader.writeUInt32BE(1,4);pngHeader[8]=8;pngHeader[9]=6;
+ const screenshot=Buffer.concat([Buffer.from([137,80,78,71,13,10,26,10]),chunk('IHDR',pngHeader),chunk('IDAT',deflateSync(Buffer.from([0,128,128,128,255]))),chunk('IEND',Buffer.alloc(0))]).toString('base64');
  const ticketSubject='Browser support '+randomBytes(6).toString('hex');
- const intake=await context.request.post('https://omnidesk.test/api/agent/support',{headers:{Authorization:'Bearer '+assertion},data:{requesterKey:'A'.repeat(64),ticket:{requestId:crypto.randomUUID(),subject:ticketSubject,description:'Isolated fixture, no live user data',screenshotBase64:null,screenshotConsent:false}}});
+ const intake=await context.request.post('https://omnidesk.test/api/agent/support',{headers:{Authorization:'Bearer '+assertion},data:{requesterKey:'A'.repeat(64),ticket:{requestId:crypto.randomUUID(),subject:ticketSubject,description:'Isolated fixture, no live user data',screenshotBase64:screenshot,screenshotConsent:true}}});
  assert.equal(intake.status(),201,'Authenticated isolated ticket intake');
  await page.getByRole('button',{name:'Assistenza',exact:true}).click();
  await page.getByRole('button',{name:fixtureName,exact:true}).waitFor();
@@ -100,10 +104,19 @@ try {
  await page.getByRole('button',{name:'Filtra',exact:true}).click();
  await page.getByRole('row').filter({has:page.getByRole('cell',{name:ticketSubject,exact:true})}).getByRole('button',{name:'Apri ticket',exact:true}).click();
  await page.getByLabel('Stato',{exact:true}).selectOption('resolved');
+ assert.equal(await page.getByLabel('Risposta visibile al richiedente',{exact:true}).evaluate(e=>e.checkValidity()),false,'Resolution requires a response before submit');
+ await page.getByRole('img',{name:'Screenshot allegato alla richiesta',exact:true}).evaluate(async img=>{await img.decode();if(img.naturalWidth!==1)throw Error('Screenshot not rendered');});
+ await page.getByRole('button',{name:'Ingrandisci screenshot',exact:true}).click();
+ await page.getByRole('dialog').waitFor();
+ await page.getByRole('button',{name:'Chiudi immagine',exact:true}).click();
  await page.getByLabel('Risposta visibile al richiedente',{exact:true}).fill('Risolto nel test isolato');
  await page.getByLabel('Filtra stato richieste',{exact:true}).selectOption('');
- await page.getByRole('button',{name:'Salva ticket',exact:true}).click();
+ await page.getByRole('button',{name:'Invia risposta',exact:true}).click();
  await page.getByRole('row').filter({has:page.getByRole('cell',{name:ticketSubject,exact:true})}).getByRole('cell',{name:'Risolto',exact:true}).waitFor();
+ await page.getByRole('log').getByText('Risolto nel test isolato',{exact:true}).waitFor();
+ await page.getByRole('button',{name:'Aggiorna messaggi',exact:true}).click();
+ await page.getByRole('log').getByText('Risolto nel test isolato',{exact:true}).waitFor();
+ await page.screenshot({path:'/previews/support-conversation.png',fullPage:true});
  await page.getByRole('button',{name:'Dispositivi',exact:true}).click();
 
  await page.getByRole('button',{name:'Aggiorna',exact:true}).click();

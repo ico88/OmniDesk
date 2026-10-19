@@ -19,3 +19,8 @@ describe('API session boundaries', () => {
     await expect(api('/admin/users/user/roles', 'PUT', {roles:[]})).rejects.toThrow('Deve rimanere almeno un amministratore attivo.');
   });
 });
+
+it('shows actionable ticket validation errors', async () => {
+  vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response(JSON.stringify({error:"Scrivi una risposta all'utente."}),{status:400})));
+  await expect(api('/support/fixture','PUT',{})).rejects.toThrow("Scrivi una risposta all'utente.");
+});
