@@ -57,6 +57,7 @@ public sealed class SupportMessage
     public Guid TicketId { get; set; }
     public string? ActorId { get; set; }
     public string Kind { get; set; } = "reply";
+    public string Visibility { get; set; } = "public";
     public string Body { get; set; } = "";
     public string? FromState { get; set; }
     public string? ToState { get; set; }

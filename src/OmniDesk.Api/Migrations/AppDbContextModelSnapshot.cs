@@ -709,6 +709,11 @@ namespace OmniDesk.Api.Migrations
                         },
                         new
                         {
+                            RoleId = "Administrator",
+                            Permission = "tickets.note.internal"
+                        },
+                        new
+                        {
                             RoleId = "Operator",
                             Permission = "view"
                         },
@@ -864,6 +869,13 @@ namespace OmniDesk.Api.Migrations
                     b.Property<string>("ToState")
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Visibility")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("public");
 
                     b.HasKey("Id");
 

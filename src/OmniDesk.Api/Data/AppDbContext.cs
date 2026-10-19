@@ -69,6 +69,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
         b.Entity<SupportMessage>().HasIndex(x=>new {x.TicketId,x.Id});
         b.Entity<SupportMessage>().Property(x=>x.Body).HasMaxLength(8000);
         b.Entity<SupportMessage>().Property(x=>x.Kind).HasMaxLength(20);
+        b.Entity<SupportMessage>().Property(x=>x.Visibility).HasMaxLength(20).HasDefaultValue("public");
         b.Entity<SupportMessage>().Property(x=>x.FromState).HasMaxLength(20);
         b.Entity<SupportMessage>().Property(x=>x.ToState).HasMaxLength(20);
         b.Entity<SupportTicket>().HasOne<Device>().WithMany().HasForeignKey(x => x.DeviceId).OnDelete(DeleteBehavior.Restrict);

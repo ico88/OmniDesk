@@ -6,7 +6,7 @@ namespace OmniDesk.Api.Security;
 public static class Permissions
 {
     public static readonly string[] Roles = ["Administrator", "Operator", "Viewer"];
-    public static readonly string[] All = ["view", "remote.control", "terminal", "files", "updates", "diagnostics.view", "services.manage", "processes.manage", "administration", "tickets.view", "tickets.manage"];
+    public static readonly string[] All = ["view", "remote.control", "terminal", "files", "updates", "diagnostics.view", "services.manage", "processes.manage", "administration", "tickets.view", "tickets.manage", "tickets.note.internal"];
     public static string[] ForRole(string role) => role switch
     {
         "Administrator" => All,

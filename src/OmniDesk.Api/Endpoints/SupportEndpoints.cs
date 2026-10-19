@@ -11,6 +11,7 @@ namespace OmniDesk.Api.Endpoints;
 public sealed record SupportStaffEdit(long ExpectedVersion,string State,string? Resolution,bool AddReply=false,
     string? Priority=null,bool UpdatePriority=false,string? AssigneeId=null,bool UpdateAssignment=false,
     Guid? QueueId=null,bool UpdateQueue=false);
+public sealed record SupportInternalNote(long ExpectedVersion, string Body);
 public sealed record SupportTicketVersion(Guid TicketId, long ExpectedVersion);
 public sealed record BulkQueueAssignment(SupportTicketVersion[] Tickets, Guid? QueueId);
 public static class SupportEndpoints
@@ -260,19 +261,46 @@ public static class SupportEndpoints
                 new { ticketId = id, deviceId = ticket.DeviceId, siteId = ticket.SiteId, oldState = ticket.State, state = r.State, oldPriority = ticket.Priority, priority, oldAssigneeId = ticket.AssigneeId, assigneeId, oldQueueId = ticket.QueueId, queueId, version = r.ExpectedVersion + 1 }, c.TraceIdentifier);
             await db.SaveChangesAsync(); await tx.CommitAsync(); return Results.NoContent();
         });
+        staff.MapPost("/{id:guid}/internal-notes", async (Guid id, SupportInternalNote r, HttpContext c, AppDbContext db, PermissionService p) => {
+            var ticket = await db.SupportTickets.AsNoTracking().SingleOrDefaultAsync(t => t.Id == id);
+            if (ticket is null) return Results.NotFound();
+            if (!await p.Allows(c.User.UserId(), "tickets.view", ticket.DeviceId, siteId: ticket.SiteId) ||
+                !await p.Allows(c.User.UserId(), "tickets.note.internal", ticket.DeviceId, siteId: ticket.SiteId)) return Results.Forbid();
+            var body = r.Body?.Trim();
+            if (string.IsNullOrWhiteSpace(body) || body.Length > 8000)
+                return Results.BadRequest(new { error = "La nota interna deve contenere da 1 a 8000 caratteri." });
+            await using var tx = await db.Database.BeginTransactionAsync();
+            await DeviceOperationLock.Acquire(db, ticket.DeviceId);
+            if (!await p.Allows(c.User.UserId(), "tickets.view", ticket.DeviceId, siteId: ticket.SiteId) ||
+                !await p.Allows(c.User.UserId(), "tickets.note.internal", ticket.DeviceId, siteId: ticket.SiteId)) return Results.Forbid();
+            ticket = await db.SupportTickets.AsNoTracking().SingleAsync(t => t.Id == id);
+            if (ticket.Version != r.ExpectedVersion) return Results.Conflict(new { error = "Il ticket è stato aggiornato. Ricarica la conversazione prima di aggiungere la nota." });
+            var now = DateTimeOffset.UtcNow;
+            var updated = await db.SupportTickets.Where(t => t.Id == id && t.Version == r.ExpectedVersion)
+                .ExecuteUpdateAsync(s => s.SetProperty(t => t.UpdatedAt, now).SetProperty(t => t.Version, t => t.Version + 1));
+            if (updated == 0) return Results.Conflict(new { error = "Il ticket è stato aggiornato. Ricarica la conversazione prima di aggiungere la nota." });
+            db.SupportMessages.Add(new SupportMessage { TicketId = id, ActorId = c.User.UserId(), Kind = "internal_note", Visibility = "internal", Body = body, CreatedAt = now });
+            db.AuditEvents.Add(new AuditEvent { ActorId = c.User.UserId(), Action = "ticket.note.internal.created", Target = id.ToString() });
+            CoreOutbox.Add(db, "ticket.internal_note.created", "ticket", id,
+                new { ticketId = id, deviceId = ticket.DeviceId, siteId = ticket.SiteId, version = r.ExpectedVersion + 1 }, c.TraceIdentifier);
+            await db.SaveChangesAsync();
+            await tx.CommitAsync();
+            return Results.NoContent();
+        });
         staff.MapGet("/{id:guid}/messages",async(Guid id,long? before,HttpContext c,AppDbContext db,PermissionService p)=>{
             if(before is <=0)return Results.BadRequest();
             var ticket=await db.SupportTickets.AsNoTracking().SingleOrDefaultAsync(t=>t.Id==id);
             if(ticket is null)return Results.NotFound();
             if(!await p.Allows(c.User.UserId(),"tickets.view",ticket.DeviceId,siteId:ticket.SiteId))return Results.Forbid();
-            var query=db.SupportMessages.AsNoTracking().Where(m=>m.TicketId==id);
+            var canViewInternal = await p.Allows(c.User.UserId(), "tickets.note.internal", ticket.DeviceId, siteId: ticket.SiteId);
+            var query=db.SupportMessages.AsNoTracking().Where(m=>m.TicketId==id && (m.Visibility=="public" || canViewInternal));
             if(before.HasValue)query=query.Where(m=>m.Id<before.Value);
             var rows=await query.OrderByDescending(m=>m.Id).Take(100)
-                .Select(m=>new {m.Id,m.Kind,m.Body,m.FromState,m.ToState,m.CreatedAt,m.IsImported}).ToArrayAsync();
+                .Select(m=>new {m.Id,m.Kind,m.Visibility,m.Body,m.FromState,m.ToState,m.CreatedAt,m.IsImported}).ToArrayAsync();
             c.Response.Headers.CacheControl="no-store";
             var oldest=rows.Length>0?rows[^1].Id:(long?)null;
             var hasMore=oldest.HasValue&&await query.AnyAsync(m=>m.Id<oldest.Value);
-            return Results.Ok(new {ticket.Version,ticket.State,ticket.Resolution,canReply=await p.Allows(c.User.UserId(),"tickets.manage",ticket.DeviceId,siteId:ticket.SiteId),hasMore,oldestId=oldest,messages=rows.Reverse()});
+            return Results.Ok(new {ticket.Version,ticket.State,ticket.Resolution,canReply=await p.Allows(c.User.UserId(),"tickets.manage",ticket.DeviceId,siteId:ticket.SiteId),canNote=canViewInternal,hasMore,oldestId=oldest,messages=rows.Reverse()});
         });
         staff.MapGet("/{id:guid}/screenshot", async (Guid id, bool? inline, HttpContext c, AppDbContext db, PermissionService p) => {
             var ticket = await db.SupportTickets.AsNoTracking().SingleOrDefaultAsync(t => t.Id == id);
