@@ -311,3 +311,13 @@ Durata predefinita del link temporaneo MeshCentral estesa da 5 a 30 minuti per
 ridurre le riaperture durante interventi ordinari. Restano conto alla rovescia,
 scadenza server-side e revoca esplicita; il server continua a controllare permessi
 e policy tramite il guard di sessione.
+
+### Diagnostica Windows — code indipendenti — sorgenti e test verificati
+
+Le raccolte Processi/Servizi/Eventi possono accodarsi mentre un’altra raccolta
+diagnostica è pendente; una nuova richiesta per la stessa categoria riutilizza
+il job attivo. La migrazione rimuove l’indice DB che impediva più job pendenti
+per dispositivo. Gli interventi che cambiano lo stato (update, processi e
+servizi) mantengono la serializzazione reciproca. Test API/PostgreSQL 64/64,
+build API e dashboard e Vitest passati. Deploy LAN e prova interattiva ancora
+da completare.

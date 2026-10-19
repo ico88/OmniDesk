@@ -983,3 +983,21 @@ HTTPS/CA, readiness, dashboard e 401 anonimo; tutti i servizi risultano running.
 Il test `Session_lifetime_is_thirty_minutes` è passato nella suite CI. Nessuna
 sessione remota reale è stata aperta dopo il deploy: verifica interattiva della
 durata e del banner sul PC pilota ancora aperta.
+
+### Raccolta Processi e Servizi Windows — 2026-10-19
+
+I `409` sulle raccolte diagnostiche erano causati dal blocco globale dei job:
+un job Processi impediva di accodare Servizi (e viceversa), e l’indice univoco
+PostgreSQL lo imponeva anche a livello database. Rimossi il vincolo e il blocco
+tra letture diagnostiche; richieste duplicate della stessa categoria riusano il
+job ancora `queued`/`leased`. Update, terminazione processi e controllo servizi
+restano serializzati fra loro e non vengono bloccati dalle sole diagnostiche.
+I messaggi `409` delle azioni operative ora mostrano la spiegazione inviata
+dall’API.
+
+Verifiche: `docker compose -f compose.test.yaml run --build --rm tests` — 64/64
+test passati, incluse richieste Processi+Servizi in coda e nuova migrazione
+versionata; `docker compose build api dashboard`, `npm test -- --run` nella
+dashboard, `docker compose config --quiet`, `docker compose -f compose.test.yaml
+config --quiet` e `git diff --check` passati. Il server LAN non è ancora stato
+aggiornato con questa migrazione; la conferma dal PC pilota resta aperta.
