@@ -1,9 +1,18 @@
 name: windows-agent-package
-on: [push, pull_request, workflow_dispatch]
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      native_installer_only:
+        description: Build the native Windows installer without running tests
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
   agent-msi:
+    if: ${{ inputs.native_installer_only != true }}
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -77,9 +86,10 @@ jobs:
           if-no-files-found: error
           path: |
             artifacts/windows-*/OmniDesk.Agent.msi
-            artifacts/windows-*/Install-OmniDeskAgent.ps1
+            artifacts/windows-*/OmniDesk.Setup.exe
             artifacts/windows-*/SHA256SUMS.txt
   console:
+    if: ${{ inputs.native_installer_only != true }}
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -92,3 +102,45 @@ jobs:
           name: omnidesk-console-unsigned
           if-no-files-found: error
           path: artifacts/console-win-x64/**
+
+  native-installer:
+    if: ${{ inputs.native_installer_only == true }}
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Publish Agent, Tray and native setup UI
+        shell: pwsh
+        run: |
+          foreach ($component in @('Agent', 'Tray', 'Setup')) {
+            dotnet publish "src/OmniDesk.$component.Windows" -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o "artifacts/$($component.ToLower())-win-x64"
+            if ($LASTEXITCODE -ne 0) { throw "Publish $component failed" }
+          }
+      - name: Restore pinned remote engine and build MSI
+        shell: pwsh
+        run: |
+          npm ci --ignore-scripts --omit=dev --prefix modules/remote-meshcentral
+          if ($LASTEXITCODE -ne 0) { throw 'MeshCentral restore failed' }
+          $remote = 'modules/remote-meshcentral/node_modules/meshcentral/agents/MeshService64.exe'
+          if ((Get-FileHash $remote -Algorithm SHA256).Hash -ne 'CBF10A37FC01F74F2473AECA0A4B391DCA6F9D0A8D0300AA7181DBCE7BACC51E') { throw 'Remote engine hash mismatch' }
+          New-Item -ItemType Directory artifacts/remote-win-x64 -Force | Out-Null
+          Copy-Item $remote artifacts/remote-win-x64/MeshService64.exe
+          dotnet build installer/OmniDesk.Agent -c Release
+          if ($LASTEXITCODE -ne 0) { throw 'MSI build failed' }
+          $msi = @(Get-ChildItem installer/OmniDesk.Agent/bin -Filter OmniDesk.Agent.msi -Recurse | Where-Object FullName -Match '[\\/]Release[\\/]')
+          if ($msi.Count -ne 1) { throw 'Expected one Release MSI' }
+          $out = 'artifacts/windows-0.8.0'
+          New-Item -ItemType Directory $out -Force | Out-Null
+          Copy-Item $msi[0].FullName $out
+          Copy-Item artifacts/setup-win-x64/OmniDesk.Setup.exe $out
+          @('OmniDesk.Agent.msi','OmniDesk.Setup.exe') | ForEach-Object { $hash=Get-FileHash (Join-Path $out $_) -Algorithm SHA256; '{0}  {1}' -f $hash.Hash.ToLowerInvariant(), $_ } | Set-Content (Join-Path $out SHA256SUMS.txt) -Encoding ascii
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-0.8.0-native-installer
+          if-no-files-found: error
+          path: artifacts/windows-0.8.0/*

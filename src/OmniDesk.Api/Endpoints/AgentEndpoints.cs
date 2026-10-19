@@ -57,6 +57,27 @@ public static class AgentEndpoints
             return Results.Created($"/api/devices/{device.Id}", new EnrollmentResponse(device.Id));
         }).RequireRateLimiting("enrollment");
         var authenticated = machine.MapGroup("").RequireAuthorization(new AuthorizeAttribute { AuthenticationSchemes = DeviceAuthentication.SchemeName });
+        authenticated.MapPost("/uninstall", async (HttpContext c, AppDbContext db) => {
+            var id = Guid.Parse(c.User.UserId());
+            await using var tx = await db.Database.BeginTransactionAsync();
+            await DeviceOperationLock.Acquire(db, id);
+            var now = DateTimeOffset.UtcNow;
+            var revoked = await db.DeviceCredentials.Where(x => x.DeviceId == id && x.RevokedAt == null)
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.RevokedAt, now));
+            if (revoked == 0) return Results.Unauthorized();
+            var jobs = await db.UpdateJobs.Where(x => x.DeviceId == id && x.State == "queued").Select(x => x.Id).ToListAsync();
+            await db.UpdateJobs.Where(x => x.DeviceId == id && x.State == "queued")
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.State, "cancelled").SetProperty(x => x.CompletedAt, now));
+            await db.RemoteSessions.Where(x => x.DeviceId == id && x.State != "revoked" && x.State != "failed" && x.State != "revocation_pending")
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.State, "revocation_pending"));
+            await db.RemoteProvisionings.Where(x => x.DeviceId == id && x.Enabled)
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.Enabled, false).SetProperty(x => x.UnattendedAllowed, false));
+            foreach (var job in jobs) db.AuditEvents.Add(Audit(null, "update.cancel.device_uninstall", job));
+            db.AuditEvents.Add(Audit(null, "device.self_uninstall", id));
+            await db.SaveChangesAsync();
+            await tx.CommitAsync();
+            return Results.NoContent();
+        });
         authenticated.MapPost("/metrics", async (MetricsRequest r, HttpContext c, AppDbContext db) => {
             if (!Valid(r)) return Results.BadRequest();
             var id = Guid.Parse(c.User.UserId()); var now = DateTimeOffset.UtcNow;

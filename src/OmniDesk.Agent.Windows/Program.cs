@@ -7,7 +7,7 @@ if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException("OmniD
 if (args.Length == 1 && args[0] == "self-test") { await WindowsSelfTest.Run(); return; }
 if (args.Length == 1 && args[0] == "--help")
 {
-    Console.WriteLine("OmniDesk Agent: connect-test --server https://192.168.1.233:8085 | enroll --server <HTTPS-origin> --token-file <protected-file> | self-test");
+    Console.WriteLine("OmniDesk Agent: connect-test --server https://192.168.1.233:8085 | enroll --server <HTTPS-origin> --token-file <protected-file> | enroll --server <HTTPS-origin> --token-stdin | revoke | self-test");
     return;
 }
 if (args.Length > 0 && args[0] == "connect-test")
@@ -30,23 +30,39 @@ if (args.Length > 0 && args[0] == "connect-test")
 }
 if (args.Length > 0 && args[0] == "enroll")
 {
-    string Option(string key) { var index = Array.IndexOf(args, key); return index >= 0 && index + 1 < args.Length ? args[index + 1] : throw new ArgumentException($"Missing {key}"); }
-    if (AgentIdentity.Load() is not null) throw new InvalidOperationException("Already enrolled. Revoke the old identity and remove its local configuration before enrolling again.");
-    var server = AgentIdentity.ValidateServer(Option("--server"));
-    var tokenPath = Option("--token-file");
-    var token = (await File.ReadAllTextAsync(tokenPath)).Trim();
-    if (token.Length != 64 || !token.All(Uri.IsHexDigit)) throw new ArgumentException("Invalid enrollment token file.");
-    // Establish ACLs before contacting server, so an unprivileged enrollment cannot consume a token.
+    if (AgentIdentity.Load() is not null) throw new InvalidOperationException("Already enrolled. Revoke the old identity before enrolling again.");
+    if (args.Length < 4 || args[1] != "--server" || args[3] is not ("--token-file" or "--token-stdin") ||
+        (args[3] == "--token-file" && args.Length != 5) || (args[3] == "--token-stdin" && args.Length != 4))
+        throw new ArgumentException("Usage: enroll --server <HTTPS-origin> --token-file <protected-file> | --token-stdin");
+    var server = AgentIdentity.ValidateServer(args[2]);
+    var token = (args[3] == "--token-stdin" ? await Console.In.ReadLineAsync() ?? "" : await File.ReadAllTextAsync(args[4])).Trim();
+    if (token.Length != 64 || !token.All(Uri.IsHexDigit)) throw new ArgumentException("Invalid enrollment token.");
     AgentIdentity.SecureDirectory(AgentIdentity.Folder);
     using var rsa = RSA.Create(3072);
     using var client = AgentConnection.CreateClient();
     using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
     await AgentConnection.CheckReady(client, server, timeout.Token);
-    using var response = await client.PostAsJsonAsync(new Uri(server, "api/agent/enroll"), new EnrollmentRequest(token, Environment.MachineName, rsa.ExportSubjectPublicKeyInfoPem()));
+    using var response = await client.PostAsJsonAsync(new Uri(server, "api/agent/enroll"), new EnrollmentRequest(token, Environment.MachineName, rsa.ExportSubjectPublicKeyInfoPem()), timeout.Token);
     response.EnsureSuccessStatusCode();
-    var enrolled = await response.Content.ReadFromJsonAsync<EnrollmentResponse>() ?? throw new InvalidOperationException("Enrollment response missing.");
+    var enrolled = await response.Content.ReadFromJsonAsync<EnrollmentResponse>(timeout.Token) ?? throw new InvalidOperationException("Enrollment response missing.");
     AgentIdentity.Create(server.AbsoluteUri, enrolled.DeviceId, rsa).Save();
-    Console.WriteLine($"Enrolled device {enrolled.DeviceId}. Remove the enrollment token file securely.");
+    Console.WriteLine($"Enrolled device {enrolled.DeviceId}.");
+    return;
+}
+if (args.Length > 0 && args[0] == "revoke")
+{
+    if (args.Length != 1) throw new ArgumentException("Usage: revoke");
+    var identity = AgentIdentity.Load();
+    if (identity is null) return;
+    using var client = AgentConnection.CreateClient();
+    using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+    using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(AgentIdentity.ValidateServer(identity.ServerUrl), "api/agent/uninstall"));
+    request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", identity.Assertion());
+    using var response = await client.SendAsync(request, timeout.Token);
+    if (!response.IsSuccessStatusCode && response.StatusCode != System.Net.HttpStatusCode.Unauthorized)
+        throw new InvalidOperationException($"Server revocation failed (HTTP {(int)response.StatusCode}); uninstall cancelled.");
+    File.Delete(AgentIdentity.ConfigPath);
+    Console.WriteLine("Device identity revoked on server.");
     return;
 }
 if (args.Length > 0 && args[0] == "verify-enrollment")
