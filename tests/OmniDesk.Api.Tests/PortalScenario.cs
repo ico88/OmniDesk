@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
+using System.Net.Http.Headers;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -68,19 +69,49 @@ public static class PortalScenario
         Assert.Equal(HttpStatusCode.NotFound, (await outsider.GetAsync($"/api/portal/tickets/{ticketId}")).StatusCode);
         Assert.Empty(await outsider.GetFromJsonAsync<JsonElement[]>("/api/portal/tickets") ?? []);
 
-        Assert.Equal(HttpStatusCode.NoContent, (await admin.PostAsJsonAsync($"/api/support/{ticketId}/internal-notes", new { expectedVersion = 1L, body = "Nota riservata al team" })).StatusCode);
-        Assert.Equal(HttpStatusCode.NoContent, (await admin.PutAsJsonAsync($"/api/support/{ticketId}", new { expectedVersion = 2L, state = "in_progress", resolution = "Stiamo verificando il collegamento." , addReply = true })).StatusCode);
+        var attachmentPath = $"/api/portal/tickets/{ticketId}/attachments";
+        Assert.Empty(await portal.GetFromJsonAsync<JsonElement[]>(attachmentPath) ?? []);
+        Assert.Equal(HttpStatusCode.NotFound, (await outsider.GetAsync(attachmentPath)).StatusCode);
+        using (var missingConsent = new MultipartFormDataContent())
+        {
+            missingConsent.Add(new StringContent("1"), "expectedVersion");
+            missingConsent.Add(new StringContent("false"), "consent");
+            missingConsent.Add(new ByteArrayContent("portal attachment"u8.ToArray()), "file", "manual.txt");
+            Assert.Equal(HttpStatusCode.BadRequest, (await portal.PostAsync(attachmentPath, missingConsent)).StatusCode);
+        }
+        await Csrf(portal);
+        using (var form = new MultipartFormDataContent())
+        {
+            form.Add(new StringContent("1"), "expectedVersion");
+            form.Add(new StringContent("true"), "consent");
+            var content = new ByteArrayContent("portal attachment clean fixture"u8.ToArray());
+            content.Headers.ContentType = new MediaTypeHeaderValue("text/plain");
+            form.Add(content, "file", "manual.txt");
+            var uploaded = await portal.PostAsync(attachmentPath, form);
+            Assert.Equal(HttpStatusCode.Accepted, uploaded.StatusCode);
+            var attachment = await uploaded.Content.ReadFromJsonAsync<JsonElement>();
+            var attachmentId = attachment.GetProperty("id").GetGuid();
+            Assert.Equal("quarantined", attachment.GetProperty("scanState").GetString());
+            Assert.Equal(HttpStatusCode.NotFound, (await portal.GetAsync($"{attachmentPath}/{attachmentId}")).StatusCode);
+            var listed = Assert.Single(await portal.GetFromJsonAsync<JsonElement[]>(attachmentPath) ?? []);
+            Assert.Equal("manual.txt", listed.GetProperty("fileName").GetString());
+            Assert.Equal(HttpStatusCode.NotFound, (await outsider.GetAsync($"{attachmentPath}/{attachmentId}")).StatusCode);
+        }
+
+        Assert.Equal(HttpStatusCode.NoContent, (await admin.PostAsJsonAsync($"/api/support/{ticketId}/internal-notes", new { expectedVersion = 2L, body = "Nota riservata al team" })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await admin.PutAsJsonAsync($"/api/support/{ticketId}", new { expectedVersion = 3L, state = "in_progress", resolution = "Stiamo verificando il collegamento." , addReply = true })).StatusCode);
         var detail = await portal.GetFromJsonAsync<JsonElement>($"/api/portal/tickets/{ticketId}");
         var messages = detail.GetProperty("messages");
         Assert.DoesNotContain(messages.EnumerateArray(), message => message.GetProperty("body").GetString() == "Nota riservata al team");
         Assert.Equal("La stampante del reparto non risponde.", messages[0].GetProperty("body").GetString());
         Assert.Contains(messages.EnumerateArray(), message => message.GetProperty("body").GetString() == "Stiamo verificando il collegamento.");
         await Csrf(portal);
-        Assert.Equal(HttpStatusCode.NoContent, (await portal.PostAsJsonAsync($"/api/portal/tickets/{ticketId}/messages", new { expectedVersion = 3L, body = "Ho verificato il cavo." })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await portal.PostAsJsonAsync($"/api/portal/tickets/{ticketId}/messages", new { expectedVersion = 4L, body = "Ho verificato il cavo." })).StatusCode);
 
         Assert.Equal(HttpStatusCode.NoContent, (await admin.DeleteAsync($"/api/admin/portal-device-access/{userId}/{device}")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await portal.GetAsync($"/api/portal/tickets/{ticketId}")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await portal.GetAsync($"/api/portal/tickets/{ticketId}/screenshot")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await portal.GetAsync(attachmentPath)).StatusCode);
         await Csrf(portal);
         Assert.Equal(HttpStatusCode.NotFound, (await portal.PostAsJsonAsync($"/api/portal/tickets/{ticketId}/messages", new { expectedVersion = 4L, body = "Non autorizzato dopo revoca" })).StatusCode);
     }
