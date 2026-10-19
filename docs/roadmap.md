@@ -56,7 +56,7 @@ Incremento gestione dispositivi: etichetta/gruppo e revoca identità dalla conso
 | --- | --- | --- |
 | SD0 — basi comuni e progetto esecutivo | **Implementato:** registro sedi e Device.SiteId, sede backfill “Sede da assegnare”, concessioni site-scoped, snapshot sede sui ticket, outbox transazionale core per gli eventi elencati nelle verifiche. **Da completare:** consumer/worker outbox, copertura completa eventi, storage allegati, antivirus, retention e identità portale | Migrazioni versionate e upgrade LAN verificati; nessun gruppo trasformato implicitamente in sede. Il ticket conserva la sede storica quando il dispositivo si sposta |
 | SD1 — ticket e console IT | **Parziale implementato:** intake Agent/Tray mono-dispositivo, stati open/in_progress/resolved/closed, priorità e categorie, code/site routing/membership, assegnazione singola/bulk, chat pubblica, audit, note interne con `tickets.note.internal`. **Da completare:** ticket manuali, link espliciti multi-dispositivo, workflow configurabile e interventi RMM correlati | Test PostgreSQL su autorizzazione, versioni, intake/idempotenza, assegnazioni e note; migrazioni versionate. Le azioni RMM richiedono comunque la capability corrente e i gate M3/M4 |
-| SD2 — portale e collaborazione | **Parziale implementato:** Tray locale mostra ticket del SID Windows e screenshot solo con consenso; dashboard IT mostra conversazione e note riservate separate. **Da completare:** portale web con account/relazioni verificate e commenti propri, allegati generici in quarantena, antivirus, notifiche e KB iniziale | Screenshot PNG ristretto, consenso, audit e test anti-fuga note; il portale personale, storage esterno e antivirus restano gate separati |
+| SD2 — portale e collaborazione | **Parziale implementato:** Tray locale mostra i ticket del SID Windows, conversazione pubblica e risposte dell’utente; dashboard IT mostra conversazione e note riservate separate. Screenshot solo con consenso. **Da completare:** portale web con account/relazioni verificate, allegati generici in quarantena, antivirus, notifiche e KB iniziale | Screenshot PNG ristretto, consenso, audit e test anti-fuga note; il portale personale, storage esterno e antivirus restano gate separati |
 | SD3 — ingressi agente/email e storico interventi | **Parziale implementato:** intake macchina autenticato, limitato e idempotente. **Da completare:** mailbox/thread verificati, qualificazione email, correlazione sessioni/job e riepilogo interventi | Identità macchina separata da quella umana, rate limit e test replay esistenti; segreti mailbox e test spoof/replay/loop obbligatori prima di collegare email. Nessuna identità umana deriva dal solo mittente |
 | SD4 — allarmi, SLA ed escalation | Motore allarmi core persistente, ticket da occorrenze correlate, SLA/calendari versionati, timer durevoli e automazioni allowlist | SD0–SD3 e sviluppo/validazione del motore allarmi, oggi assente. Gate DST/pausa/riapertura/crash, deduplica escalation e prevenzione loop. Nessuna shell automatica |
 | SD5 — conoscenza avanzata e AI opzionale | Ricerca autorizzata, KB e storico avanzati; riepiloghi e bozze AI opt-in, eventuali approvazioni umane specifiche per future azioni | SD1–SD4 stabilizzati, policy dati/provider/budget e valutazioni prompt injection. AI senza credenziali o accesso diretto ai comandi; produzione subordinata a restore, carico e sicurezza |
@@ -270,6 +270,17 @@ sequenza senza buchi. La migrazione conserva le richieste già presenti e assegn
 numeri distinti. La candidata Windows passa da 0.8.5 a 0.8.6 per includere il
 numero nella Tray; il workflow precedente non valida questo incremento. La tranche
 categorie aggiorna la candidata a 0.8.7 e richiede il proprio workflow Windows.
+
+### SD2 — conversazione ticket dalla Tray — sorgenti e test Linux verificati
+
+La Tray può selezionare uno dei ticket del SID Windows corrente, leggere la
+conversazione pubblica e inviare una risposta. Il server associa il ticket sia
+al dispositivo firmatario sia alla chiave SID derivata dall’Agent; applica
+versione attesa, limite anti-spam e rifiuto delle risposte a ticket risolti o
+chiusi. Le note interne non vengono restituite alla Tray. IPC v1 ha nuovi metodi
+tipizzati e rifiuta payload non validi. Suite Linux API/PostgreSQL, IPC, build
+dashboard e Vitest passati; compilazione/build MSI Windows e prova sulla Tray
+installata restano gate CI/client. La candidata Agent/Tray/MSI passa a 0.8.8.
 
 
 ### SD1 — priorità e assegnazione ticket — sorgenti e test verificati

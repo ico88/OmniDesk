@@ -927,3 +927,15 @@ conteggio UI; `docker compose build api dashboard` e `git diff --check` passati.
 Deploy LAN completato dopo il CI Linux con backup protetto `.backups/20261019T134504Z.FHXrbK`; zero sessioni remote prima/dopo lo stop API, nessuna migrazione necessaria, ricreati API/dashboard. `verify-lan.py` ha confermato CA, readiness, asset e rifiuto anonimo; il bundle pubblico contiene i nuovi contatori. Nessun login o ticket di produzione è stato creato.
 
 CI Linux del commit `a331894` completato con successo: test, configurazione Compose, build API/dashboard e smoke Chromium. Il workflow Windows Agent/MSI resta in corso e non è richiesto dal riepilogo ticket.
+
+### Risposta del richiedente dalla Tray — sorgenti 0.8.8
+
+`./scripts/test.sh` passato: 64 test xUnit con PostgreSQL/migrazioni, 4 Vitest,
+build TypeScript/Vite. Gli scenari verificano lettura solo dei messaggi pubblici,
+associazione a device + requester key, risposta, rifiuto chiave errata/versione
+obsoleta e payload IPC invalidi. `docker compose config -q`,
+`docker compose -f compose.test.yaml config -q`, `docker compose build api` e
+`git diff --check` passati. La macchina di
+sviluppo non ha il comando `dotnet`; la build nativa Agent/Tray/MSI verrà verificata
+dal workflow GitHub Windows dopo il push. Nessuna installazione Windows o deploy
+LAN eseguiti in questo incremento.
