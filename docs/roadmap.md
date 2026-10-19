@@ -354,14 +354,23 @@ zero sessioni; smoke HTTPS/CA e bundle aggiornato passano.
 
 La barra desktop ora usa un'unica azione «Disconnetti e revoca»: rimuove il link
 condiviso, invece di chiudere soltanto lo stream lasciando valido lo stesso grant.
-Se MeshCentral non conferma la revoca, il server mantiene lo stato
+Se la disconnessione o la revoca resta in verifica, il server mantiene lo stato
 `revocation_pending`, impedisce nuove sessioni per quel dispositivo e continua i
-tentativi; la UI attende la conferma prima di consentire un nuovo collegamento.
+tentativi; la UI attende la conclusione server-side prima di consentire un nuovo collegamento.
 Una volta chiusa la revoca, ogni nuova connessione passa di nuovo da RBAC e dalla
 policy di consenso/unattended configurata. API/PostgreSQL coprono il blocco e il
 riavvio dopo il retry; Chromium isolato verifica la barra e il flusso UI con URL
 Mesh simulato. Il comportamento del motore e della sessione Windows reale resta
 da verificare prima del deploy LAN.
+
+Correzione della disconnessione attiva: la revoca di un grant `remote.control`
+invia prima `endDesktopMultiplex` tramite MeshCentral e poi rimuove il device
+share. `RemoteSessionGuard` ritenta entrambe le operazioni mentre lo stato resta
+`revocation_pending`, che continua a bloccare nuove sessioni. L'adapter invia il
+comando di chiusura senza una conferma del viewer: la risposta API prova quindi
+l'invio del comando e la revoca del link, non che lo stream sul PC sia già
+terminato. Test API/PostgreSQL verificano ordine, fallimenti separati, retry e
+blocco/riapertura. Prova interattiva contro MeshCentral e Windows resta aperta.
 
 ### SD1 — vincolo sede per ticket multi-dispositivo — sorgenti e test verificati
 

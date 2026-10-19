@@ -1176,3 +1176,18 @@ Implementati articoli testuali con slug univoco, bozze/pubblicazione, versione c
 ## Diagnostica processi/servizi — dettaglio 409 per credenziale Agent
 
 Le API di diagnostica, controllo servizi/processi e aggiornamento ora restituiscono un errore 409 strutturato (`agent_credential_unavailable`) quando l'identità Agent è assente o revocata. La UI esistente mostra il messaggio server invece del solo codice HTTP; la policy resta deny. Aggiunte asserzioni API per i tre percorsi dopo revoca. `./scripts/test.sh` passato: 64/64 test xUnit/PostgreSQL e 5/5 Vitest; in particolare le tre risposte sono verificate dopo revoca dell’identità dispositivo. Sul database LAN la sola verifica read-only ha trovato 1 dispositivo, 1 credenziale attiva, 0 job mutanti in coda/in lease e 0 sessioni remote attive; l’errore 409 storico non è riproducibile nello stato corrente. Il messaggio strutturato chiarisce quindi il caso credenziale assente/revocata; gli altri 409 (conflitto di job attivo o request id riutilizzato) mantengono la loro semantica. Nessuna immagine o servizio LAN ricreato; test interattivi non interrotti.
+
+### Revoca remota: chiusura stream prima del link
+
+`DELETE /api/devices/{id}/remote-sessions/{sessionId}` invia `endDesktopMultiplex`
+per le sessioni `remote.control`, poi rimuove il device share. La sessione passa
+prima a `revocation_pending`; il guard ripete entrambi i passaggi e lo stato
+continua a negare nuove sessioni finché la revoca non viene confermata. I test
+API/PostgreSQL coprono l'ordine, il fallimento della chiusura, il fallimento
+della revoca dopo una chiusura inviata, il retry e la riapertura autorizzata.
+`./scripts/test.sh` è passato con 64/64 test e 5/5 Vitest. Il browser smoke
+verifica il messaggio della console con MeshCentral simulato. `Disconnect`
+invia il comando MeshCentral senza attesa di risposta: il test non dimostra che
+il viewer Windows abbia effettivamente chiuso lo stream. La prova interattiva
+MeshCentral resta aperta; nessun deploy LAN è stato eseguito. In questa verifica
+i container LAN sono rimasti attivi, senza ricrearli.
