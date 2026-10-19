@@ -28,7 +28,7 @@ export function SupportDesk() {
       await api(`/support/${selected.id}`,'PUT',{expectedVersion:selected.version,state,resolution}); setSelected(null); await load();
     });}}><h3>{selected.subject}</h3><p style={{whiteSpace:'pre-wrap'}}>{selected.description}</p>
       {selected.hasScreenshot && <p><a href={`/api/support/${selected.id}/screenshot`} download>Scarica screenshot autorizzato</a></p>}
-      <label>Stato<select value={state} onChange={e=>setState(e.target.value)}>{Object.entries(labels).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label>
+      <label htmlFor="ticket-state">Stato</label><select id="ticket-state" value={state} onChange={e=>setState(e.target.value)}>{Object.entries(labels).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select>
       <label>Risposta visibile al richiedente<textarea maxLength={8000} value={resolution} onChange={e=>setResolution(e.target.value)}/></label>
       <p>Per risolvere o chiudere il ticket è richiesta una risposta. Il server verifica il permesso tickets.manage.</p>
       <button disabled={busy}>Salva ticket</button><button type="button" onClick={()=>setSelected(null)}>Chiudi dettaglio</button>

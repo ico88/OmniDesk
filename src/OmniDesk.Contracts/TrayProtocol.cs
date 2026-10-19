@@ -37,9 +37,21 @@ public static class TrayProtocol
         var bytes = new byte[size]; await stream.ReadExactlyAsync(bytes, ct);
         using var json = JsonDocument.Parse(bytes, new JsonDocumentOptions { MaxDepth = 8 });
         if (json.RootElement.ValueKind != JsonValueKind.Object) throw new InvalidDataException("IPC object required.");
-        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var field in json.RootElement.EnumerateObject())
-            if (!names.Add(field.Name)) throw new InvalidDataException("Duplicate IPC property.");
+        static void CheckProperties(JsonElement value)
+        {
+            if (value.ValueKind == JsonValueKind.Object)
+            {
+                var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var field in value.EnumerateObject())
+                {
+                    if (!names.Add(field.Name)) throw new InvalidDataException("Duplicate IPC property.");
+                    CheckProperties(field.Value);
+                }
+            }
+            else if (value.ValueKind == JsonValueKind.Array)
+                foreach (var item in value.EnumerateArray()) CheckProperties(item);
+        }
+        CheckProperties(json.RootElement);
         return JsonSerializer.Deserialize<T>(bytes, Options) ?? throw new InvalidDataException("Missing IPC object.");
     }
 }

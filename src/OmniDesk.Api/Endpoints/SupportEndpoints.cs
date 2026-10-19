@@ -64,8 +64,8 @@ public static class SupportEndpoints
             var global = (await p.Global(c.User.UserId())).Contains("tickets.view");
             var grants = from g in db.ScopeGrants join permission in db.RolePermissions on g.RoleId equals permission.RoleId
                          where g.UserId == c.User.UserId() && permission.Permission == "tickets.view" select g;
-            var query = db.SupportTickets.AsNoTracking().Where(t => global || db.Devices.Any(d => d.Id == t.DeviceId &&
-                grants.Any(g => g.DeviceId == d.Id || (d.GroupId != null && g.GroupId == d.GroupId))));
+            var query = db.SupportTickets.AsNoTracking().Where(t => db.Users.Any(u => u.Id == c.User.UserId() && !u.IsDisabled) && (global || db.Devices.Any(d => d.Id == t.DeviceId &&
+                grants.Any(g => g.DeviceId == d.Id || (d.GroupId != null && g.GroupId == d.GroupId)))));
             return Results.Ok(await query.OrderByDescending(t => t.CreatedAt).Take(100)
                 .Select(t => new SupportTicketView(t.Id,t.DeviceId,t.Subject,t.Description,t.State,t.Resolution,t.Version,t.CreatedAt,t.UpdatedAt,t.Screenshot != null)).ToArrayAsync());
         });
