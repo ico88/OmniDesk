@@ -31,6 +31,10 @@ sessioni remote correnti.
 - M4 (coda/API testate, worker cross-compilato; collaudo WUA Windows ancora aperto): Windows Update scan/install, job firmati/idempotenti, reboot policy, scheduling e report.
 - M5 (console cross-compilata, TOTP e layout testati; flag TOTP inizialmente false): console Windows WebView2 della stessa UI, dashboard layout per utente, TOTP setup/challenge/recovery/cifratura implementati e testati; hardening, retention, restore, upgrade e release firmata ancora aperti.
 
+Release candidata 0.8.3: raccolta on-demand processi/servizi/eventi con permesso
+`diagnostics.view`; versione MSI e workflow Windows aggiornati. Build Linux e
+test locali passati; pipeline Windows e pubblicazione LAN in corso.
+
 Gate produzione: revisione minacce, pen test autorizzazione/CSRF/enrollment, build riproducibili e SBOM, backup ripristinato, certificati pubblici verificati, test MSI install/upgrade/uninstall e rotazione credenziali. Nessuna data di completamento promessa per moduli non implementati.
 
 Incremento Agent LAN 0.5.2: client HTTP comune senza redirect, diagnostica readiness prima dell'enrollment, verifica identità protetta e script installazione con CA LocalMachine/impronta SHA256 e MSI elevato. Binario win-x64 cross-compilato, contratti/test TLS sul server LAN verificati. MSI 0.5.2 e lifecycle Windows ancora da compilare/collaudare su Windows; kit locale diagnostico senza MSI. [Procedura LAN](windows-lan-install.md). Nessun desktop remoto o Tray dichiarato operativo.
