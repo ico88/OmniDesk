@@ -77,6 +77,7 @@ public static class SupportScenario
         Assert.Single((await scoped.GetFromJsonAsync<SupportTicketView[]>("/api/support?search=WINDOWS%20FIXTURE"))!);
         Assert.Empty((await admin.GetFromJsonAsync<SupportTicketView[]>("/api/support?search=%25"))!);
         Assert.Equal(HttpStatusCode.BadRequest,(await admin.GetAsync("/api/support?state=invalid")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,(await admin.GetAsync("/api/support?priority=emergency")).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest,(await admin.GetAsync("/api/support?search="+new string('a',201))).StatusCode);
         var image = await admin.GetAsync($"/api/support/{ticket.Id}/screenshot");
         Assert.Equal(HttpStatusCode.OK,image.StatusCode); Assert.Equal("attachment",image.Content.Headers.ContentDisposition!.DispositionType);
@@ -94,6 +95,8 @@ public static class SupportScenario
         var assignedTicket=(await admin.GetFromJsonAsync<System.Text.Json.JsonElement[]>($"/api/support?deviceId={device}"))!.Single();
         Assert.Equal("urgent",assignedTicket.GetProperty("priority").GetString());
         Assert.Equal(scopedId,assignedTicket.GetProperty("assigneeId").GetString());
+        Assert.Single((await admin.GetFromJsonAsync<System.Text.Json.JsonElement[]>($"/api/support?priority=urgent"))!);
+        Assert.Single((await admin.GetFromJsonAsync<System.Text.Json.JsonElement[]>($"/api/support?assignee={Uri.EscapeDataString("scoped@example.test")}"))!);
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
