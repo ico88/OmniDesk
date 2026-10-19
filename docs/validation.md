@@ -1528,3 +1528,30 @@ live è stato riavviato. Questa registrazione copre solo la suite isolata e non
 ha completato con successo build MSI, installazione/recovery/disinstallazione e
 build console; il controllo upgrade/repair/rollback dalle baseline è ancora in
 corso, quindi il gate Windows complessivo resta aperto.
+
+## SD1/SD3 — riepiloghi strutturati degli interventi RMM — 2026-10-19
+
+Aggiunta `SupportInterventionSummaries`, tabella append-only con ticket, device,
+artefatto RMM già collegato, capability, autore, riepilogo, esito controllato,
+seguito opzionale e timestamp server-side. API di creazione richiede versione
+attesa, `tickets.view` e `tickets.manage` sul ticket e device e la capability
+RMM. La lettura rivalida `tickets.view` e capability per ogni device e omette le
+righe fuori scope. L'interfaccia ticket permette di registrare e consultare i
+riepiloghi accanto agli artefatti correlati. Timestamp d'avvio/completamento
+provengono dall'artefatto e non sono presentati come durata dell'attività umana.
+Audit e outbox registrano riferimenti/esito senza copiare il testo del riepilogo.
+La migrazione è additiva; la rimozione utente conserva la riga con autore nullo.
+
+`./scripts/test.sh`: 79/79 test xUnit con PostgreSQL effimero/migrazioni e 5/5
+Vitest; scenari verificano esito/seguito obbligatorio, append-only, versioni
+attese, `tickets.view/manage`, capability artefatto e assenza del testo privato
+da audit/outbox. Build TypeScript/Vite incluse. `docker compose build api
+dashboard` passato; Compose standard, test e backup-check (con
+`BACKUP_CHECK_FILE` esplicito) validati. `./scripts/smoke.sh --browser` passato
+su stack isolato: Chromium collega il job RMM, registra e rilegge il riepilogo
+dalla UI. `git diff --check` passato.
+
+Nessuna migrazione o immagine è stata applicata al server LAN e nessun servizio
+live è stato riavviato. La migrazione e gli endpoint sono verificati sul database
+temporaneo; la CI del commit di questo incremento è ancora da avviare dopo il
+push. I test non attestano tempi reali di lavoro umano né runtime Windows/LAN.
