@@ -382,3 +382,16 @@ reale aggiunto alla CI Windows. Ripristino client previsto mediante recache v e
 repair amus dalla copia originale dello stesso pacchetto, rinominata agent.msi.
 Fonte flag v: https://learn.microsoft.com/windows-server/administration/windows-commands/msiexec
 Esito CI/client ancora da registrare; niente promessa di repair riuscito.
+
+### Causa confermata della scomparsa del motore: quarantena Defender
+
+Eventi reali forniti dall'operatore confermano quarantena di MeshService64.exe
+E servizio OmniDeskRemote alle 09:23 locali. Detection
+HackTool:Win32/Meshagent.MBZ!MTB, ID 2147970383, intelligence 1.461.100.0, engine
+1.1.26090.9. Non piu ipotesi di difetto MSI per la scomparsa post-riparazione.
+Il difetto sorgente MSI/1706 rimane distinto ed e stato corretto. Nessun
+falso positivo dichiarato e nessuna esclusione/protezione disattivata.
+Dossier di revisione preparato in remote-engine-defender-review.md, nessun invio.
+Windows run 39215503901 e Linux 39215503914 passati: include cleanup persistente
+MSI, upgrade da 0.6/0.7 e repair payload/servizio mancanti sul runner isolato.
+Questi esiti non superano il blocco antivirus del PC pilota.
