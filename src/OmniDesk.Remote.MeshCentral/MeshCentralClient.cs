@@ -20,7 +20,7 @@ public sealed partial class MeshCentralClient(MeshCentralOptions options) : IMes
         // Exactly one protocol. Consent policy comes only from the authorized server; no administrative UI or broad account handed to browser.
         var protocol = capability switch { "remote.control" => 2, "terminal" => 1, "files" => 4, _ => throw new ArgumentException("Unsupported remote capability") };
         var consent = SessionConsent(capability, consentRequired);
-        var expires = DateTimeOffset.UtcNow.AddMinutes(5);
+        var expires = DateTimeOffset.UtcNow.AddMinutes(30);
         var reply = await Command(new Dictionary<string, object> {
             ["action"] = "createDeviceShareLink", ["nodeid"] = nodeId, ["guestname"] = actor[..Math.Min(actor.Length, 80)],
             ["p"] = protocol, ["consent"] = consent, ["start"] = DateTimeOffset.UtcNow.ToUnixTimeSeconds(), ["end"] = expires.ToUnixTimeSeconds(), ["viewOnly"] = false
