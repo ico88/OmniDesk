@@ -238,3 +238,7 @@ Log completo del run diagnostico 39204355721 conferma errore 1939 durante Servic
 - SHA256 MSI: `18ec3c94312d1eae93a5e1feb444e78b639efad1f213604c42855be3bd62fc30`.
 - API/dashboard avviate: confronto image ID container/immagine locale riuscito; ultima sonda TLS con CA, readiness, dashboard/asset e anonymous401 passata. Migrazione SupportTickets e backup predeploy gia registrati sopra.
 - Gate ancora aperti: sessione utente Windows reale (Tray/IPC/screenshot), prova enrollment/heartbeat/ticket LAN da quel client, MSI repair/upgrade/rollback e firma, provisioning e motore desktop/terminale/file remoti reali. Il desktop remoto completo non e incluso nel kit. Nessun test fake o compile chiude questi gate.
+
+### Avvio incremento remoto e download web 0.7.0
+
+Sorgenti: provisioning server/worker Windows, vendor nell'MSI, overlay LAN e download web. Prima cross-build Agent/API e migrazione RemoteProvisioning generate con successo; suite PostgreSQL con provisioning fake e download protetto passata (23 casi xUnit complessivi; scenario composto esteso). Il fake verifica soltanto contratti/autorizzazione, non MeshCentral reale. Runtime 0.7 e Windows ancora da verificare. Client concordato: Windows 10, IP 192.168.1.160, installazione amministrativa disponibile; nessun accesso interattivo a quel PC in questa sessione.
