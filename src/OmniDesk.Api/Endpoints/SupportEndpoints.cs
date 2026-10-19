@@ -12,6 +12,7 @@ public sealed record SupportStaffEdit(long ExpectedVersion,string State,string? 
     string? Priority=null,bool UpdatePriority=false,string? AssigneeId=null,bool UpdateAssignment=false,
     Guid? QueueId=null,bool UpdateQueue=false);
 public sealed record SupportInternalNote(long ExpectedVersion, string Body);
+public sealed record ManualSupportCreate(Guid RequestId, Guid DeviceId, string Subject, string Description, string Category, string Priority);
 public sealed record SupportTicketVersion(Guid TicketId, long ExpectedVersion);
 public sealed record BulkQueueAssignment(SupportTicketVersion[] Tickets, Guid? QueueId);
 public static class SupportEndpoints
@@ -21,7 +22,7 @@ public static class SupportEndpoints
     public static bool ValidCategory(string? category) => category is not null && Categories.Contains(category);
     private static bool ValidKey(string? key) => key is { Length: 64 } && key.All(Uri.IsHexDigit);
     private static SupportTicketView View(SupportTicket t) => new(t.Id, t.Number, t.DeviceId, t.Subject, t.Description, t.State,
-        t.Resolution, t.Version, t.CreatedAt, t.UpdatedAt, t.Screenshot != null, t.Category);
+        t.Resolution, t.Version, t.CreatedAt, t.UpdatedAt, t.Screenshot != null, t.Category, t.Origin);
     public static void MapSupportEndpoints(this WebApplication app)
     {
         var machine = app.MapGroup("/api/agent/support").WithMetadata(new MachineRequest())
@@ -117,6 +118,33 @@ public static class SupportEndpoints
             return Results.Created($"/api/support/{ticket.Id}", View(ticket));
         });
         var staff = app.MapGroup("/api/support").RequireAuthorization();
+        staff.MapPost("/manual", async (ManualSupportCreate r, HttpContext c, AppDbContext db, PermissionService p) => {
+            if (r.RequestId == Guid.Empty || r.DeviceId == Guid.Empty || string.IsNullOrWhiteSpace(r.Subject) || r.Subject.Trim().Length > 200 ||
+                string.IsNullOrWhiteSpace(r.Description) || r.Description.Trim().Length > 8000 || !ValidCategory(r.Category) || !Priorities.Contains(r.Priority)) return Results.BadRequest();
+            var userId = c.User.UserId();
+            await using var tx = await db.Database.BeginTransactionAsync();
+            await DeviceOperationLock.Acquire(db, r.DeviceId);
+            if (!await p.Allows(userId, "tickets.manage", r.DeviceId)) return Results.Forbid();
+            var device = await db.Devices.AsNoTracking().SingleOrDefaultAsync(x => x.Id == r.DeviceId);
+            if (device is null) return Results.NotFound();
+            var requesterKey = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes("operator:" + userId))).ToLowerInvariant();
+            var existing = await db.SupportTickets.AsNoTracking().SingleOrDefaultAsync(t => t.DeviceId == r.DeviceId && t.RequesterKey == requesterKey && t.RequestId == r.RequestId);
+            if (existing is not null)
+                return existing.Origin == "operator" && existing.Subject == r.Subject.Trim() && existing.Description == r.Description.Trim() && existing.Category == r.Category && existing.Priority == r.Priority
+                    ? Results.Ok(View(existing)) : Results.Conflict();
+            var queueId = await db.SupportQueueRoutingRules.AsNoTracking()
+                .Where(rule => rule.Category == r.Category && (rule.SiteId == device.SiteId || rule.SiteId == null) &&
+                    db.SupportQueues.Any(queue => queue.Id == rule.QueueId && queue.IsActive && (queue.SiteId == null || queue.SiteId == device.SiteId)))
+                .OrderByDescending(rule => rule.SiteId != null).Select(rule => (Guid?)rule.QueueId).FirstOrDefaultAsync();
+            var ticket = new SupportTicket { DeviceId = device.Id, SiteId = device.SiteId, RequesterKey = requesterKey, RequestId = r.RequestId,
+                Origin = "operator", Subject = r.Subject.Trim(), Description = r.Description.Trim(), Category = r.Category, Priority = r.Priority, QueueId = queueId };
+            db.SupportTickets.Add(ticket);
+            db.AuditEvents.Add(new AuditEvent { ActorId = userId, Action = "ticket.manual.create", Target = ticket.Id.ToString() });
+            CoreOutbox.Add(db, "ticket.created", "ticket", ticket.Id,
+                new { ticketId = ticket.Id, deviceId = ticket.DeviceId, siteId = ticket.SiteId, state = ticket.State, category = ticket.Category, queueId = ticket.QueueId, origin = ticket.Origin }, c.TraceIdentifier);
+            await db.SaveChangesAsync(); await tx.CommitAsync();
+            return Results.Created($"/api/support/{ticket.Id}", View(ticket));
+        });
         staff.MapGet("/queues", async (Guid? siteId, HttpContext c, AppDbContext db, PermissionService p) => {
             var userId = c.User.UserId();
             var global = await p.Global(userId);
@@ -197,7 +225,7 @@ public static class SupportEndpoints
             var assigneeTerm=assignee?.Trim().ToLowerInvariant();
             if(!string.IsNullOrEmpty(assigneeTerm))query=query.Where(t=>t.AssigneeId!=null&&db.Users.Any(u=>u.Id==t.AssigneeId&&u.Email!=null&&u.Email.ToLower()==assigneeTerm));
             return Results.Ok(await query.OrderByDescending(t => t.CreatedAt).Take(100)
-                .Select(t => new {t.Id,t.Number,t.DeviceId,t.SiteId,deviceName=db.Devices.Where(d=>d.Id==t.DeviceId).Select(d=>d.Name).FirstOrDefault(),siteName=db.Sites.Where(s=>s.Id==t.SiteId).Select(s=>s.Name).FirstOrDefault(),t.Subject,t.Description,t.State,t.Priority,t.Category,t.QueueId,queueName=t.QueueId==null?null:db.SupportQueues.Where(q=>q.Id==t.QueueId).Select(q=>q.Name).FirstOrDefault(),t.AssigneeId,assigneeEmail=t.AssigneeId==null?null:db.Users.Where(u=>u.Id==t.AssigneeId).Select(u=>u.Email).FirstOrDefault(),canManage=manageGlobal||manageGrants.Any(g=>g.SiteId==t.SiteId||g.DeviceId==t.DeviceId||(g.GroupId!=null&&db.Devices.Any(d=>d.Id==t.DeviceId&&d.GroupId==g.GroupId))),t.Resolution,t.Version,t.CreatedAt,t.UpdatedAt,hasScreenshot=t.Screenshot != null}).ToArrayAsync());
+                .Select(t => new {t.Id,t.Number,t.DeviceId,t.SiteId,deviceName=db.Devices.Where(d=>d.Id==t.DeviceId).Select(d=>d.Name).FirstOrDefault(),siteName=db.Sites.Where(s=>s.Id==t.SiteId).Select(s=>s.Name).FirstOrDefault(),t.Subject,t.Description,t.State,t.Priority,t.Category,t.Origin,t.QueueId,queueName=t.QueueId==null?null:db.SupportQueues.Where(q=>q.Id==t.QueueId).Select(q=>q.Name).FirstOrDefault(),t.AssigneeId,assigneeEmail=t.AssigneeId==null?null:db.Users.Where(u=>u.Id==t.AssigneeId).Select(u=>u.Email).FirstOrDefault(),canManage=manageGlobal||manageGrants.Any(g=>g.SiteId==t.SiteId||g.DeviceId==t.DeviceId||(g.GroupId!=null&&db.Devices.Any(d=>d.Id==t.DeviceId&&d.GroupId==g.GroupId))),t.Resolution,t.Version,t.CreatedAt,t.UpdatedAt,hasScreenshot=t.Screenshot != null}).ToArrayAsync());
         });
         staff.MapPut("/bulk-queue", async (BulkQueueAssignment r, HttpContext c, AppDbContext db, PermissionService p) => {
             if (r.Tickets is null || r.Tickets.Length is < 1 or > 50 || r.Tickets.Any(x => x.TicketId == Guid.Empty || x.ExpectedVersion < 1) ||

@@ -80,6 +80,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
         b.Entity<SupportTicket>().Property(x => x.Number).UseIdentityByDefaultColumn();
         b.Entity<SupportTicket>().HasIndex(x => x.Number).IsUnique();
         b.Entity<SupportTicket>().Property(x => x.RequesterKey).HasMaxLength(64);
+        b.Entity<SupportTicket>().Property(x => x.Origin).HasMaxLength(20).HasDefaultValue("device");
         b.Entity<SupportTicket>().Property(x => x.Subject).HasMaxLength(200);
         b.Entity<SupportTicket>().Property(x => x.Description).HasMaxLength(8000);
         b.Entity<SupportTicket>().Property(x => x.Resolution).HasMaxLength(8000);

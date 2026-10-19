@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from './api';
 import { Icon } from './Icon';
 
-type Ticket = { id:string; number:number; deviceId:string; siteId:string; deviceName:string|null; siteName:string|null; subject:string; description:string; state:string; priority:string; category:string; queueId:string|null; queueName:string|null; assigneeId:string|null; assigneeEmail:string|null; canManage:boolean; resolution:string|null; version:number; createdAt:string; hasScreenshot:boolean };
+type Ticket = { id:string; number:number; deviceId:string; siteId:string; deviceName:string|null; siteName:string|null; subject:string; description:string; state:string; priority:string; category:string; origin:string; queueId:string|null; queueName:string|null; assigneeId:string|null; assigneeEmail:string|null; canManage:boolean; resolution:string|null; version:number; createdAt:string; hasScreenshot:boolean };
 type TicketSummary = { total:number; open:number; inProgress:number; urgent:number };
 type Assignee = { id:string; email:string };
 type Queue = { id:string; name:string; siteId?:string|null };
@@ -12,7 +12,7 @@ const labels: Record<string,string> = {open:'Aperto',in_progress:'In lavorazione
 const priorities: Record<string,string> = {low:'Bassa',normal:'Normale',high:'Alta',urgent:'Urgente'};
 const categories: Record<string,string> = {general:'Generale',hardware:'Hardware',software:'Software',network:'Rete',account:'Account',other:'Altro'};
 const date=(value:string)=>new Date(value).toLocaleString('it-IT');
-export function SupportDesk({visibleDeviceIds,onOpenDevice,deviceId,sites=[]}:{visibleDeviceIds:string[];onOpenDevice:(id:string)=>Promise<void>;deviceId?:string;sites?:{id:string;name:string;isArchived?:boolean}[]}) {
+export function SupportDesk({visibleDeviceIds,onOpenDevice,deviceId,sites=[],devices=[]}:{visibleDeviceIds:string[];onOpenDevice:(id:string)=>Promise<void>;deviceId?:string;sites?:{id:string;name:string;isArchived?:boolean}[];devices?:{id:string;name:string;siteId:string|null}[]}) {
   const [tickets,setTickets] = useState<Ticket[]>([]);
   const [summary,setSummary]=useState<TicketSummary|null>(null);
   const [queues,setQueues]=useState<Queue[]>([]);
@@ -37,6 +37,12 @@ export function SupportDesk({visibleDeviceIds,onOpenDevice,deviceId,sites=[]}:{v
   const [queueId,setQueueId]=useState('');
   const [assigneeId,setAssigneeId]=useState('');
   const [assignees,setAssignees]=useState<Assignee[]>([]);
+  const [manualOpen,setManualOpen]=useState(false);
+  const [manualDevice,setManualDevice]=useState(deviceId??'');
+  const [manualSubject,setManualSubject]=useState('');
+  const [manualDescription,setManualDescription]=useState('');
+  const [manualCategory,setManualCategory]=useState('general');
+  const [manualPriority,setManualPriority]=useState('normal');
   const panel=useRef<HTMLElement>(null);
   const reply=useRef<HTMLTextAreaElement>(null);
   const preview=useRef<HTMLDialogElement>(null);
@@ -71,8 +77,16 @@ export function SupportDesk({visibleDeviceIds,onOpenDevice,deviceId,sites=[]}:{v
   }
   useEffect(()=>{void work(load);},[deviceId]);
   useEffect(()=>{if(selected)panel.current?.scrollIntoView({behavior:'smooth',block:'start'});},[selected?.id]);
-  return <section className="panel"><h2><Icon name="support"/>Richieste di assistenza</h2>
+  const createableDevices=deviceId?devices.filter(x=>x.id===deviceId):devices;
+  return <section className="panel"><div className="section-heading"><h2><Icon name="support"/>Richieste di assistenza</h2>{createableDevices.length>0&&<button className="secondary compact" type="button" onClick={()=>{setManualDevice(deviceId??createableDevices[0]!.id);setManualOpen(value=>!value);setError('');}}><Icon name="support" size={15}/>{manualOpen?'Chiudi':'Nuovo ticket'}</button>}</div>
     <p>Fino a 100 richieste nei tuoi ambiti autorizzati. Cerca per oggetto o nome del computer.</p>
+    {manualOpen&&<form className="chat-composer manual-ticket-form" onSubmit={e=>{e.preventDefault();void work(async()=>{await api('/support/manual','POST',{requestId:crypto.randomUUID(),deviceId:manualDevice,subject:manualSubject,description:manualDescription,category:manualCategory,priority:manualPriority});setManualOpen(false);setManualSubject('');setManualDescription('');await load();});}}>
+      <label>Dispositivo<select required value={manualDevice} disabled={!!deviceId||busy} onChange={e=>setManualDevice(e.target.value)}>{createableDevices.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+      <label>Oggetto<input required maxLength={200} value={manualSubject} disabled={busy} onChange={e=>setManualSubject(e.target.value)}/></label>
+      <label>Descrizione<textarea required maxLength={8000} value={manualDescription} disabled={busy} onChange={e=>setManualDescription(e.target.value)}/></label>
+      <div className="action-row"><label>Categoria<select value={manualCategory} disabled={busy} onChange={e=>setManualCategory(e.target.value)}>{Object.entries(categories).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label><label>Priorità<select value={manualPriority} disabled={busy} onChange={e=>setManualPriority(e.target.value)}>{Object.entries(priorities).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label></div>
+      <small>Il ticket sarà associato al dispositivo e alla sua sede corrente. La creazione richiede tickets.manage sul dispositivo.</small><button disabled={busy||!manualDevice||!manualSubject.trim()||!manualDescription.trim()}><Icon name="arrow" size={15}/>Crea ticket</button>{error&&<p role="alert">{error}</p>}
+    </form>}
     <div className="ticket-summary" aria-label="Riepilogo ticket nei tuoi ambiti"><article><small>Ticket totali</small><strong>{summary?.total??'—'}</strong></article><article><small>Aperti</small><strong>{summary?.open??'—'}</strong></article><article><small>In lavorazione</small><strong>{summary?.inProgress??'—'}</strong></article><article className="urgent"><small>Urgenti non chiusi</small><strong>{summary?.urgent??'—'}</strong></article></div>
     {error&&!selected&&<p role="alert">{error}</p>}
     <form className="support-toolbar" onSubmit={e=>{e.preventDefault();void work(load);}}>
@@ -94,7 +108,7 @@ export function SupportDesk({visibleDeviceIds,onOpenDevice,deviceId,sites=[]}:{v
       <div className="section-heading"><div><span className="eyebrow">CONVERSAZIONE · OD-{String(selected.number).padStart(6,'0')}</span><h3>{selected.subject}</h3><span className="device-name"><Icon name="devices" size={16}/>{selected.deviceName||'Dispositivo non disponibile'}</span></div><button className="secondary compact" type="button" disabled={busy} onClick={()=>{setSelected(null);setThread(null);setError('');}}><Icon name="close" size={15}/>Chiudi dettaglio</button></div>
       {error&&<p role="alert">{error}</p>}
       <div className="conversation-log" role="log" aria-label="Messaggi del ticket" aria-live="polite">
-        <article className="chat-message requester"><div className="chat-meta"><strong>Richiesta dell’utente</strong><time>{date(selected.createdAt)}</time></div><p>{selected.description}</p>
+        <article className="chat-message requester"><div className="chat-meta"><strong>{selected.origin==='operator'?'Ticket inserito da assistenza':'Richiesta dell’utente'}</strong><time>{date(selected.createdAt)}</time></div><p>{selected.description}</p>
           {selected.hasScreenshot&&<button className="chat-image-button" type="button" onClick={()=>preview.current?.showModal()} aria-label="Ingrandisci screenshot"><img src={`/api/support/${selected.id}/screenshot?inline=true`} alt="Screenshot allegato alla richiesta" loading="lazy"/><span><Icon name="search" size={14}/>Ingrandisci screenshot</span></button>}
         </article>
         {!thread&&<p>Caricamento conversazione…</p>}

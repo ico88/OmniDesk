@@ -37,6 +37,7 @@ public sealed class SupportTicket
     public Guid DeviceId { get; set; }
     public Guid SiteId { get; set; }
     public string RequesterKey { get; set; } = "";
+    public string Origin { get; set; } = "device";
     public string Subject { get; set; } = "";
     public string Description { get; set; } = "";
     public string State { get; set; } = "open";

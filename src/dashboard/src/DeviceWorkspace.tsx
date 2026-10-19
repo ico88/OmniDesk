@@ -202,7 +202,7 @@ export function DeviceWorkspace({ device, admin, groups, sites, onDeviceChanged,
       </>}
     </DevicePanel>}
 
-    {activeTab === 'tickets' && <DevicePanel id="tickets">{count('tickets.view') ? <SupportDesk key={device.id} sites={sites} deviceId={device.id} visibleDeviceIds={[]} onOpenDevice={async () => undefined}/> : <p>Non hai il permesso tickets.view su questo dispositivo.</p>}</DevicePanel>}
+    {activeTab === 'tickets' && <DevicePanel id="tickets">{count('tickets.view') ? <SupportDesk key={device.id} sites={sites} devices={[{id:device.id,name:device.name,siteId:device.siteId}]} deviceId={device.id} visibleDeviceIds={[]} onOpenDevice={async () => undefined}/> : <p>Non hai il permesso tickets.view su questo dispositivo.</p>}</DevicePanel>}
 
     {(['processes', 'services', 'events'] as const).includes(activeTab as 'processes' | 'services' | 'events') && <DevicePanel id={activeTab}>
       {(() => {

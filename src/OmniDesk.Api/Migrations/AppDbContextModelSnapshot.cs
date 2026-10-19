@@ -1044,6 +1044,14 @@ namespace OmniDesk.Api.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
+                    b.Property<string>("Origin")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("device");
+
+
                     b.Property<string>("Resolution")
                         .HasMaxLength(8000)
                         .HasColumnType("character varying(8000)");
