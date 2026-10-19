@@ -31,7 +31,7 @@ public static class UpdateEndpoints
             var existing = await db.UpdateJobs.AsNoTracking().SingleOrDefaultAsync(x => x.DeviceId == id && x.RequestId == request.RequestId);
             if (existing is not null) return existing.Kind == "agent.update" && existing.Payload == JsonSerializer.Serialize(new AgentUpdatePackage(release.Version, release.MsiSha256, release.MsiSize.Value))
                 ? Results.Ok(new { existing.Id, existing.State }) : Results.Conflict();
-            var active = await db.UpdateJobs.AnyAsync(x => x.DeviceId == id && (x.State == "queued" || x.State == "leased"));
+            var active = await db.UpdateJobs.AnyAsync(x => x.DeviceId == id && !x.Kind.StartsWith("diagnostics.") && (x.State == "queued" || x.State == "leased"));
             if (active) return Results.Conflict(new { code = "job_active", message = "È già in corso un lavoro per questo dispositivo." });
             var package = new AgentUpdatePackage(release.Version, release.MsiSha256, release.MsiSize.Value);
             var job = new UpdateJob { DeviceId = id, RequestId = request.RequestId, RequestedBy = c.User.UserId(), Kind = "agent.update", Payload = JsonSerializer.Serialize(package) };
@@ -57,6 +57,8 @@ public static class UpdateEndpoints
             if (existing is not null)
                 return existing.Kind == kind && JsonSerializer.Deserialize<UpdateSelection[]>(existing.Payload)!.SequenceEqual(r.Updates ?? [])
                     ? Results.Ok(new { existing.Id, existing.State }) : Results.Conflict();
+            if (await db.UpdateJobs.AnyAsync(x => x.DeviceId == id && !x.Kind.StartsWith("diagnostics.") && (x.State == "queued" || x.State == "leased")))
+                return Results.Conflict(new { code = "job_active", message = "Un altro intervento è già in coda o in esecuzione. Attendi il completamento e riprova." });
             var job = new UpdateJob { DeviceId = id, RequestId = r.RequestId, RequestedBy = c.User.UserId(), Kind = kind, Payload = JsonSerializer.Serialize(r.Updates ?? []) };
             db.UpdateJobs.Add(job); db.AuditEvents.Add(Event(c.User.UserId(), "update.queue." + kind, job.Id));
             try { await db.SaveChangesAsync(); }
@@ -89,7 +91,9 @@ public static class UpdateEndpoints
             var jobKind = "diagnostics." + kind;
             var existing = await db.UpdateJobs.AsNoTracking().SingleOrDefaultAsync(x => x.DeviceId == id && x.RequestId == r.RequestId);
             if (existing is not null) return existing.Kind == jobKind ? Results.Ok(new { existing.Id, existing.State }) : Results.Conflict();
-            if (await db.UpdateJobs.AnyAsync(x => x.DeviceId == id && (x.State == "queued" || x.State == "leased"))) return Results.Conflict(new { code = "job_active", message = "È già in corso un lavoro per questo dispositivo." });
+            var pending = await db.UpdateJobs.AsNoTracking().Where(x => x.DeviceId == id && x.Kind == jobKind && (x.State == "queued" || x.State == "leased"))
+                .OrderByDescending(x => x.CreatedAt).FirstOrDefaultAsync();
+            if (pending is not null) return Results.Ok(new { pending.Id, pending.State });
             var job = new UpdateJob { DeviceId = id, RequestId = r.RequestId, RequestedBy = c.User.UserId(), Kind = jobKind, Payload = "[]" };
             db.UpdateJobs.Add(job); db.AuditEvents.Add(Event(c.User.UserId(), jobKind + ".queue", job.Id));
             try { await db.SaveChangesAsync(); } catch (DbUpdateException e) when (e.InnerException is Npgsql.PostgresException { SqlState: "23505" }) { return Results.Conflict(); }
@@ -118,7 +122,7 @@ public static class UpdateEndpoints
                 var existingControl = existing.Kind == kind ? JsonSerializer.Deserialize<ServiceControlPayload>(existing.Payload) : null;
                 return existingControl == control ? Results.Ok(new { existing.Id, existing.State }) : Results.Conflict();
             }
-            if (await db.UpdateJobs.AnyAsync(x => x.DeviceId == id && (x.State == "queued" || x.State == "leased"))) return Results.Conflict(new { code = "job_active", message = "È già in corso un lavoro per questo dispositivo." });
+            if (await db.UpdateJobs.AnyAsync(x => x.DeviceId == id && !x.Kind.StartsWith("diagnostics.") && (x.State == "queued" || x.State == "leased"))) return Results.Conflict(new { code = "job_active", message = "Un altro intervento è già in coda o in esecuzione. Attendi il completamento e riprova." });
             var job = new UpdateJob { DeviceId = id, RequestId = r.RequestId, RequestedBy = c.User.UserId(), Kind = kind, Payload = payload };
             db.UpdateJobs.Add(job);
             db.AuditEvents.Add(Event(c.User.UserId(), "service.control.queue", job.Id));
@@ -168,7 +172,7 @@ public static class UpdateEndpoints
                 var existingControl = existing.Kind == "process.kill" ? JsonSerializer.Deserialize<ProcessControlPayload>(existing.Payload) : null;
                 return existingControl == control ? Results.Ok(new { existing.Id, existing.State }) : Results.Conflict();
             }
-            if (await db.UpdateJobs.AnyAsync(x => x.DeviceId == id && (x.State == "queued" || x.State == "leased"))) return Results.Conflict(new { code = "job_active", message = "È già in corso un lavoro per questo dispositivo." });
+            if (await db.UpdateJobs.AnyAsync(x => x.DeviceId == id && !x.Kind.StartsWith("diagnostics.") && (x.State == "queued" || x.State == "leased"))) return Results.Conflict(new { code = "job_active", message = "Un altro intervento è già in coda o in esecuzione. Attendi il completamento e riprova." });
             var job = new UpdateJob { DeviceId = id, RequestId = r.RequestId, RequestedBy = c.User.UserId(), Kind = "process.kill", Payload = payload };
             db.UpdateJobs.Add(job);
             db.AuditEvents.Add(Event(c.User.UserId(), "process.kill.queue", job.Id));

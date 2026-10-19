@@ -1136,10 +1136,6 @@ namespace OmniDesk.Api.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("DeviceId")
-                        .IsUnique()
-                        .HasFilter("\"State\" IN ('queued','leased')");
-
                     b.HasIndex("DeviceId", "RequestId")
                         .IsUnique();
 

@@ -13,8 +13,9 @@ export async function api<T>(path: string, method = 'GET', body?: unknown): Prom
   });
   if (!response.ok) {
     if (response.status === 400 || response.status === 409) {
-      const detail = await response.json().catch(() => null) as { error?: unknown } | null;
-      if (typeof detail?.error === 'string' && detail.error.length <= 300) throw new Error(detail.error);
+      const detail = await response.json().catch(() => null) as { error?: unknown; message?: unknown } | null;
+      const message = typeof detail?.error === 'string' ? detail.error : detail?.message;
+      if (typeof message === 'string' && message.length <= 300) throw new Error(message);
     }
     throw new Error(response.status === 401 ? 'Sessione scaduta o credenziali non valide' : response.status === 403 ? 'Permesso non concesso' : `Operazione non riuscita (${response.status})`);
   }

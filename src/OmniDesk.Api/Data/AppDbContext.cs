@@ -114,7 +114,6 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
         b.Entity<DashboardLayout>().Property(x => x.Widgets).HasColumnType("jsonb");
         b.Entity<UpdateJob>().HasOne<Device>().WithMany().HasForeignKey(x => x.DeviceId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<UpdateJob>().HasIndex(x => new { x.DeviceId, x.RequestId }).IsUnique();
-        b.Entity<UpdateJob>().HasIndex(x => x.DeviceId).IsUnique().HasFilter("\"State\" IN ('queued','leased')");
         b.Entity<UpdateJob>().Property(x => x.Payload).HasColumnType("jsonb");
         b.Entity<UpdateJob>().Property(x => x.Result).HasColumnType("jsonb");
         b.Entity<MeshDeviceMapping>().HasKey(x => x.DeviceId);
