@@ -19,10 +19,12 @@ function Wait-Agent {
     } while ([DateTime]::UtcNow -lt $limit)
     throw 'Servizio non avviato o non recuperato dopo crash.'
 }
+$installLog = Join-Path (Get-Location) 'artifacts/msi-install.log'
+$uninstallLog = Join-Path (Get-Location) 'artifacts/msi-uninstall.log'
 $attempted = $false
 try {
     $attempted = $true
-    $install = Start-Process msiexec.exe -ArgumentList @('/i',('"'+$msi+'"'),'/qn','/norestart') -Wait -PassThru
+    $install = Start-Process msiexec.exe -ArgumentList @('/i',('"'+$msi+'"'),'/qn','/norestart','/l*v',('"'+$installLog+'"')) -Wait -PassThru
     if ($install.ExitCode -notin @(0,3010)) { throw "Installazione MSI fallita: $($install.ExitCode)" }
     $service = Wait-Agent
     if ($service.StartMode -ne 'Auto' -or $service.StartName -ne 'LocalSystem') { throw 'Avvio o identita servizio non conformi.' }
@@ -47,9 +49,16 @@ try {
     Write-Host 'PASS MSI: Agent/Tray, avvio automatico SYSTEM, startup Tray, DACL e recovery dopo crash.'
     Write-Host 'Non verificati: logon Tray, pipe interattiva, screenshot, enrollment LAN, remoto e upgrade.'
 }
+catch {
+    if (Test-Path $installLog) { Get-Content $installLog -Tail 150 | Write-Host }
+    Get-WinEvent -FilterHashtable @{LogName='Application'; StartTime=[DateTime]::Now.AddMinutes(-5)} -ErrorAction SilentlyContinue |
+        Where-Object { $_.Message -match 'OmniDesk|OmniDeskAgent' } | Select-Object -First 5 |
+        ForEach-Object { Write-Host $_.Message }
+    throw
+}
 finally {
     if ($attempted) {
-        $uninstall = Start-Process msiexec.exe -ArgumentList @('/x',('"'+$msi+'"'),'/qn','/norestart') -Wait -PassThru
+        $uninstall = Start-Process msiexec.exe -ArgumentList @('/x',('"'+$msi+'"'),'/qn','/norestart','/l*v',('"'+$uninstallLog+'"')) -Wait -PassThru
         if ($uninstall.ExitCode -notin @(0,1605,3010)) { throw "Disinstallazione MSI fallita: $($uninstall.ExitCode)" }
         if (Get-Service OmniDeskAgent -ErrorAction SilentlyContinue) { throw 'Servizio residuo dopo uninstall.' }
         if (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run' -Name OmniDeskTray -ErrorAction SilentlyContinue) { throw 'Startup Tray residuo dopo uninstall.' }
