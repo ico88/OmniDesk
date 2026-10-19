@@ -881,6 +881,13 @@ namespace OmniDesk.Api.Migrations
                     b.Property<string>("AssigneeId")
                         .HasColumnType("text");
 
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasDefaultValue("general");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -950,6 +957,8 @@ namespace OmniDesk.Api.Migrations
 
                     b.HasIndex("DeviceId", "RequesterKey", "RequestId")
                         .IsUnique();
+
+                    b.HasIndex("SiteId", "Category", "State", "CreatedAt");
 
                     b.HasIndex("SiteId", "State", "Priority", "CreatedAt");
 

@@ -9,6 +9,7 @@ namespace OmniDesk.Tray.Windows;
 internal sealed class SupportForm : Form
 {
     private readonly TextBox subject = new() { MaxLength = 200, Dock = DockStyle.Top, PlaceholderText = "Oggetto" };
+    private readonly ComboBox category = new() { Dock = DockStyle.Top, DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly TextBox description = new() { MaxLength = 8000, Multiline = true, Height = 130, Dock = DockStyle.Top, PlaceholderText = "Descrivi il problema" };
     private readonly CheckBox consent = new() { Text = "Acconsento ad allegare l'immagine mostrata al team IT", AutoSize = true, Dock = DockStyle.Top };
     private readonly PictureBox preview = new() { Height = 170, Dock = DockStyle.Top, SizeMode = PictureBoxSizeMode.Zoom };
@@ -28,7 +29,8 @@ internal sealed class SupportForm : Form
         Text = "OmniDesk — Richiedi assistenza"; Width = 660; Height = 750; StartPosition = FormStartPosition.CenterScreen;
         var buttons = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 65 };
         buttons.Controls.AddRange([capture, remove, send, refresh]);
-        Controls.Add(tickets); Controls.Add(buttons); Controls.Add(consent); Controls.Add(preview); Controls.Add(description); Controls.Add(subject); Controls.Add(result);
+        category.Items.AddRange(["Generale", "Hardware", "Software", "Rete", "Account", "Altro"]); category.SelectedIndex = 0;
+        Controls.Add(tickets); Controls.Add(buttons); Controls.Add(consent); Controls.Add(preview); Controls.Add(description); Controls.Add(category); Controls.Add(subject); Controls.Add(result);
         capture.Click += (_, _) => CaptureScreen(); remove.Click += (_, _) => ClearImage();
         send.Click += async (_, _) => await Send(); refresh.Click += async (_, _) => await List();
         Shown += async (_, _) => await List();
@@ -86,7 +88,7 @@ internal sealed class SupportForm : Form
     private async Task Work(Func<Task> action)
     {
         if (busy) return; busy = true;
-        send.Enabled = refresh.Enabled = capture.Enabled = remove.Enabled = subject.Enabled = description.Enabled = consent.Enabled = false;
+        send.Enabled = refresh.Enabled = capture.Enabled = remove.Enabled = subject.Enabled = description.Enabled = category.Enabled = consent.Enabled = false;
         try { await action(); }
         catch (Exception e) when (!stop.IsCancellationRequested)
         {
@@ -104,24 +106,24 @@ internal sealed class SupportForm : Form
         finally
         {
             busy = false;
-            if (!IsDisposed) send.Enabled = refresh.Enabled = capture.Enabled = remove.Enabled = subject.Enabled = description.Enabled = consent.Enabled = true;
+            if (!IsDisposed) send.Enabled = refresh.Enabled = capture.Enabled = remove.Enabled = subject.Enabled = description.Enabled = category.Enabled = consent.Enabled = true;
         }
     }
     private Task List() => Work(async () => {
         var response = await Call(new(TrayProtocol.Version,Guid.NewGuid(),TrayProtocol.ListTicketsMethod));
         if (stop.IsCancellationRequested) return;
         result.Text = response.Error ?? "Ticket aggiornati";
-        if (response.Error is null) tickets.Text = string.Join(Environment.NewLine + Environment.NewLine,response.Tickets.Select(t => $"OD-{t.Number:000000} · {t.CreatedAt:g} — {t.Subject}\r\nStato: {t.State}\r\n{t.Resolution}"));
+        if (response.Error is null) tickets.Text = string.Join(Environment.NewLine + Environment.NewLine,response.Tickets.Select(t => $"OD-{t.Number:000000} · {t.CreatedAt:g} — {t.Subject}\r\nCategoria: {t.Category} · Stato: {t.State}\r\n{t.Resolution}"));
     });
     private Task Send() => Work(async () => {
         if (string.IsNullOrWhiteSpace(subject.Text) || string.IsNullOrWhiteSpace(description.Text)) { result.Text = "Compila oggetto e descrizione."; return; }
         if (screenshot is not null && !consent.Checked) { result.Text = "Per allegare lo screenshot occorre il consenso; puoi anche rimuoverlo."; return; }
         var image = screenshot is null ? null : Convert.ToBase64String(screenshot);
         if (pending is null || pending.Subject != subject.Text || pending.Description != description.Text || pending.ScreenshotBase64 != image)
-            pending = new(Guid.NewGuid(),subject.Text,description.Text,image,consent.Checked);
+            pending = new(Guid.NewGuid(),subject.Text,description.Text,image,consent.Checked, category.SelectedIndex switch { 1 => "hardware", 2 => "software", 3 => "network", 4 => "account", 5 => "other", _ => "general" });
         var response = await Call(new(TrayProtocol.Version,Guid.NewGuid(),TrayProtocol.CreateTicketMethod,pending));
         if (stop.IsCancellationRequested) return;
-        result.Text = response.Error ?? $"Richiesta registrata: {response.Tickets[0].Id}";
+        result.Text = response.Error ?? $"Richiesta registrata: OD-{response.Tickets[0].Number:000000}";
         if (response.Error is null) { pending = null; subject.Clear(); description.Clear(); ClearImage(); }
     });
     protected override void Dispose(bool disposing)
