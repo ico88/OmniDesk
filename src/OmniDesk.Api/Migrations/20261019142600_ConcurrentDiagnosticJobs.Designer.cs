@@ -12,7 +12,7 @@ using OmniDesk.Api.Data;
 namespace OmniDesk.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20261019152000_ConcurrentDiagnosticJobs")]
+    [Migration("20261019142600_ConcurrentDiagnosticJobs")]
     partial class ConcurrentDiagnosticJobs
     {
         /// <inheritdoc />
