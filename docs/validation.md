@@ -926,7 +926,7 @@ lo scenario verifica conteggio device-scoped e zero conteggi per un account senz
 conteggio UI; `docker compose build api dashboard` e `git diff --check` passati.
 Deploy LAN completato dopo il CI Linux con backup protetto `.backups/20261019T134504Z.FHXrbK`; zero sessioni remote prima/dopo lo stop API, nessuna migrazione necessaria, ricreati API/dashboard. `verify-lan.py` ha confermato CA, readiness, asset e rifiuto anonimo; il bundle pubblico contiene i nuovi contatori. Nessun login o ticket di produzione è stato creato.
 
-CI Linux del commit `a331894` completato con successo: test, configurazione Compose, build API/dashboard e smoke Chromium. Il workflow Windows Agent/MSI resta in corso e non è richiesto dal riepilogo ticket.
+CI Linux del commit `a331894` completato con test, configurazione Compose, build API/dashboard e smoke Chromium; workflow Windows dello stesso commit `39262750153` concluso con successo.
 
 ### Risposta del richiedente dalla Tray — sorgenti 0.8.8
 
@@ -938,4 +938,28 @@ obsoleta e payload IPC invalidi. `docker compose config -q`,
 `git diff --check` passati. La macchina di
 sviluppo non ha il comando `dotnet`; la build nativa Agent/Tray/MSI verrà verificata
 dal workflow GitHub Windows dopo il push. Nessuna installazione Windows o deploy
-LAN eseguiti in questo incremento.
+LAN erano ancora stati eseguiti al momento di questa nota.
+
+### CI e kit LAN Agent/Tray 0.8.8
+
+Commit `4d515e5b9f6783b4c4a6d41edf1096448bf1ac26`: CI Linux
+[39265279164](https://github.com/ico88/OmniDesk/actions/runs/39265279164) e CI
+Windows [39265279323](https://github.com/ico88/OmniDesk/actions/runs/39265279323)
+completate con successo. Windows ha compilato Agent/Tray/MSI e passato
+installazione, recovery, disinstallazione e upgrade/repair/rollback da baseline
+0.6.0 e 0.7.0. L’artifact Windows non prova l’installazione interattiva o la
+conversazione sul PC pilota.
+
+Artifact Windows confezionato con `scripts/package-lan-kit.py` in
+`artifacts/windows-lan/OmniDesk.Windows.LAN-0.8.8.zip` e pubblicato nel volume
+`/packages` montato dall’API, senza riavvio o stop dei servizi. Manifesto letto
+anche dal container API: commit sopra, ZIP SHA-256
+`ae988c07bda5a64c3c8404efc5341c719a40b0b937a2addbfbfb21374138edd3`, MSI
+SHA-256 `530894b8bd4ddc518872109694456d2377338df74931a8ba9c7d4bfdc773b8bd`.
+`verify-lan.py` ha confermato readiness HTTPS/CA, dashboard e rifiuto anonimo.
+Il test HTTP autenticato del download non è stato eseguito; non è stato usato né
+creato un account o ticket di produzione. Il pacchetto resta unsigned, per
+collaudo LAN; non è una release firmata né una validazione di Defender.
+Il packager ricava la versione dal nome `windows-X.Y.Z` se `--version` è omesso;
+la prova in directory temporanea è passata e `ZipFile.testzip()` ha restituito
+`None` per i cinque file del kit.

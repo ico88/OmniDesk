@@ -279,8 +279,10 @@ al dispositivo firmatario sia alla chiave SID derivata dall’Agent; applica
 versione attesa, limite anti-spam e rifiuto delle risposte a ticket risolti o
 chiusi. Le note interne non vengono restituite alla Tray. IPC v1 ha nuovi metodi
 tipizzati e rifiuta payload non validi. Suite Linux API/PostgreSQL, IPC, build
-dashboard e Vitest passati; compilazione/build MSI Windows e prova sulla Tray
-installata restano gate CI/client. La candidata Agent/Tray/MSI passa a 0.8.8.
+dashboard e Vitest passati; CI Windows 39265279323 ha compilato e collaudato
+MSI 0.8.8 (install/recovery/uninstall e upgrade/repair/rollback). Il kit è
+pubblicato nel volume LAN della UI. La prova della conversazione sulla Tray
+installata resta aperta.
 
 
 ### SD1 — priorità e assegnazione ticket — sorgenti e test verificati
