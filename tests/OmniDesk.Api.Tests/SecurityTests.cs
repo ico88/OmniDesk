@@ -114,6 +114,14 @@ public sealed class SecurityTests : IClassFixture<ApiFactory>, IAsyncLifetime
         Assert.Equal(HttpStatusCode.NoContent, (await admin.DeleteAsync($"/api/admin/grants/{grantId}")).StatusCode);
         Assert.Empty((await scoped.GetFromJsonAsync<Device[]>("/api/devices"))!);
         var siteId = Guid.Parse("11111111-1111-4111-8111-111111111111");
+        var newSiteResponse = await admin.PostAsJsonAsync("/api/admin/sites", new { name = "Integration branch" });
+        Assert.Equal(HttpStatusCode.Created, newSiteResponse.StatusCode);
+        var newSiteId = (await newSiteResponse.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("id").GetGuid();
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.Contains(await db.CoreOutboxEvents.ToListAsync(), x => x.EventType == "site.created" && x.AggregateId == newSiteId);
+        }
         var siteGrant = await admin.PostAsJsonAsync("/api/admin/grants", new { userId = scopedId, role = "Viewer", siteId });
         Assert.Equal(HttpStatusCode.Created, siteGrant.StatusCode);
         Assert.Equal(2, (await scoped.GetFromJsonAsync<Device[]>("/api/devices"))!.Length);

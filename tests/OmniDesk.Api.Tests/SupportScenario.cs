@@ -3,6 +3,9 @@ using System.IO.Compression;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using OmniDesk.Api.Data;
 using OmniDesk.Contracts;
 using Xunit;
 
@@ -27,7 +30,7 @@ public static class SupportScenario
         using (var z = new ZLibStream(compressed,CompressionLevel.Fastest,true)) z.Write(new byte[]{0,128,128,128,255});
         Chunk("IDAT",compressed.ToArray()); Chunk("IEND",[]); return png.ToArray();
     }
-    public static async Task Run(HttpClient admin, HttpClient scoped, HttpClient agent, Func<string> assertion, Guid device)
+    public static async Task Run(ApiFactory factory, HttpClient admin, HttpClient scoped, HttpClient agent, Func<string> assertion, Guid device)
     {
         void Auth() => agent.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer",assertion());
         var owner = new string('A',64); var other = new string('B',64);
@@ -40,6 +43,14 @@ public static class SupportScenario
         Assert.Equal(HttpStatusCode.Created,response.StatusCode);
         var ticket = (await response.Content.ReadFromJsonAsync<SupportTicketView>())!;
         Assert.Equal(device,ticket.DeviceId); Assert.True(ticket.HasScreenshot);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var evt = await db.CoreOutboxEvents.SingleAsync(x => x.EventType == "ticket.created" && x.AggregateId == ticket.Id);
+            Assert.Contains(device.ToString(), evt.Payload);
+            Assert.DoesNotContain(create.Description, evt.Payload);
+            Assert.DoesNotContain(create.ScreenshotBase64!, evt.Payload);
+        }
         Auth(); Assert.Equal(HttpStatusCode.OK,(await agent.PostAsJsonAsync("/api/agent/support",new SupportIntake(owner,create))).StatusCode);
         Auth(); Assert.Equal(HttpStatusCode.Conflict,(await agent.PostAsJsonAsync("/api/agent/support",new SupportIntake(owner,create with { Subject = "different" }))).StatusCode);
         Auth(); Assert.Empty((await agent.GetFromJsonAsync<SupportTicketView[]>($"/api/agent/support/{other}"))!);
@@ -70,6 +81,13 @@ public static class SupportScenario
         Assert.Contains("Scrivi una risposta",await invalid.Content.ReadAsStringAsync());
         Assert.Equal(HttpStatusCode.BadRequest,(await admin.PutAsJsonAsync($"/api/support/{ticket.Id}",new SupportEdit(1,"resolved",null))).StatusCode);
         Assert.Equal(HttpStatusCode.NoContent,(await admin.PutAsJsonAsync($"/api/support/{ticket.Id}",new SupportEdit(1,"resolved","Risolto fixture"))).StatusCode);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var evt = await db.CoreOutboxEvents.SingleAsync(x => x.EventType == "ticket.updated" && x.AggregateId == ticket.Id);
+            Assert.Contains("resolved", evt.Payload);
+            Assert.DoesNotContain("Risolto fixture", evt.Payload);
+        }
         Assert.Equal(HttpStatusCode.Conflict,(await admin.PutAsJsonAsync($"/api/support/{ticket.Id}",new SupportEdit(1,"closed","Stale"))).StatusCode);
         var conversation = await admin.GetFromJsonAsync<System.Text.Json.JsonElement>($"/api/support/{ticket.Id}/messages");
         var messages = conversation.GetProperty("messages").EnumerateArray().ToArray();

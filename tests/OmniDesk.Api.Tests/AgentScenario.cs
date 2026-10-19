@@ -39,6 +39,13 @@ public static class AgentScenario
         var enrolled = await anonymous.PostAsJsonAsync("/api/agent/enroll", enrollment);
         Assert.Equal(HttpStatusCode.Created, enrolled.StatusCode);
         var id = (await enrolled.Content.ReadFromJsonAsync<EnrollmentResponse>())!.DeviceId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var evt = await db.CoreOutboxEvents.SingleAsync(x => x.EventType == "device.enrolled" && x.AggregateId == id);
+            Assert.Contains(id.ToString(), evt.Payload);
+            Assert.DoesNotContain(key.ExportSubjectPublicKeyInfoPem(), evt.Payload);
+        }
         Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.PostAsJsonAsync("/api/agent/enroll", enrollment)).StatusCode);
         var revokedToken = await Issue();
         Assert.Equal(HttpStatusCode.NoContent, (await admin.DeleteAsync($"/api/admin/enrollment-tokens/{revokedToken.Id}")).StatusCode);
@@ -86,7 +93,7 @@ public static class AgentScenario
         Assert.Equal(42.5, status.GetProperty("metrics").GetProperty("cpuPercent").GetDouble());
         Assert.Equal("Test app", status.GetProperty("inventory").GetProperty("software")[0].GetProperty("name").GetString());
         await RemoteProvisioningScenario.Run(factory, admin, scoped, agent, () => Assertion(key), id);
-        await SupportScenario.Run(admin, scoped, agent, () => Assertion(key), id);
+        await SupportScenario.Run(factory, admin, scoped, agent, () => Assertion(key), id);
         await UpdateScenario.Run(admin, scoped, agent, () => Assertion(key), id);
         await RemoteAgentUpdateScenario.Run(factory, admin, scoped, agent, () => Assertion(key), id);
         await DeviceManagementScenario.Run(factory, admin, scoped, scopedId, agent, () => Assertion(key), id, group);
