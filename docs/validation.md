@@ -1102,6 +1102,7 @@ omnidesk-local-ca.crt` ora passa readiness/CA, dashboard e rifiuto anonimo; il
 bundle pubblicato contiene i controlli di disconnessione e dispositivi ticket.
 Tutti i cinque servizi risultano running e il DB resta a 0 sessioni remote / 0
 job update. Nessun login, click autenticato o comando di disconnessione reale
-MeshCentral è stato eseguito. CI Linux `39276800149` passata; il workflow
-Windows sul commit precedente all'ultimo solo-UI-label `39276440522` passato;
-Windows `39276800079` sul commit finale è ancora in esecuzione.
+MeshCentral è stato eseguito. CI Linux `39276800149` e Windows `39276800079`
+sono passate sul commit finale con codice applicativo; anche Windows
+`39276440522` è passato sul commit della feature. I workflow del successivo
+commit solo documentale sono stati avviati dopo la validazione runtime.
