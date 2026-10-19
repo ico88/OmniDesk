@@ -33,7 +33,8 @@ public sealed partial class MeshCentralClient(MeshCentralOptions options) : IMes
         return new(reply.GetProperty("publicid").GetString()!, url, expires);
     }
     internal static int SessionConsent(string capability, bool required) =>
-        (capability switch { "remote.control" => 1, "terminal" => 2, "files" => 4, _ => throw new ArgumentException("Unsupported remote capability") }) |
+        // Desktop always requests the visible connection bar (64), independently of consent.
+        (capability switch { "remote.control" => 65, "terminal" => 2, "files" => 4, _ => throw new ArgumentException("Unsupported remote capability") }) |
         (required ? capability switch { "remote.control" => 8, "terminal" => 16, _ => 32 } : 0);
     public async Task Revoke(string nodeId, string publicId, CancellationToken cancellationToken)
     {
