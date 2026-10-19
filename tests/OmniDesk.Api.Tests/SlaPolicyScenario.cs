@@ -106,6 +106,20 @@ public sealed class SlaPolicyScenario(ApiFactory factory) : IClassFixture<ApiFac
                 targets.Single(x => x.TargetType == "first_response").DueAt);
             Assert.Equal(new DateTimeOffset(2026, 10, 26, 12, 0, 0, TimeSpan.Zero),
                 targets.Single(x => x.TargetType == "resolution").DueAt);
+            var respondedAt = new DateTimeOffset(2026, 10, 19, 11, 0, 0, TimeSpan.Zero);
+            Assert.Equal(1, await TicketSlaTargetService.CompleteTarget(db, ticketId, "first_response", respondedAt));
+            Assert.Equal(0, await TicketSlaTargetService.CompleteTarget(db, ticketId, "first_response", respondedAt.AddMinutes(1)));
+            var responseTarget = await db.SupportTicketSlaTargets.AsNoTracking()
+                .SingleAsync(x => x.TicketId == ticketId && x.TargetType == "first_response");
+            var resolutionTarget = await db.SupportTicketSlaTargets.AsNoTracking()
+                .SingleAsync(x => x.TicketId == ticketId && x.TargetType == "resolution");
+            Assert.Equal(respondedAt, responseTarget.CompletedAt);
+            Assert.Null(resolutionTarget.CompletedAt);
+            var resolvedAt = new DateTimeOffset(2026, 10, 26, 13, 0, 0, TimeSpan.Zero);
+            Assert.Equal(1, await TicketSlaTargetService.CompleteTarget(db, ticketId, "resolution", resolvedAt));
+            resolutionTarget = await db.SupportTicketSlaTargets.AsNoTracking()
+                .SingleAsync(x => x.TicketId == ticketId && x.TargetType == "resolution");
+            Assert.Equal(resolvedAt, resolutionTarget.CompletedAt);
 
             var fallbackSiteId = Guid.NewGuid();
             var fallbackDeviceId = Guid.NewGuid();
