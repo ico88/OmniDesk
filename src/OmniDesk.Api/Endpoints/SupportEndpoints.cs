@@ -14,7 +14,7 @@ public static class SupportEndpoints
 {
     private static readonly string[] Priorities = ["low", "normal", "high", "urgent"];
     private static bool ValidKey(string? key) => key is { Length: 64 } && key.All(Uri.IsHexDigit);
-    private static SupportTicketView View(SupportTicket t) => new(t.Id, t.DeviceId, t.Subject, t.Description, t.State,
+    private static SupportTicketView View(SupportTicket t) => new(t.Id, t.Number, t.DeviceId, t.Subject, t.Description, t.State,
         t.Resolution, t.Version, t.CreatedAt, t.UpdatedAt, t.Screenshot != null);
     public static void MapSupportEndpoints(this WebApplication app)
     {
@@ -25,7 +25,7 @@ public static class SupportEndpoints
             var deviceId = Guid.Parse(c.User.UserId());
             var rows = await db.SupportTickets.AsNoTracking().Where(t => t.DeviceId == deviceId && t.RequesterKey == requesterKey)
                 .OrderByDescending(t => t.CreatedAt).Take(10)
-                .Select(t => new SupportTicketView(t.Id,t.DeviceId,t.Subject,"",t.State,t.Resolution,t.Version,t.CreatedAt,t.UpdatedAt,t.Screenshot != null)).ToArrayAsync();
+                .Select(t => new SupportTicketView(t.Id,t.Number,t.DeviceId,t.Subject,"",t.State,t.Resolution,t.Version,t.CreatedAt,t.UpdatedAt,t.Screenshot != null)).ToArrayAsync();
             return Results.Ok(rows);
         });
         machine.MapPost("", async (SupportIntake r, HttpContext c, AppDbContext db) => {
@@ -86,7 +86,7 @@ public static class SupportEndpoints
             var assigneeTerm=assignee?.Trim().ToLowerInvariant();
             if(!string.IsNullOrEmpty(assigneeTerm))query=query.Where(t=>t.AssigneeId!=null&&db.Users.Any(u=>u.Id==t.AssigneeId&&u.Email!=null&&u.Email.ToLower()==assigneeTerm));
             return Results.Ok(await query.OrderByDescending(t => t.CreatedAt).Take(100)
-                .Select(t => new {t.Id,t.DeviceId,t.SiteId,deviceName=db.Devices.Where(d=>d.Id==t.DeviceId).Select(d=>d.Name).FirstOrDefault(),siteName=db.Sites.Where(s=>s.Id==t.SiteId).Select(s=>s.Name).FirstOrDefault(),t.Subject,t.Description,t.State,t.Priority,t.AssigneeId,assigneeEmail=t.AssigneeId==null?null:db.Users.Where(u=>u.Id==t.AssigneeId).Select(u=>u.Email).FirstOrDefault(),t.Resolution,t.Version,t.CreatedAt,t.UpdatedAt,hasScreenshot=t.Screenshot != null}).ToArrayAsync());
+                .Select(t => new {t.Id,t.Number,t.DeviceId,t.SiteId,deviceName=db.Devices.Where(d=>d.Id==t.DeviceId).Select(d=>d.Name).FirstOrDefault(),siteName=db.Sites.Where(s=>s.Id==t.SiteId).Select(s=>s.Name).FirstOrDefault(),t.Subject,t.Description,t.State,t.Priority,t.AssigneeId,assigneeEmail=t.AssigneeId==null?null:db.Users.Where(u=>u.Id==t.AssigneeId).Select(u=>u.Email).FirstOrDefault(),t.Resolution,t.Version,t.CreatedAt,t.UpdatedAt,hasScreenshot=t.Screenshot != null}).ToArrayAsync());
         });
         staff.MapGet("/{id:guid}/assignees", async (Guid id, HttpContext c, AppDbContext db, PermissionService p) => {
             var ticket = await db.SupportTickets.AsNoTracking().SingleOrDefaultAsync(t => t.Id == id);

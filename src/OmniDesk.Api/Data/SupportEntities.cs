@@ -3,6 +3,7 @@ namespace OmniDesk.Api.Data;
 public sealed class SupportTicket
 {
     public Guid Id { get; set; } = Guid.NewGuid();
+    public long Number { get; set; }
     public Guid RequestId { get; set; }
     public Guid DeviceId { get; set; }
     public Guid SiteId { get; set; }

@@ -111,7 +111,7 @@ internal sealed class SupportForm : Form
         var response = await Call(new(TrayProtocol.Version,Guid.NewGuid(),TrayProtocol.ListTicketsMethod));
         if (stop.IsCancellationRequested) return;
         result.Text = response.Error ?? "Ticket aggiornati";
-        if (response.Error is null) tickets.Text = string.Join(Environment.NewLine + Environment.NewLine,response.Tickets.Select(t => $"{t.CreatedAt:g} — {t.Subject}\r\nStato: {t.State}\r\n{t.Resolution}"));
+        if (response.Error is null) tickets.Text = string.Join(Environment.NewLine + Environment.NewLine,response.Tickets.Select(t => $"OD-{t.Number:000000} · {t.CreatedAt:g} — {t.Subject}\r\nStato: {t.State}\r\n{t.Resolution}"));
     });
     private Task Send() => Work(async () => {
         if (string.IsNullOrWhiteSpace(subject.Text) || string.IsNullOrWhiteSpace(description.Text)) { result.Text = "Compila oggetto e descrizione."; return; }

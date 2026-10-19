@@ -72,6 +72,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
         b.Entity<SupportTicket>().HasOne<Site>().WithMany().HasForeignKey(x => x.SiteId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<SupportTicket>().HasIndex(x => new { x.DeviceId, x.RequesterKey, x.RequestId }).IsUnique();
         b.Entity<SupportTicket>().HasIndex(x => new { x.DeviceId, x.CreatedAt });
+        b.Entity<SupportTicket>().Property(x => x.Number).UseIdentityByDefaultColumn();
+        b.Entity<SupportTicket>().HasIndex(x => x.Number).IsUnique();
         b.Entity<SupportTicket>().Property(x => x.RequesterKey).HasMaxLength(64);
         b.Entity<SupportTicket>().Property(x => x.Subject).HasMaxLength(200);
         b.Entity<SupportTicket>().Property(x => x.Description).HasMaxLength(8000);
