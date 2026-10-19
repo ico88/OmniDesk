@@ -914,3 +914,14 @@ vincola la durata a 30 minuti; `docker compose build api dashboard` passato. CI 
 per packaging dell’agente resta in corso e non blocca le modifiche web.
 
 Smoke Chromium esteso per impostare il nome operatore e verificarne la persistenza; `./scripts/smoke.sh --browser` passato. Questo non avvia MeshCentral né sostituisce la verifica visiva sul PC pilota.
+
+### Riepilogo scoped ticket — 2026-10-19
+
+Aggiunto `GET /api/support/summary`: restituisce totale, aperti, in lavorazione e
+urgenti non chiusi per l’insieme autorizzato, con filtri facoltativi per device/sede.
+L’aggregazione non eredita il limite di 100 righe della tabella. UI con cards
+responsive. `./scripts/test.sh` passato (64 xUnit/PostgreSQL, 4 Vitest, TypeScript);
+lo scenario verifica conteggio device-scoped e zero conteggi per un account senza
+`tickets.view`. `./scripts/smoke.sh --browser` passato su container isolati con
+conteggio UI; `docker compose build api dashboard` e `git diff --check` passati.
+Non ancora distribuito su LAN; runtime installato non modificato da questo incremento.

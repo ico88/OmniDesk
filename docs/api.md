@@ -54,6 +54,8 @@ Contratti ticket/screenshot, identità locale del richiedente, permessi `tickets
 
 `POST /api/support/{id}/internal-notes` aggiunge una nota con `{expectedVersion,body}`. Richiede `tickets.view` e `tickets.note.internal` sull'ambito storico del ticket, CSRF e versione corrente; restituisce 409 per conflitti. `GET /api/support/{id}/messages` include note interne solo per chi possiede la capability dedicata e segnala `canNote`. Le note non sono incluse nell'intake o nel feed Agent, nell'oggetto ticket né negli eventi outbox; la mutazione è auditata senza copiare il corpo.
 
+`GET /api/support/summary` restituisce `total`, `open`, `inProgress` e `urgent` calcolati sull’intero insieme autorizzato (i ticket urgenti risolti/chiusi sono esclusi). Accetta facoltativamente `deviceId` o `siteId` con lo stesso controllo `tickets.view`; senza grant restituisce conteggi zero. I conteggi non sono limitati alle 100 righe restituite dalla lista.
+
 `GET /api/support` restituisce i ticket visibili e include il numero stabile `OD-` (campo numerico `number`), `priority`, `category`, `queueId`, `queueName`, `assigneeId`
 e `assigneeEmail`; accetta filtri `priority=low|normal|high|urgent`, `category=general|hardware|software|network|account|other`, `queue={id|unassigned}` e `assignee=email`
 oltre a stato, ricerca, device e sede. `GET /api/support/{id}/assignees` richiede `tickets.manage`

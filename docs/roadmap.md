@@ -262,7 +262,7 @@ core sono general, hardware, software, network, account e other; la Tray le
 propone in apertura e la console le filtra. Le code globali e per sede,
 membership operatori versionata, routing per categoria con override di sede,
 assegnazione per ticket e in massa e filtro per coda sono implementati con
-permessi e migrazioni verificate. Restano contatori/SLA.
+permessi e migrazioni verificate. Restano SLA/calendari.
 
 Il numero ticket è ora generato da Identity PostgreSQL e condiviso dalla Tray e
 dalla console nel formato `OD-000123`; non deriva dall’UUID e non promette una
@@ -274,16 +274,12 @@ categorie aggiorna la candidata a 0.8.7 e richiede il proprio workflow Windows.
 
 ### SD1 — priorità e assegnazione ticket — sorgenti e test verificati
 
-Il ticket core supporta priorità `low/normal/high/urgent` e assegnatario
-facoltativo, con migrazione EF dedicata. La console IT mostra e modifica entrambi;
-la lista espone email assegnatario. I candidati sono account abilitati con
-`tickets.view` e `tickets.manage` sullo stesso dispositivo/sede del ticket;
-nuove assegnazioni sono ricontrollate lato server. Le modifiche sono versionate,
-auditate e incluse nell’outbox senza descrizioni o contenuti di conversazione.
-`./scripts/test.sh`: 63 test xUnit/PostgreSQL e 4 Vitest passati. Migrazioni
-verificate da schema vuoto e da uno schema isolato con ticket preesistente; upgrade
-del database LAN non eseguito e nessun deploy effettuato. Restano code, SLA,
-bulk assignment e viste operative.
+Il ticket core supporta priorità `low/normal/high/urgent`, assegnatario facoltativo,
+code, membership, routing, assegnazioni in massa e riepiloghi server-side dei
+conteggi. Le viste richiedono i grant ticket correnti; i conteggi non superano il
+limite di 100 righe della tabella. L’incremento riepilogo è testato con
+PostgreSQL/Chromium; deploy LAN in attesa della pipeline sul branch. Restano SLA,
+viste operative più ampie e automazioni Service Desk.
 
 ### Identità leggibile dell’operatore nelle sessioni remote — implementata su LAN, prova PC aperta
 
