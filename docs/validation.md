@@ -1574,7 +1574,8 @@ verificano valori canonici, alias compatibili e filtri. `docker compose build ap
 dashboard` e `./scripts/smoke.sh --browser` sono passati, incluso il controllo dei
 filtri P1–P4 nella UI. `git diff --check` è passato.
 
-Questa modifica è ancora locale e non pubblicata sulla LAN. La CI precedente
-copre `c410f48`, prima delle priorità; dopo il push va verificata la CI di questo
-incremento. Il job Windows precedente è tuttora in corso sul test upgrade MSI e
-non è stato interrotto.
+Questa modifica è pubblicata sul branch ma non distribuita sulla LAN. CI Linux
+`39324222545` è passata sul commit `6161758`, inclusi test, migrazioni, build
+container e smoke browser. Il job Windows precedente è tuttora in corso sul test
+upgrade MSI; il nuovo workflow Windows è in coda e il run precedente non è stato
+interrotto.
