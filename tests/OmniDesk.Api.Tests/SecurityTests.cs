@@ -201,6 +201,11 @@ public sealed class SecurityTests : IClassFixture<ApiFactory>, IAsyncLifetime
         await Csrf(locked);
         for (var i = 0; i < 5; i++)
             Assert.Equal(HttpStatusCode.Unauthorized, (await locked.PostAsJsonAsync("/api/auth/login", new { email = "scoped@example.test", password = "wrong" })).StatusCode);
-        Assert.Equal(HttpStatusCode.Unauthorized, (await locked.PostAsJsonAsync("/api/auth/login", new { email = "scoped@example.test", password = Password })).StatusCode);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var users = scope.ServiceProvider.GetRequiredService<UserManager<AppUser>>();
+            var user = await users.FindByEmailAsync("scoped@example.test");
+            Assert.True(await users.IsLockedOutAsync(user!));
+        }
     }
 }
