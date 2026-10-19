@@ -336,3 +336,9 @@ Il test upgrade precedentemente pendente e ora passato con rilascio view COM e
 timeout espliciti. Queste prove non comprendono il desktop interattivo o la Tray
 nella sessione reale dell'operatore. Artifact originale scaricato e da usare per
 kit 0.7.1 (senza overlay script). Aggiornamento in-place, identita preservata.
+
+Kit 0.7.1 pubblicato nella directory montata dal download UI. SHA256 ZIP:
+799c30abf71a0fa462456b3734d2389f41c21b6a48e52610861a9c7b54e20a5b.
+Verificati ZIP definitivo/CRC, tutti i checksum, uguaglianza MSI con artifact
+originale e versione/hash manifest. Sonda HTTPS readiness/dashboard/asset e
+rifiuto anonimo passata dopo la pubblicazione. Attesa prova Tray del client.
