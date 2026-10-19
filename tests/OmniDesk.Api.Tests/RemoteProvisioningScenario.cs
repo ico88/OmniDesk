@@ -63,6 +63,7 @@ public static class RemoteProvisioningScenario
         Assert.Equal(HttpStatusCode.NoContent,(await admin.PutAsJsonAsync(policyRoute,new {unattendedAllowed=true,expectedVersion=version})).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict,(await admin.PutAsJsonAsync(policyRoute,new {unattendedAllowed=false,expectedVersion=version})).StatusCode);
         version=await Version();
+        await new RemoteSessionGuard(factory.Services.GetRequiredService<IServiceScopeFactory>(),NullLogger<RemoteSessionGuard>.Instance).Sweep(CancellationToken.None);
         foreach(var capability in new[]{"remote.control","terminal","files"}) {
             Assert.Equal(HttpStatusCode.Created,(await admin.PostAsJsonAsync($"/api/devices/{device}/remote-sessions",new {capability})).StatusCode);
             Assert.False(factory.Mesh.ConsentRequests.Last());
@@ -70,6 +71,7 @@ public static class RemoteProvisioningScenario
         Assert.Equal(HttpStatusCode.NoContent,(await admin.PutAsJsonAsync(policyRoute,new {unattendedAllowed=false,expectedVersion=version})).StatusCode);
         version=await Version();
         Assert.Equal(HttpStatusCode.NoContent,(await admin.PutAsJsonAsync(policyRoute,new {unattendedAllowed=true,expectedVersion=version})).StatusCode);
+        await new RemoteSessionGuard(factory.Services.GetRequiredService<IServiceScopeFactory>(),NullLogger<RemoteSessionGuard>.Instance).Sweep(CancellationToken.None);
         var inflightVersion=await Version();
         factory.Mesh.DuringCreate=async()=>Assert.Equal(HttpStatusCode.NoContent,(await admin.PutAsJsonAsync(policyRoute,new {unattendedAllowed=false,expectedVersion=inflightVersion})).StatusCode);
         var changedDuringCreation=await admin.PostAsJsonAsync($"/api/devices/{device}/remote-sessions",new {capability="remote.control"});

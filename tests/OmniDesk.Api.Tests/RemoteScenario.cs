@@ -67,10 +67,17 @@ public static class RemoteScenario
             Assert.Equal(HttpStatusCode.Accepted, (await scoped.DeleteAsync($"/api/devices/{device}/remote-sessions/{pending}")).StatusCode);
             var sessions = await scoped.GetFromJsonAsync<JsonElement>($"/api/devices/{device}/remote-sessions");
             Assert.Equal("revocation_pending", sessions.EnumerateArray().Single(x => x.GetProperty("id").GetGuid() == pending).GetProperty("state").GetString());
+            var blockedReconnect = await scoped.PostAsJsonAsync($"/api/devices/{device}/remote-sessions", new { capability = "remote.control" });
+            Assert.Equal(HttpStatusCode.Conflict, blockedReconnect.StatusCode);
+            Assert.Equal("remote_revocation_pending", (await blockedReconnect.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
         }
         finally { mesh.FailRevocation = false; }
         Assert.Equal(HttpStatusCode.NoContent, (await scoped.DeleteAsync($"/api/devices/{device}/remote-sessions/{pending}")).StatusCode);
         Assert.Equal(HttpStatusCode.NoContent, (await scoped.DeleteAsync($"/api/devices/{device}/remote-sessions/{pending}")).StatusCode);
+        var afterRevocation = await scoped.PostAsJsonAsync($"/api/devices/{device}/remote-sessions", new { capability = "remote.control" });
+        Assert.Equal(HttpStatusCode.Created, afterRevocation.StatusCode);
+        var afterRevocationId = (await afterRevocation.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+        Assert.Equal(HttpStatusCode.NoContent, (await scoped.DeleteAsync($"/api/devices/{device}/remote-sessions/{afterRevocationId}")).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await admin.PostAsJsonAsync($"/api/devices/{device}/remote-sessions", new { capability = "administration" })).StatusCode);
     }
 }

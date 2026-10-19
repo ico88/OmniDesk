@@ -171,6 +171,27 @@ try {
  await page.getByRole('heading',{name:renamed,exact:true}).waitFor();
  for (const tab of ['Panoramica','Desktop remoto','Terminale e PowerShell','Trasferimento file','Processi','Servizi Windows','Software installato','Aggiornamenti','Eventi e log','Ticket e interventi']) await page.getByRole('tab',{name:tab,exact:true}).waitFor();
  await page.waitForFunction(()=>document.querySelector('main.content')?.getAttribute('aria-busy')==='false');
+ const deviceId=(await (await context.request.get('https://omnidesk.test/api/devices')).json()).find(d=>d.name===renamed).id;
+ const remoteSessionId=randomBytes(16).toString('hex'); let remoteShareState='active';
+ await page.route(`**/api/devices/${deviceId}/remote-sessions/availability`,route=>route.fulfill({json:{configured:true,mapped:true,revoked:false,enabled:true,nodeId:null,unattendedAllowed:false}}));
+ await page.route(`**/api/devices/${deviceId}/remote-sessions`,async route=>{
+  if(route.request().method()==='GET') return route.fulfill({json:remoteShareState==='revoked'?[]:[{id:remoteSessionId,capability:'remote.control',state:remoteShareState,createdAt:new Date().toISOString(),expiresAt:new Date(Date.now()+10*60_000).toISOString(),consentRequired:true}]});
+  if(route.request().method()==='POST') return route.fulfill({status:201,json:{id:remoteSessionId,url:'https://mesh.example.test/sharing?c=fixture',expiresAt:new Date(Date.now()+10*60_000).toISOString()}});
+  return route.continue();
+ });
+ await page.route(`**/api/devices/${deviceId}/remote-sessions/${remoteSessionId}`,async route=>{
+  if(route.request().method()==='DELETE'){remoteShareState='revoked';return route.fulfill({status:204});}
+  return route.continue();
+ });
+ await page.route('https://mesh.example.test/sharing**',route=>route.fulfill({status:200,contentType:'text/html',body:'<!doctype html><title>Remote fixture</title><p>Isolated Mesh fixture</p>'}));
+ await page.getByRole('tab',{name:'Desktop remoto',exact:true}).click();
+ await page.getByRole('button',{name:'Avvia sessione',exact:true}).waitFor();
+ await page.getByRole('button',{name:'Avvia sessione',exact:true}).click();
+ await page.locator(`iframe[title="Desktop remoto: ${renamed}"]`).waitFor();
+ page.once('dialog',dialog=>dialog.accept());
+ await page.getByRole('button',{name:'Disconnetti e revoca',exact:true}).click();
+ await page.getByRole('button',{name:'Avvia sessione',exact:true}).waitFor();
+ await page.getByText('Collegamento revocato. Per riconnettersi servirà una nuova sessione autorizzata.',{exact:true}).waitFor();
  await page.screenshot({path:'/previews/devices-admin-desktop.png',fullPage:true});
  await page.locator('summary').filter({hasText:'Gestione dispositivo'}).click();
  assert.equal(await page.getByLabel('Gruppo dispositivo',{exact:true}).inputValue(),'','Group change persisted');
