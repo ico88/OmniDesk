@@ -1487,5 +1487,8 @@ diagnostico viene aggiunto.
 migrazione da schema vuoto, revoca sincrona/ritentata e timestamp nella timeline.
 Il primo smoke browser ha rivelato una race nel test che non attendeva il thread;
 aggiunta attesa sul controllo popolato. `./scripts/smoke.sh --browser` poi passato
-su stack isolato con Chromium. La build API è inclusa nei test Docker; Compose e
-diff verranno registrati con la verifica finale del commit. Nessun deploy LAN.
+su stack isolato con Chromium. `docker compose build api dashboard`, Compose
+standard/test/backup-check (con `BACKUP_CHECK_FILE` esplicito) e `git diff
+--check` passati. Nessun deploy LAN. CI sul commit `3446a70` ancora in corso al
+momento della registrazione: run Linux `39316014360`, Windows
+`39316014371`.
