@@ -1579,3 +1579,26 @@ Questa modifica è pubblicata sul branch ma non distribuita sulla LAN. CI Linux
 container e smoke browser. Il job Windows precedente è tuttora in corso sul test
 upgrade MSI; il nuovo workflow Windows è in coda e il run precedente non è stato
 interrotto.
+
+## SD1 — partecipanti ticket scoped — 2026-10-19
+
+La migrazione `SupportTicketParticipants` aggiunge una relazione univoca ticket/
+account con autore e timestamp. API e console consentono di elencare, aggiungere
+e rimuovere account attivi che hanno già `tickets.view` sul device/sede; le
+mutazioni richiedono `tickets.manage`, lock, versione attesa, audit e outbox. La
+partecipazione non concede accesso: letture e notifiche verificano di nuovo
+account attivo e permesso. Le notifiche coprono aggiunta, risposta pubblica e
+aggiornamento successivo alla data di ingresso, senza inoltrare contenuto privato.
+La dashboard mostra partecipanti e permette le modifiche solo agli operatori
+autorizzati.
+
+Verifica: `./scripts/test.sh` passato con 79 xUnit/PostgreSQL e 5 Vitest; il test
+include lettore scoped, utente senza grant, rifiuto della scrittura, notifiche,
+audit e revoca relazione. `docker compose build api dashboard`, `docker compose
+config -q`, `git diff --check` e `./scripts/smoke.sh --browser` passati; Chromium
+ha verificato aggiunta/rimozione in UI nel compose effimero, insieme alle
+regressioni preesistenti. Un primo smoke aveva usato immagini dashboard obsolete;
+è stato ripetuto dopo build e con l'utente read-only predisposto prima di aprire
+il ticket. Nessun deploy, migrazione o test sull'istanza LAN; CI sul commit
+contenente questo incremento ancora da eseguire. Allegati generici in quarantena,
+notifiche esterne, email, allarmi, SLA e automazioni restano da sviluppare.
