@@ -408,3 +408,12 @@ bit1; eventuale meshid esplicito discordante resta rifiutato. Test regressione
 con risposta reale compressa, gruppo/nodo diversi, offline e duplicati.
 Nessuna associazione manuale o modifica SQL; il worker deve completare il POST
 autenticato al prossimo retry. Attendere test/deploy/mapping runtime.
+
+Correzione mapping verificata: 8 test MeshNodeResponseTests passati (risposta
+compressa positiva, online flag, gruppo/nodo errati, offline, mismatch esplicito,
+duplicati e lista vuota). API Docker compilata e avviata; 502 transitorio durante
+startup, poi readiness/dashboard/asset/anonymous401 passati. Al retry automatico
+il POST reale /api/agent/remote/node e riuscito 204 e MeshDeviceMapping esiste
+per DESKTOP-EK7AD7M. Nessun inserimento SQL/manuale del nodo. Questo conferma
+associazione autenticata con nodo online nel gruppo corretto; apertura desktop,
+consenso e revoca restano prove distinte da eseguire con l'operatore.
