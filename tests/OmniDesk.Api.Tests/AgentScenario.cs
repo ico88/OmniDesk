@@ -88,6 +88,7 @@ public static class AgentScenario
         await RemoteProvisioningScenario.Run(factory, admin, scoped, agent, () => Assertion(key), id);
         await SupportScenario.Run(admin, scoped, agent, () => Assertion(key), id);
         await UpdateScenario.Run(admin, scoped, agent, () => Assertion(key), id);
+        await RemoteAgentUpdateScenario.Run(factory, admin, scoped, agent, () => Assertion(key), id);
         await DeviceManagementScenario.Run(factory, admin, scoped, scopedId, agent, () => Assertion(key), id, group);
         Assert.Equal(HttpStatusCode.NoContent, (await admin.PostAsync($"/api/admin/devices/{id}/revoke", null)).StatusCode);
         agent.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Assertion(key));

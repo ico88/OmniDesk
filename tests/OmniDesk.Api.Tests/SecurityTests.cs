@@ -84,6 +84,7 @@ public sealed class SecurityTests : IClassFixture<ApiFactory>, IAsyncLifetime
         using var viewer = Client();
         await Login(viewer, "viewer@example.test");
         Assert.Equal(HttpStatusCode.Forbidden, (await viewer.GetAsync("/api/admin/audit")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await viewer.PostAsJsonAsync($"/api/admin/devices/{device}/agent-update", new { requestId = Guid.NewGuid() })).StatusCode);
         var branding = new { name = "Test brand", logoUrl = "", primaryColor = "#123456", theme = "light" };
         Assert.Equal(HttpStatusCode.Forbidden, (await viewer.PutAsJsonAsync("/api/branding", branding)).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await admin.PutAsJsonAsync("/api/branding", new { name = "Unsafe", logoUrl = "javascript:alert(1)", primaryColor = "#123456", theme = "light" })).StatusCode);
@@ -119,6 +120,11 @@ public sealed class SecurityTests : IClassFixture<ApiFactory>, IAsyncLifetime
             Assert.False(await p.Allows(scopedId, "remote.control", other));
             Assert.False(await p.Allows(scopedId, "administration", device));
         }
+        var scopedAdmin = await admin.PostAsJsonAsync("/api/admin/grants", new { userId = scopedId, role = "Administrator", deviceId = device, groupId = (Guid?)null });
+        Assert.Equal(HttpStatusCode.Created, scopedAdmin.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await scoped.PostAsJsonAsync($"/api/admin/devices/{device}/agent-update", new { requestId = Guid.NewGuid() })).StatusCode);
+        var scopedAdminId = (await scopedAdmin.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("id").GetGuid();
+        Assert.Equal(HttpStatusCode.NoContent, (await admin.DeleteAsync($"/api/admin/grants/{scopedAdminId}")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await viewer.PostAsJsonAsync("/api/admin/roles", new { name = "Escape", permissions = new[] { "administration" } })).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await admin.PostAsJsonAsync("/api/admin/roles", new { name = "Invalid", permissions = new[] { "unknown" } })).StatusCode);
         Assert.Equal(HttpStatusCode.Created, (await admin.PostAsJsonAsync("/api/admin/roles", new { name = "FilesOnly", permissions = new[] { "files" } })).StatusCode);
