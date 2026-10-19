@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from './api';
+import { Icon } from './Icon';
 
 type Ticket = { id:string; deviceId:string; subject:string; description:string; state:string; resolution:string|null; version:number; createdAt:string; hasScreenshot:boolean };
 const labels: Record<string,string> = {open:'Aperto',in_progress:'In lavorazione',resolved:'Risolto',closed:'Chiuso'};
@@ -17,12 +18,12 @@ export function SupportDesk() {
     finally { setBusy(false); }
   }
   useEffect(()=>{void work(load);},[]);
-  return <section className="panel"><h2>Richieste di assistenza</h2>
+  return <section className="panel"><h2><Icon name="support"/>Richieste di assistenza</h2>
     <p>Ultime 100 richieste nei tuoi ambiti autorizzati. I permessi sui ticket non autorizzano le sessioni remote.</p>
     {error && <p role="alert">{error}</p>}
-    <button disabled={busy} onClick={()=>void work(load)}>Aggiorna richieste</button>
-    <table><thead><tr><th>Data</th><th>Oggetto</th><th>Stato</th><th>Dispositivo</th><th>Dettagli</th></tr></thead>
-      <tbody>{tickets.map(t=><tr key={t.id}><td>{new Date(t.createdAt).toLocaleString('it-IT')}</td><td>{t.subject}</td><td>{labels[t.state]??t.state}</td><td>{t.deviceId}</td><td><button onClick={()=>{setSelected(t);setState(t.state);setResolution(t.resolution??'');}}>Apri ticket</button></td></tr>)}</tbody></table>
+    <button disabled={busy} onClick={()=>void work(load)}><Icon name="refresh"/>Aggiorna richieste</button>
+    <div className="table-wrap"><table><thead><tr><th>Data</th><th>Oggetto</th><th>Stato</th><th>Dispositivo</th><th>Dettagli</th></tr></thead>
+      <tbody>{tickets.map(t=><tr key={t.id}><td>{new Date(t.createdAt).toLocaleString('it-IT')}</td><td>{t.subject}</td><td><span className={`status-pill ${t.state==='resolved'||t.state==='closed'?'online':'offline'}`}>{labels[t.state]??t.state}</span></td><td>{t.deviceId}</td><td><button onClick={()=>{setSelected(t);setState(t.state);setResolution(t.resolution??'');}}>Apri ticket</button></td></tr>)}</tbody></table></div>
     {!tickets.length && <p>Nessuna richiesta visibile.</p>}
     {selected && <form onSubmit={e=>{e.preventDefault();void work(async()=>{
       await api(`/support/${selected.id}`,'PUT',{expectedVersion:selected.version,state,resolution}); setSelected(null); await load();
