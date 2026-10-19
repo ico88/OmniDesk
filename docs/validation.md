@@ -644,3 +644,27 @@ Non eseguiti avvio/deploy live, sessione iframe sul server o stream video remoto
 né test interattivo sul PC Windows. Il deploy è escluso per
 non interrompere sessioni remote attive. Le build non dimostrano la connessione
 Mesh né la compatibilità visiva con ogni browser.
+
+## Aggiornamento remoto Agent Windows 0.8.1 — 19 ottobre 2026
+
+Implementato il job `agent.update` con autorizzazione globale `administration`,
+controllo online/versione, MSI legato alla release LAN, verifica ZIP/MSI lato API
+e hash MSI lato Agent. Il servizio usa un updater separato protetto da ACL, MSI
+silenzioso senza riavvio Windows e ricevuta per confermare l’esito dopo restart.
+Il manifest di release ora include hash e dimensione MSI. La UI dispositivo
+mostra versione e comando, disponibile solo agli amministratori globali.
+
+Verifiche eseguite:
+
+- `./scripts/test.sh`: riuscito; 47 test xUnit con PostgreSQL isolato e 4 Vitest; TypeScript/Vite build passata. Include coda/lease/download MSI e rifiuto di admin solo scoped.
+- `docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD:/work" -w /work mcr.microsoft.com/dotnet/sdk:10.0 dotnet build src/OmniDesk.Agent.Windows/OmniDesk.Agent.Windows.csproj -c Release -p:EnableWindowsTargeting=true`: riuscito, 0 warning/errori.
+- Pubblicazione self-contained win-x64 single-file cross-target riuscita.
+- Fixture isolata `package-lan-kit.py`: manifest MSI SHA-256/dimensione verificati; `py_compile` riuscito.
+- `git diff --check`: riuscito.
+
+Non eseguiti MSI upgrade/repair reali su Windows, esecuzione del servizio come
+LocalSystem, update/restart sul PC pilota o deploy server. Questi richiedono il
+workflow GitHub Actions Windows e poi la prova interattiva. La release pubblica
+non è firmata Authenticode; i checksum non attestano l’editore. La versione
+0.8.0 installata deve ricevere una prima installazione MSI 0.8.1 manuale prima
+di poter auto-aggiornarsi.

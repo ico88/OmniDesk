@@ -170,3 +170,17 @@ Artifact LAN confezionato con CA pubblica, checksum e istruzioni native; API con
 endpoint revoca pubblicata sul server dopo backup locale. La disinstallazione MSI revoca prima
 identità e accessi e fallisce chiusa se il server non risponde. Installazione,
 enrollment e rimozione interattivi non sono collaudati.
+
+### Aggiornamento remoto Agent Windows
+
+Implementazione sorgente 0.8.1: heartbeat include versione Agent; il server
+accetta un job solo da amministratore globale, su dispositivo online, con
+versione rilevata e release MSI pubblicata. L’Agent scarica solo l’MSI legato a
+job/lease validi, controlla dimensione e SHA-256 e invoca Windows Installer
+senza riavvio di Windows. Un updater separato e una ricevuta ACL protetta
+permettono al servizio di riavviarsi e riportare il risultato. La build Windows,
+il test MSI upgrade/repair su runner Windows e il collaudo client LAN restano
+gate prima di dichiarare la funzione pronta. Il kit 0.8.0 non contiene updater:
+richiede una singola installazione MSI manuale della 0.8.1. Le release senza
+metadati MSI non sono candidabili. Firma Authenticode e invio Microsoft restano
+fuori da questa implementazione; i checksum del server non attestano l’editore.
