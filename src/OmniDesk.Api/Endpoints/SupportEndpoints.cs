@@ -83,14 +83,14 @@ public static class SupportEndpoints
         staff.MapPut("/{id:guid}", async (Guid id, SupportStaffEdit r, HttpContext c, AppDbContext db, PermissionService p) => {
             var ticket = await db.SupportTickets.AsNoTracking().SingleOrDefaultAsync(t => t.Id == id);
             if (ticket is null) return Results.NotFound();
-            if (!await p.Allows(c.User.UserId(), "tickets.manage", ticket.DeviceId)) return Results.Forbid();
+            if (!await p.Allows(c.User.UserId(), "tickets.manage", ticket.DeviceId, siteId: ticket.SiteId)) return Results.Forbid();
             if (r.State is not ("open" or "in_progress" or "resolved" or "closed")) return Results.BadRequest(new {error="Seleziona uno stato del ticket valido."});
             if(r.Resolution?.Length>8000)return Results.BadRequest(new {error="La risposta puo contenere al massimo 8000 caratteri."});
             if((r.AddReply||r.State is "resolved" or "closed")&&string.IsNullOrWhiteSpace(r.Resolution))
                 return Results.BadRequest(new {error="Scrivi una risposta all'utente prima di risolvere o chiudere il ticket."});
             await using var tx = await db.Database.BeginTransactionAsync();
             await DeviceOperationLock.Acquire(db, ticket.DeviceId);
-            if (!await p.Allows(c.User.UserId(), "tickets.manage", ticket.DeviceId)) return Results.Forbid();
+            if (!await p.Allows(c.User.UserId(), "tickets.manage", ticket.DeviceId, siteId: ticket.SiteId)) return Results.Forbid();
             ticket=await db.SupportTickets.AsNoTracking().SingleAsync(t=>t.Id==id);
             if(ticket.Version!=r.ExpectedVersion)return Results.Conflict(new {error="Il ticket e stato aggiornato. Ricarica la conversazione prima di salvare."});
             var body=r.Resolution?.Trim();
@@ -118,7 +118,7 @@ public static class SupportEndpoints
             c.Response.Headers.CacheControl="no-store";
             var oldest=rows.Length>0?rows[^1].Id:(long?)null;
             var hasMore=oldest.HasValue&&await query.AnyAsync(m=>m.Id<oldest.Value);
-            return Results.Ok(new {ticket.Version,ticket.State,ticket.Resolution,canReply=await p.Allows(c.User.UserId(),"tickets.manage",ticket.DeviceId),hasMore,oldestId=oldest,messages=rows.Reverse()});
+            return Results.Ok(new {ticket.Version,ticket.State,ticket.Resolution,canReply=await p.Allows(c.User.UserId(),"tickets.manage",ticket.DeviceId,siteId:ticket.SiteId),hasMore,oldestId=oldest,messages=rows.Reverse()});
         });
         staff.MapGet("/{id:guid}/screenshot", async (Guid id, bool? inline, HttpContext c, AppDbContext db, PermissionService p) => {
             var ticket = await db.SupportTickets.AsNoTracking().SingleOrDefaultAsync(t => t.Id == id);
