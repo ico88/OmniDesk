@@ -13,6 +13,7 @@ public sealed class RemoteSession
     public string? PublicId { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? ExpiresAt { get; set; }
+    public DateTimeOffset? EndedAt { get; set; }
 }
 
 public sealed class RemoteProvisioning

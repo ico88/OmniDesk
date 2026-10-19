@@ -34,7 +34,7 @@ public static class RemoteEndpoints
         devices.MapGet("", async (Guid id, HttpContext c, AppDbContext db, PermissionService p) => {
             if (!await p.Allows(c.User.UserId(), "view", id)) return Results.Forbid();
             return Results.Ok(await db.RemoteSessions.AsNoTracking().Where(x => x.DeviceId == id).OrderByDescending(x => x.CreatedAt).Take(100)
-                .Select(x => new { x.Id, x.ActorId, x.Capability, x.State, x.CreatedAt, x.ExpiresAt, x.ConsentRequired }).ToListAsync());
+                .Select(x => new { x.Id, x.ActorId, x.Capability, x.State, x.CreatedAt, x.ExpiresAt, x.EndedAt, x.ConsentRequired }).ToListAsync());
         });
         devices.MapPost("", async (Guid id, RemoteRequest r, HttpContext c, AppDbContext db, UserManager<AppUser> users, PermissionService p, IMeshCentralClient mesh, ILoggerFactory logs) => {
             if (!Capabilities.Contains(r.Capability)) return Results.BadRequest();
@@ -75,7 +75,9 @@ public static class RemoteEndpoints
                     try { await mesh.Revoke(mapping.NodeId, created.PublicId, CancellationToken.None); }
                     catch (Exception cleanup) { cleanupPending = true; logs.CreateLogger("Remote").LogWarning("Mesh compensation failed: {Type}", cleanup.GetType().Name); }
                 }
-                session.State = cleanupPending ? "revocation_pending" : "failed"; db.AuditEvents.Add(Event(c, "remote.failed", session.Id)); await db.SaveChangesAsync();
+                session.State = cleanupPending ? "revocation_pending" : "failed";
+                if (!cleanupPending) session.EndedAt = DateTimeOffset.UtcNow;
+                db.AuditEvents.Add(Event(c, "remote.failed", session.Id)); await db.SaveChangesAsync();
                 logs.CreateLogger("Remote").LogWarning("Mesh session request failed: {Type}", e.GetType().Name);
                 return Results.Problem("Remote engine unavailable", statusCode:503);
             }
@@ -132,8 +134,9 @@ public static class RemoteEndpoints
                 return Results.Accepted(value: new { session.Id, state = "revocation_pending" });
             }
             await using var tx = await db.Database.BeginTransactionAsync();
+            var endedAt = DateTimeOffset.UtcNow;
             var completed = await db.RemoteSessions.Where(x => x.Id == sessionId && x.State == "revocation_pending")
-                .ExecuteUpdateAsync(s => s.SetProperty(x => x.State, "revoked"));
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.State, "revoked").SetProperty(x => x.EndedAt, endedAt));
             if (completed > 0)
             {
                 db.AuditEvents.Add(Event(c, "remote.revoke", session.Id));

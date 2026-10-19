@@ -705,6 +705,7 @@ public static class SupportEndpoints
                 label = "Sessione " + capability;
                 state = session.State;
                 occurredAt = session.CreatedAt;
+                completedAt = session.EndedAt;
             }
             else
             {
@@ -757,7 +758,7 @@ public static class SupportEndpoints
             var deviceIds = links.Select(x => x.DeviceId).ToArray();
             var sessions = await db.RemoteSessions.AsNoTracking().Where(x => deviceIds.Contains(x.DeviceId))
                 .OrderByDescending(x => x.CreatedAt).Take(25)
-                .Select(x => new { x.Id, x.DeviceId, x.Capability, x.State, x.CreatedAt }).ToArrayAsync();
+                .Select(x => new { x.Id, x.DeviceId, x.Capability, x.State, x.CreatedAt, x.EndedAt }).ToArrayAsync();
             var jobs = await db.UpdateJobs.AsNoTracking().Where(x => deviceIds.Contains(x.DeviceId))
                 .OrderByDescending(x => x.CreatedAt).Take(25)
                 .Select(x => new { x.Id, x.DeviceId, x.Kind, x.State, x.CreatedAt, x.CompletedAt }).ToArrayAsync();
@@ -767,7 +768,7 @@ public static class SupportEndpoints
                     (session.Capability is "remote.control" or "terminal" or "files") &&
                     await p.Allows(userId, session.Capability, session.DeviceId))
                     candidates.Add(new(session.Id, session.DeviceId, deviceNames[session.DeviceId],
-                        "remote_session", "Sessione " + session.Capability, session.Capability, session.State, session.CreatedAt, null));
+                        "remote_session", "Sessione " + session.Capability, session.Capability, session.State, session.CreatedAt, session.EndedAt));
             foreach (var job in jobs)
             {
                 var capability = job.Kind switch
@@ -822,8 +823,12 @@ public static class SupportEndpoints
                     string? currentState = null;
                     DateTimeOffset? currentCompletedAt = null;
                     if (artifactType == "remote_session")
-                        currentState = await db.RemoteSessions.AsNoTracking().Where(x => x.Id == artifactId && x.DeviceId == deviceId)
-                            .Select(x => x.State).SingleOrDefaultAsync();
+                    {
+                        var currentSession = await db.RemoteSessions.AsNoTracking().Where(x => x.Id == artifactId && x.DeviceId == deviceId)
+                            .Select(x => new { x.State, x.EndedAt }).SingleOrDefaultAsync();
+                        currentState = currentSession?.State;
+                        currentCompletedAt = currentSession?.EndedAt;
+                    }
                     else if (artifactType == "update_job")
                     {
                         var currentJob = await db.UpdateJobs.AsNoTracking().Where(x => x.Id == artifactId && x.DeviceId == deviceId)
