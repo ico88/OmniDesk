@@ -1771,7 +1771,12 @@ scadenze calcolate sul calendario lavorativo, inclusa la settimana successiva.
 pubblica dell'operatore completa idempotentemente il primo riscontro e la
 transizione a resolved/closed completa la risoluzione nella stessa transazione
 ticket. Il test verifica timestamp, indipendenza dei due target e idempotenza.
-Restano pause/ripresa, cicli di riapertura, worker breach, escalation e allarmi.
+`SlaBreachWorker` seleziona una scadenza alla volta con `FOR UPDATE SKIP LOCKED`,
+persiste `BreachedAt` e un audit di sistema nella stessa transazione; il test
+PostgreSQL porta entrambi i target fixture oltre scadenza, verifica due sole
+registrazioni e ripete la scansione senza duplicati, quindi annulla la fixture.
+Nessuna notifica o escalation viene dichiarata attiva. Restano pause/ripresa,
+cicli di riapertura, deduplica escalation e consegna degli allarmi.
 
 CI Linux e Windows `39339233583`/`39339233542` sono verdi per la policy SLA
 base. Sul commit dei target iniziali, CI Linux `39340488203` è verde; il job
@@ -1788,5 +1793,7 @@ browser smoke crea una policy, verifica i due target, vede entrambi e controlla
 il completamento dopo la risposta/risoluzione. Dopo rebuild API/dashboard,
 `./scripts/test.sh` e `./scripts/smoke.sh --browser` sono passati (88 test API,
 6 Vitest, migrazioni, Chromium, ClamAV e restore isolato). Questa estensione UI
-deve ancora essere inclusa nella CI con il prossimo push. Nessun servizio LAN è
-stato modificato.
+deve ancora essere inclusa nella CI con il prossimo push. Il worker breach è
+stato validato con la suite PostgreSQL e il rebuild API; il successivo smoke
+Chromium ha verificato migrazioni, UI SLA e restore. Nessun servizio LAN è stato
+modificato.
