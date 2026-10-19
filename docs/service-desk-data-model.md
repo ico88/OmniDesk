@@ -9,7 +9,7 @@
 | Sites; Devices.SiteId | **Implementato:** sedi archiviabili, FK dispositivo, enrollment per sede, sede storica sui ticket e backfill dei record esistenti a “Sede da assegnare”. Le sedi restano distinte da DeviceGroups. Migrazione e API verificate su database vuoto; upgrade di un database popolato resta da verificare |
 | Concessioni per sede | **Implementato:** `ScopeGrants.SiteId` con vincolo PostgreSQL che ammette un solo ambito; permessi di sede non si trasformano in permessi gruppo/device. Testata visibilità e separazione del permesso `view` |
 | AlertOccurrences / AlertEvents | Identità stabile di occorrenza, device, regola/versione, apertura/recupero e correlazione; gli snapshot metriche esistenti non sono allarmi |
-| Outbox core | **Fondazione implementata:** tabella `CoreOutboxEvents` e scritture transazionali per enrollment, sedi, metadata device e ticket. Payload curato senza contenuti ticket, tipo/versione e correlation ID. Da completare consumer, idempotenza di consegna, retry/backoff, dead-letter, retention e copertura di tutti gli eventi core |
+| Outbox core | **Parziale implementato:** tabella `CoreOutboxEvents`, scritture transazionali e worker durevole `ticket-notifications.v1`; proietta notifiche ticket in modo idempotente con lock concorrente, retry/backoff e dead-letter. Le notifiche sono persistite in `UserNotifications`. Restano copertura/consumer per tutti gli eventi di dominio e retention |
 
 ## Tabelle del modulo
 
@@ -36,7 +36,7 @@
 | TicketSlaTargets / SlaPauseIntervals | Ticket, tipo obiettivo, policy/calendario versione, start/due UTC, tempo consumato, pause start/end e motivo; vincoli intervalli validi e target univoco per ciclo |
 | EscalationEvents | Target, ciclo, regola/versione, fase, dueAt, stato; chiave idempotente univoca per evitare duplicazioni al riavvio |
 | AutomationRules / AutomationVersions / AutomationRuns | Eventi/condizioni/azioni allowlist, versione immutabile, origine/correlazione, esito e limiti; chiave evento/regola/versione per deduplica |
-| NotificationOutbox / NotificationDeliveries | Ticket/evento, destinatario verificato, template/versione/visibilità, stato, tentativi, NextAttemptAt, LeaseUntil, errore minimizzato; idempotenza evento/destinatario/canale |
+| NotificationOutbox / NotificationDeliveries | **Parziale nel core:** consumer `ticket-notifications.v1`, consegna idempotente per evento/utente, retry/backoff, dead-letter e proiezione `UserNotifications`; canali esterni, template versionati, lease esplicite e retention restano proposti |
 | Outbox / Inbox / WorkerJobs | EventId univoco, tipo/versione, payload, stato/scadenza lease, tentativi e correlazione; inbox univoca per consumer/evento; quarantena errori dopo retry limitati |
 | KnowledgeArticles / KnowledgeArticleRevisions | Implementati: contenuti/versione e snapshot immutabili lato API; SiteId o GroupId esclusivo per scope, entrambi null per globale; autore/data e backfill della versione corrente. `ArticleTicketLinks` e categorie restano proposti, non implementati |
 | AiSuggestions (fase futura) | Ticket, autore richiedente, tipo proposta, contenuto minimizzato, provenienza/versione modello, stato accepted/rejected, scadenza; nessun comando eseguibile |
