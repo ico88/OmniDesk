@@ -111,6 +111,25 @@ public static class SupportEndpoints
                 .Where(q => q.IsActive && (q.SiteId == null || q.SiteId == ticket.SiteId))
                 .OrderBy(q => q.Name).Select(q => new { q.Id, q.Name, q.SiteId }).ToArrayAsync());
         });
+        staff.MapGet("/summary", async (Guid? deviceId, Guid? siteId, HttpContext c, AppDbContext db, PermissionService p) => {
+            var userId = c.User.UserId();
+            if (deviceId.HasValue && !await p.Allows(userId, "tickets.view", deviceId)) return Results.Forbid();
+            if (siteId.HasValue && !await p.Allows(userId, "tickets.view", siteId: siteId)) return Results.Forbid();
+            var global = (await p.Global(userId)).Contains("tickets.view");
+            var grants = from g in db.ScopeGrants join permission in db.RolePermissions on g.RoleId equals permission.RoleId
+                         where g.UserId == userId && permission.Permission == "tickets.view" select g;
+            var query = db.SupportTickets.AsNoTracking().Where(t => db.Users.Any(u => u.Id == userId && !u.IsDisabled) && (global ||
+                grants.Any(g => g.SiteId == t.SiteId) || db.Devices.Any(d => d.Id == t.DeviceId && grants.Any(g => g.DeviceId == d.Id || (d.GroupId != null && g.GroupId == d.GroupId)))));
+            if (deviceId.HasValue) query = query.Where(t => t.DeviceId == deviceId.Value);
+            if (siteId.HasValue) query = query.Where(t => t.SiteId == siteId.Value);
+            var summary = await query.GroupBy(_ => 1).Select(g => new {
+                total = g.Count(),
+                open = g.Count(t => t.State == "open"),
+                inProgress = g.Count(t => t.State == "in_progress"),
+                urgent = g.Count(t => t.Priority == "urgent" && t.State != "resolved" && t.State != "closed")
+            }).SingleOrDefaultAsync();
+            return Results.Ok(summary ?? new { total = 0, open = 0, inProgress = 0, urgent = 0 });
+        });
         staff.MapGet("", async (string? state, string? search, Guid? deviceId, Guid? siteId, string? priority, string? assignee, string? category, string? queue, HttpContext c, AppDbContext db, PermissionService p) => {
             if(state is not (null or "" or "open" or "in_progress" or "resolved" or "closed") || search?.Length > 200 ||
                 priority is not (null or "" or "low" or "normal" or "high" or "urgent") || assignee?.Length > 320 ||

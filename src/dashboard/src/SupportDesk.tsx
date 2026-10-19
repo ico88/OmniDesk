@@ -3,6 +3,7 @@ import { api } from './api';
 import { Icon } from './Icon';
 
 type Ticket = { id:string; number:number; deviceId:string; siteId:string; deviceName:string|null; siteName:string|null; subject:string; description:string; state:string; priority:string; category:string; queueId:string|null; queueName:string|null; assigneeId:string|null; assigneeEmail:string|null; canManage:boolean; resolution:string|null; version:number; createdAt:string; hasScreenshot:boolean };
+type TicketSummary = { total:number; open:number; inProgress:number; urgent:number };
 type Assignee = { id:string; email:string };
 type Queue = { id:string; name:string; siteId?:string|null };
 type Message = {id:number;kind:string;visibility:'public'|'internal';body:string;fromState:string|null;toState:string|null;createdAt:string;isImported:boolean};
@@ -13,6 +14,7 @@ const categories: Record<string,string> = {general:'Generale',hardware:'Hardware
 const date=(value:string)=>new Date(value).toLocaleString('it-IT');
 export function SupportDesk({visibleDeviceIds,onOpenDevice,deviceId,sites=[]}:{visibleDeviceIds:string[];onOpenDevice:(id:string)=>Promise<void>;deviceId?:string;sites?:{id:string;name:string;isArchived?:boolean}[]}) {
   const [tickets,setTickets] = useState<Ticket[]>([]);
+  const [summary,setSummary]=useState<TicketSummary|null>(null);
   const [queues,setQueues]=useState<Queue[]>([]);
   const [selectedQueues,setSelectedQueues]=useState<Queue[]>([]);
   const [selectedTicketIds,setSelectedTicketIds]=useState<string[]>([]);
@@ -42,12 +44,13 @@ export function SupportDesk({visibleDeviceIds,onOpenDevice,deviceId,sites=[]}:{v
   async function load() {
     const query=new URLSearchParams();
     if(filterState)query.set('state',filterState);if(search.trim())query.set('search',search.trim());if(deviceId)query.set('deviceId',deviceId);if(siteFilter)query.set('siteId',siteFilter);if(filterPriority)query.set('priority',filterPriority);if(filterCategory)query.set('category',filterCategory);if(filterQueue)query.set('queue',filterQueue);if(assigneeFilter.trim())query.set('assignee',assigneeFilter.trim());
-    const rows=await api<Ticket[]>('/support?'+query.toString());
+    const scopeQuery=new URLSearchParams();if(deviceId)scopeQuery.set('deviceId',deviceId);if(siteFilter)scopeQuery.set('siteId',siteFilter);
+    const [rows,counts]=await Promise.all([api<Ticket[]>('/support?'+query.toString()),api<TicketSummary>('/support/summary?'+scopeQuery.toString()).catch(()=>null)]);
     const siteIds=[...new Set(rows.map(ticket=>ticket.siteId).filter(Boolean))];
     const queueRows=await Promise.all([api<Queue[]>('/support/queues'),...siteIds.map(id=>api<Queue[]>(`/support/queues?siteId=${encodeURIComponent(id)}`))]);
     const byId=new Map(queueRows.flat().map(queue=>[queue.id,queue]));
     setQueues([...byId.values()].sort((a,b)=>a.name.localeCompare(b.name,'it')));
-    setTickets(rows);setSelectedTicketIds([]);setSelected(old=>old?rows.find(t=>t.id===old.id)??old:old);
+    setTickets(rows);setSummary(counts);setSelectedTicketIds([]);setSelected(old=>old?rows.find(t=>t.id===old.id)??old:old);
   }
   async function loadThread(ticket:Ticket,before?:number) {
     const data=await api<Thread>(`/support/${ticket.id}/messages${before?'?before='+before:''}`);
@@ -70,6 +73,7 @@ export function SupportDesk({visibleDeviceIds,onOpenDevice,deviceId,sites=[]}:{v
   useEffect(()=>{if(selected)panel.current?.scrollIntoView({behavior:'smooth',block:'start'});},[selected?.id]);
   return <section className="panel"><h2><Icon name="support"/>Richieste di assistenza</h2>
     <p>Fino a 100 richieste nei tuoi ambiti autorizzati. Cerca per oggetto o nome del computer.</p>
+    <div className="ticket-summary" aria-label="Riepilogo ticket nei tuoi ambiti"><article><small>Ticket totali</small><strong>{summary?.total??'—'}</strong></article><article><small>Aperti</small><strong>{summary?.open??'—'}</strong></article><article><small>In lavorazione</small><strong>{summary?.inProgress??'—'}</strong></article><article className="urgent"><small>Urgenti non chiusi</small><strong>{summary?.urgent??'—'}</strong></article></div>
     {error&&!selected&&<p role="alert">{error}</p>}
     <form className="support-toolbar" onSubmit={e=>{e.preventDefault();void work(load);}}>
       <label className="search-field"><Icon name="search"/><input aria-label="Cerca richieste" maxLength={200} placeholder="Oggetto o nome del computer…" value={search} onChange={e=>setSearch(e.target.value)}/></label>
