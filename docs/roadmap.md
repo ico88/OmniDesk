@@ -143,8 +143,9 @@ Kit 0.7.3 compilato/testato su Windows (run39223715334 riuscita) e pubblicato ne
 download autenticato della console. Restano prove client: consultazione ticket
 ripetuta durante polling e avviso/barra durante nuova sessione remota.
 
-0.8.0 in sviluppo: Setup WinForms nativo chiede il token mascherato ed esegue
-installazione/enrollment senza script lato utente; invio token su stdin. Il normale
-Disinstalla MSI revoca prima identità e accessi sul server e si interrompe se il
-server non risponde. API/Agent/Setup compilati localmente; WiX/runner Windows e
-collaudo interattivo restano da completare. Nessun test runtime dichiarato.
+0.8.0 build-only riuscita su GitHub Actions run 39229033734: Setup WinForms nativo,
+Agent, Tray e MSI compilati; i job di test sono stati esplicitamente saltati.
+Artifact LAN confezionato con CA pubblica, checksum e istruzioni native; API con
+endpoint revoca pubblicata sul server dopo backup locale. La disinstallazione MSI revoca prima
+identità e accessi e fallisce chiusa se il server non risponde. Installazione,
+enrollment e rimozione interattivi non sono collaudati.

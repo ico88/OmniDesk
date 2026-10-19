@@ -178,8 +178,8 @@ l'azione MSI fallisce e il rollback conserva l'installazione; riconnettere il PC
 alla LAN e riprovare. La CA pubblica resta nel trust store intenzionalmente.
 Un amministratore locale può comunque forzare la rimozione e controlla il PC.
 
-Il sorgente 0.8.0 è compilato in locale per `net10.0-windows` (Setup, Agent) e
-net10.0 (API), senza warning. L'MSI WiX e la verifica sul runner Windows sono
-ancora da eseguire; il build-only workflow `windows-agent-package` produce
-l'artifact senza eseguire test. Nessun runtime Windows, token o revoca reale è
-stato verificato in questo incremento.
+La compilazione locale net10.0-windows/net10.0 è riuscita senza warning. Il
+build-only Windows Actions run 39229033734 ha generato MSI e Setup.exe con 0
+warning/errore; i job di test sono stati saltati. Il kit LAN 0.8.0 è confezionato e scaricabile dalla console; l’API che gestisce la
+revoca è stata pubblicata sul server. Nessuna installazione, enrollment o rimozione
+reale è stata eseguita; il flusso MSI di revoca resta da verificare sul PC pilota.

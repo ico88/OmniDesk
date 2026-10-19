@@ -606,3 +606,7 @@ Solo compilazioni cross-target eseguite: Setup net10.0-windows, Agent
 net10.0-windows, API net10.0; zero warning/error. Comando:
 `docker run --rm -u 1000:1000 -v "$PWD:/work" -w /work -e DOTNET_CLI_HOME=/tmp/dotnet mcr.microsoft.com/dotnet/sdk:10.0 sh -c 'dotnet build src/OmniDesk.Setup.Windows -c Release && dotnet build src/OmniDesk.Agent.Windows -c Release && dotnet build src/OmniDesk.Api -c Release'`.
 Non eseguiti test, compilazione WiX Windows, installazione, enrollment o disinstallazione reali.
+
+Build-only Windows Actions run 39229033734 (commit sorgente d0d9cce45cec5dbcb2206a8707a5afad8775cf57) riuscita: publish Agent/Tray/Setup, vendor remote hash, WiX MSI build 0 warning/0 error, upload artifact. Job test agent-msi e console erano skipped; nessun MSI installato.
+Kit LAN `artifacts/windows-lan/OmniDesk.Windows.LAN-0.8.0.zip`, SHA256
+b98e174782a6fcf750f9383def93943479cf07fe4d1e3045e3663d871846d109; l'API UID1654 legge ZIP e manifest. API con endpoint self-uninstall pubblicata sul server dopo backup .backups/20261019T092313Z.9SVv40; container API ricreato e avviato. Non è stata eseguita una disinstallazione reale Windows; la revoca resta da verificare sul PC pilota.
