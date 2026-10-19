@@ -18,6 +18,8 @@ export function SupportDesk({visibleDeviceIds,onOpenDevice,deviceId,sites=[]}:{v
   const [filterState,setFilterState]=useState('');
   const [search,setSearch]=useState('');
   const [siteFilter,setSiteFilter]=useState('');
+  const [filterPriority,setFilterPriority]=useState('');
+  const [assigneeFilter,setAssigneeFilter]=useState('');
   const [state,setState] = useState('open');
   const [resolution,setResolution] = useState('');
   const [priority,setPriority]=useState('normal');
@@ -27,7 +29,7 @@ export function SupportDesk({visibleDeviceIds,onOpenDevice,deviceId,sites=[]}:{v
   const reply=useRef<HTMLTextAreaElement>(null);
   const preview=useRef<HTMLDialogElement>(null);
   const needsReply=(state==='resolved'||state==='closed')&&!selected?.resolution;
-  async function load() { const query=new URLSearchParams();if(filterState)query.set('state',filterState);if(search.trim())query.set('search',search.trim());if(deviceId)query.set('deviceId',deviceId);if(siteFilter)query.set('siteId',siteFilter);const rows=await api<Ticket[]>('/support?'+query.toString());setTickets(rows);setSelected(old=>old?rows.find(t=>t.id===old.id)??old:old); }
+  async function load() { const query=new URLSearchParams();if(filterState)query.set('state',filterState);if(search.trim())query.set('search',search.trim());if(deviceId)query.set('deviceId',deviceId);if(siteFilter)query.set('siteId',siteFilter);if(filterPriority)query.set('priority',filterPriority);if(assigneeFilter.trim())query.set('assignee',assigneeFilter.trim());const rows=await api<Ticket[]>('/support?'+query.toString());setTickets(rows);setSelected(old=>old?rows.find(t=>t.id===old.id)??old:old); }
   async function loadThread(ticket:Ticket,before?:number) {
     const data=await api<Thread>(`/support/${ticket.id}/messages${before?'?before='+before:''}`);
     if(before){setThread(old=>old?{...old,hasMore:data.hasMore,oldestId:data.oldestId,messages:[...data.messages,...old.messages]}:data);return;}
@@ -47,6 +49,8 @@ export function SupportDesk({visibleDeviceIds,onOpenDevice,deviceId,sites=[]}:{v
     <form className="support-toolbar" onSubmit={e=>{e.preventDefault();void work(load);}}>
       <label className="search-field"><Icon name="search"/><input aria-label="Cerca richieste" maxLength={200} placeholder="Oggetto o nome del computer…" value={search} onChange={e=>setSearch(e.target.value)}/></label>
       <label className="filter-field">Stato richieste<select aria-label="Filtra stato richieste" value={filterState} onChange={e=>setFilterState(e.target.value)}><option value="">Tutti gli stati</option>{Object.entries(labels).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label>
+      <label className="filter-field">Priorità<select aria-label="Filtra priorità ticket" value={filterPriority} onChange={e=>setFilterPriority(e.target.value)}><option value="">Tutte le priorità</option>{Object.entries(priorities).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label>
+      <label className="filter-field">Assegnatario<input aria-label="Filtra assegnatario ticket" maxLength={320} placeholder="email operatore" value={assigneeFilter} onChange={e=>setAssigneeFilter(e.target.value)}/></label>
       {!deviceId&&sites.length>0&&<label className="filter-field">Sede<select aria-label="Filtra sede ticket" value={siteFilter} onChange={e=>setSiteFilter(e.target.value)}><option value="">Tutte le sedi autorizzate</option>{sites.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label>}
       <button disabled={busy}><Icon name="search"/>Filtra</button>
       <button className="secondary" type="button" disabled={busy} onClick={()=>void work(load)}><Icon name="refresh"/>Aggiorna richieste</button>

@@ -67,8 +67,9 @@ public static class SupportEndpoints
             return Results.Created($"/api/support/{ticket.Id}", View(ticket));
         });
         var staff = app.MapGroup("/api/support").RequireAuthorization();
-        staff.MapGet("", async (string? state, string? search, Guid? deviceId, Guid? siteId, HttpContext c, AppDbContext db, PermissionService p) => {
-            if(state is not (null or "" or "open" or "in_progress" or "resolved" or "closed") || search?.Length > 200) return Results.BadRequest();
+        staff.MapGet("", async (string? state, string? search, Guid? deviceId, Guid? siteId, string? priority, string? assignee, HttpContext c, AppDbContext db, PermissionService p) => {
+            if(state is not (null or "" or "open" or "in_progress" or "resolved" or "closed") || search?.Length > 200 ||
+                priority is not (null or "" or "low" or "normal" or "high" or "urgent") || assignee?.Length > 320) return Results.BadRequest();
             if(deviceId.HasValue && !await p.Allows(c.User.UserId(), "tickets.view", deviceId)) return Results.Forbid();
             if(siteId.HasValue && !await p.Allows(c.User.UserId(), "tickets.view", siteId: siteId)) return Results.Forbid();
             var term=search?.Trim().ToLowerInvariant();
@@ -81,6 +82,9 @@ public static class SupportEndpoints
             if(siteId.HasValue)query=query.Where(t=>t.SiteId==siteId.Value);
             if(!string.IsNullOrEmpty(state))query=query.Where(t=>t.State==state);
             if(!string.IsNullOrEmpty(term))query=query.Where(t=>t.Subject.ToLower().Contains(term)||db.Devices.Any(d=>d.Id==t.DeviceId&&d.Name.ToLower().Contains(term)));
+            if(!string.IsNullOrEmpty(priority))query=query.Where(t=>t.Priority==priority);
+            var assigneeTerm=assignee?.Trim().ToLowerInvariant();
+            if(!string.IsNullOrEmpty(assigneeTerm))query=query.Where(t=>t.AssigneeId!=null&&db.Users.Any(u=>u.Id==t.AssigneeId&&u.Email!=null&&u.Email.ToLower()==assigneeTerm));
             return Results.Ok(await query.OrderByDescending(t => t.CreatedAt).Take(100)
                 .Select(t => new {t.Id,t.DeviceId,t.SiteId,deviceName=db.Devices.Where(d=>d.Id==t.DeviceId).Select(d=>d.Name).FirstOrDefault(),siteName=db.Sites.Where(s=>s.Id==t.SiteId).Select(s=>s.Name).FirstOrDefault(),t.Subject,t.Description,t.State,t.Priority,t.AssigneeId,assigneeEmail=t.AssigneeId==null?null:db.Users.Where(u=>u.Id==t.AssigneeId).Select(u=>u.Email).FirstOrDefault(),t.Resolution,t.Version,t.CreatedAt,t.UpdatedAt,hasScreenshot=t.Screenshot != null}).ToArrayAsync());
         });
