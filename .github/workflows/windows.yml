@@ -22,6 +22,8 @@ jobs:
           if ($parseErrors.Count -gt 0) { throw "Windows build script parser errors" }
           [System.Management.Automation.Language.Parser]::ParseFile("$PWD/installer/Test-OmniDeskMsi.ps1", [ref]$null, [ref]$parseErrors) | Out-Null
           if ($parseErrors.Count -gt 0) { throw "Windows MSI test parser errors" }
+          [System.Management.Automation.Language.Parser]::ParseFile("$PWD/installer/Test-OmniDeskUpgrade.ps1", [ref]$null, [ref]$parseErrors) | Out-Null
+          if ($parseErrors.Count -gt 0) { throw "Windows MSI upgrade test parser errors" }
       - name: Verify Tray protocol contracts
         run: dotnet test tests/OmniDesk.Api.Tests -c Release --filter FullyQualifiedName~TrayProtocolTests
       - name: Build Agent, Tray and single MSI
@@ -33,6 +35,19 @@ jobs:
           $msi = @(Get-ChildItem artifacts/windows-*/OmniDesk.Agent.msi)
           if ($msi.Count -ne 1) { throw "Atteso un singolo MSI" }
           & .\installer\Test-OmniDeskMsi.ps1 -MsiPath $msi[0].FullName
+      - name: Build pinned baseline and verify upgrade, repair and rollback
+        shell: powershell
+        run: |
+          $baseline = Join-Path $env:RUNNER_TEMP 'OmniDesk-baseline'
+          git fetch origin 98bba683420ff6ecdc14f9f401495b17291606b3 --depth=1
+          if ($LASTEXITCODE -ne 0) { throw "Baseline source fetch failed" }
+          git worktree add --detach $baseline FETCH_HEAD
+          if ($LASTEXITCODE -ne 0) { throw "Baseline worktree failed" }
+          & (Join-Path $baseline 'installer/Build-OmniDeskWindows.ps1')
+          $old = Join-Path $baseline 'artifacts/windows-0.6.0/OmniDesk.Agent.msi'
+          $new = @(Get-ChildItem artifacts/windows-*/OmniDesk.Agent.msi)
+          if ($new.Count -ne 1) { throw "Expected a single current MSI" }
+          & .\installer\Test-OmniDeskUpgrade.ps1 -BaselineMsi $old -NewMsi $new[0].FullName
       - name: Upload isolated MSI diagnostics
         if: always()
         uses: actions/upload-artifact@v4

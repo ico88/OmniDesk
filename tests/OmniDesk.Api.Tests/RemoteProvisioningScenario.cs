@@ -4,6 +4,8 @@ using System.Net.Http.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using OmniDesk.Api.Data;
+using OmniDesk.Api.Security;
+using Microsoft.Extensions.Logging.Abstractions;
 using OmniDesk.Contracts;
 using Xunit;
 namespace OmniDesk.Api.Tests;
@@ -32,6 +34,13 @@ public static class RemoteProvisioningScenario
         Auth();Assert.Equal(HttpStatusCode.NoContent,(await agent.PostAsJsonAsync("/api/agent/remote/node",report)).StatusCode);
         Auth();Assert.Equal(HttpStatusCode.NoContent,(await agent.PostAsJsonAsync("/api/agent/remote/node",report)).StatusCode);
         Assert.Equal(HttpStatusCode.NoContent,(await admin.DeleteAsync(route)).StatusCode);
+        var guard=new RemoteProvisioningGuard(factory.Services.GetRequiredService<IServiceScopeFactory>(),NullLogger<RemoteProvisioningGuard>.Instance);
+        await guard.Sweep(CancellationToken.None);
+        using(var scope=factory.Services.CreateScope()) {
+            var row=await scope.ServiceProvider.GetRequiredService<AppDbContext>().RemoteProvisionings.FindAsync(device);
+            Assert.True(row!.GroupRemoved);Assert.Empty(row.ProtectedSettings);
+        }
+        var count=factory.Mesh.GroupsRemoved;Assert.True(count>0);await guard.Sweep(CancellationToken.None);Assert.Equal(count,factory.Mesh.GroupsRemoved);
         Auth();Assert.Equal(HttpStatusCode.NoContent,(await agent.GetAsync("/api/agent/remote/configuration")).StatusCode);
         Auth();Assert.Equal(HttpStatusCode.Forbidden,(await agent.PostAsJsonAsync("/api/agent/remote/node",report)).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden,(await admin.PostAsJsonAsync($"/api/devices/{device}/remote-sessions",new {capability="remote.control"})).StatusCode);
