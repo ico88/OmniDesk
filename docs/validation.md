@@ -417,3 +417,34 @@ il POST reale /api/agent/remote/node e riuscito 204 e MeshDeviceMapping esiste
 per DESKTOP-EK7AD7M. Nessun inserimento SQL/manuale del nodo. Questo conferma
 associazione autenticata con nodo online nel gruppo corretto; apertura desktop,
 consenso e revoca restano prove distinte da eseguire con l'operatore.
+
+### Incremento non presidiato e riordino UI: sorgenti e limiti
+
+Migrazione RemoteAccessPolicy generata con EF10.0.13; sessioni esistenti marcate
+con consenso richiesto (backfill), device UnattendedAllowed=false. Versione
+policy attesa contro aggiornamenti obsoleti; attivazione/disattivazione solo
+administration globale, verifica dentro lock dispositivo e dopo chiamata motore.
+Modifica marca sessioni active revocation_pending e guard le revoca; versione
+snapshot e ricontrollo finale negano link creati durante una modifica policy.
+
+Mesh gruppo consent=7 (notifiche desktop/terminale/file), share per protocollo
+consent=9/18/36 in modalita presidiata e 1/2/4 non presidiata. La combinazione
+mantiene notifica e permessi separati. Engine account/group non esposti al browser.
+Nessun cambio autoAccept globale, nessuna modifica Tray o privilegi Windows.
+Primi test: 43 xUnit e 3 Vitest passati; aggiunta poi regressione cambio policy
+durante creazione, UI responsive e diagnostica Update: attendere run finali.
+Il test fake dimostra autorizzazione/contratto, non collegamento senza logon.
+
+Windows Update: errore reale precedente solo "Windows Update process failed".
+Avvio PS del worker senza ExecutionPolicy process era compatibile con il blocco
+Restricted gia rilevato sul PC. Aggiunto RemoteSigned esplicito per il solo
+processo dello script fisso locale e risultato con exit code/categoria sicurezza,
+senza stderr raw. Group Policy prevale; nessuna policy globale modificata.
+Test Windows di lancio fixture senza chiamate Windows Update aggiunto; Agent/Tray
+MSI portati a 0.7.2. Nessuna scansione reale riuscita dichiarata finche verificata.
+
+UI: SVG locali senza dipendenze nuove, ricerca e dettagli espandibili, stati
+basati su risposte reali, controlli remoti disabilitati fino ad associazione,
+aggiornamento stato ogni15s, apertura popup soltanto dopo link autorizzato e
+fallback visibile. Test browser adattati al flusso reale con disclosure e ricerca;
+screenshot previsti solo sull'ambiente isolato, nessun token in screenshot.

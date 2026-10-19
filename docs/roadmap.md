@@ -82,3 +82,18 @@ Hotfix 0.7.1 Tray: lettura SID di logon dal token nativo per correggere mancata 
 Gate remoto pilota: Defender ha quarantinato il binario e rimosso il servizio, rilevamento HackTool:Win32/Meshagent.MBZ!MTB confermato dagli eventi. Dossier di revisione pronto; nessun invio o verdetto di falso positivo. Collaudo desktop sospeso in attesa di risoluzione della valutazione del motore. Agent/Tray LAN restano verificati; UI e ticket possono proseguire indipendentemente. Correzione conservazione sorgente MSI e test estesi passati nel run 39215503901.
 
 Pilot remoto: dopo autorizzazione esplicita Defender dell'operatore, risolto nei sorgenti il rifiuto mapping 409 dovuto alla risposta upstream nodes che omette meshid dentro il nodo. Preservati gruppo esatto/nodo unico/online/credenziale; deploy e prova runtime da registrare. Autorizzazione laboratorio non costituisce verdetto Microsoft o chiusura del gate produzione.
+
+Incremento accesso non presidiato: policy per dispositivo con consenso predefinito,
+modifiche solo amministratore globale e versione attesa, snapshot nella sessione,
+revoca persistente al cambio e ricontrollo dopo creazione link. Notifiche Mesh
+obbligatorie nel gruppo, richiesta di consenso decisa sul server per ciascuna
+sessione e protocollo. UI con controllo esplicito, conferma e storico modalita.
+Migrazione RemoteAccessPolicy generata; test iniziali passati, verifiche finali e
+runtime ancora da completare. Nessuna attivazione globale sui dispositivi.
+
+Riordino web UI: icone SVG locali, ricerca dispositivi, stati reali leggibili,
+metriche compatte, dettagli avanzati espandibili, onboarding/download affiancati,
+avvio remoto con apertura scheda e link di riserva. Supporto responsive e temi.
+Scansione Windows Update segnalata fallita sul pilota: correzione avvio processo
+PowerShell con RemoteSigned solo nel processo, precedenza Group Policy preservata,
+nessun riavvio automatico; nuovo Agent/MSI 0.7.2 da compilare e collaudare.
