@@ -1156,3 +1156,8 @@ workflow `826d1ca`, il push documentale `d3127bf` non ha creato altri workflow:
 il filtro Markdown è verificato. Il comportamento di coalescenza non è ancora
 verificato: i run in coda/in esecuzione sono precedenti alla nuova regola e
 continuano il loro corso senza essere interrotti.
+## Incremento SD2 — Knowledge Base interna iniziale
+
+Implementati articoli testuali con slug univoco, bozze/pubblicazione, versione concorrente ottimistica e audit; permessi globali `knowledge.view` (Operator) e `knowledge.manage` (Administrator), default deny per Viewer. La UI React offre ricerca, lettura e editor solo ai gestori; il body è reso come testo e non interpreta HTML. Non sono inclusi portale self-service, ambiti sede/gruppo, allegati, Markdown/HTML, revisioni consultabili o workflow di approvazione.
+
+`./scripts/test.sh` passato: build API, migrazioni PostgreSQL temporanee, 64/64 test xUnit e build dashboard/5 Vitest. Lo scenario KB verifica rifiuto Viewer, lettura Operator limitata agli articoli pubblicati, bozze invisibili, creazione/audit, slug duplicato, pubblicazione e conflitti di aggiornamento concorrenti/stale. `docker compose build api dashboard` passato. `./scripts/smoke.sh --browser` passato con container isolati e Chromium: login Administrator, creazione/pubblicazione da UI, contenuto `<script>` non eseguibile, Viewer senza voce UI e 403 API. Compose standard validato con `docker compose config --quiet`; `git diff --check` passato. Nessun deployment LAN eseguito in questo incremento.
