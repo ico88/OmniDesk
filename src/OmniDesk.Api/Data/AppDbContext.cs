@@ -48,12 +48,15 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
     public DbSet<DeviceMetrics> DeviceMetrics => Set<DeviceMetrics>();
     public DbSet<DeviceInventory> DeviceInventories => Set<DeviceInventory>();
     public DbSet<MeshDeviceMapping> MeshDeviceMappings => Set<MeshDeviceMapping>();
+    public DbSet<RemoteProvisioning> RemoteProvisionings => Set<RemoteProvisioning>();
     public DbSet<RemoteSession> RemoteSessions => Set<RemoteSession>();
     public DbSet<UpdateJob> UpdateJobs => Set<UpdateJob>();
     public DbSet<DashboardLayout> DashboardLayouts => Set<DashboardLayout>();
     protected override void OnModelCreating(ModelBuilder b)
     {
         base.OnModelCreating(b);
+        b.Entity<RemoteProvisioning>().HasKey(x => x.DeviceId);
+        b.Entity<RemoteProvisioning>().HasOne<Device>().WithOne().HasForeignKey<RemoteProvisioning>(x => x.DeviceId).OnDelete(DeleteBehavior.Cascade);
         b.Entity<SupportTicket>().HasOne<Device>().WithMany().HasForeignKey(x => x.DeviceId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<SupportTicket>().HasIndex(x => new { x.DeviceId, x.RequesterKey, x.RequestId }).IsUnique();
         b.Entity<SupportTicket>().HasIndex(x => new { x.DeviceId, x.CreatedAt });

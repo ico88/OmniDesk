@@ -1,5 +1,5 @@
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
-  <Package Name="OmniDesk Agent" Manufacturer="OmniDesk" Version="0.6.0" UpgradeCode="2B357D2E-F3D9-4BBD-B7E4-68E4E279FA82" Scope="perMachine">
+  <Package Name="OmniDesk Agent" Manufacturer="OmniDesk" Version="0.7.0" UpgradeCode="2B357D2E-F3D9-4BBD-B7E4-68E4E279FA82" Scope="perMachine">
     <MajorUpgrade DowngradeErrorMessage="A newer OmniDesk Agent is already installed." />
     <MediaTemplate EmbedCab="yes" />
     <StandardDirectory Id="ProgramFiles64Folder">
@@ -16,8 +16,27 @@
           <File Id="TrayExe" Source="$(var.TrayPublishDir)\OmniDesk.Tray.Windows.exe" KeyPath="yes" />
           <RegistryValue Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\Run" Name="OmniDeskTray" Value="&quot;[#TrayExe]&quot;" Type="string" />
         </Component>
+        <Component Id="RemoteLicenses" Guid="714F8FE9-F2C0-44D5-8914-2708BDB3E454">
+          <File Source="..\licenses\Apache-2.0.txt" KeyPath="yes" />
+          <File Source="..\licenses\MeshAgent-NOTICE.txt" />
+        </Component>
+        <Directory Id="REMOTEFOLDER" Name="Remote">
+          <Component Id="RemoteDataAcl" Guid="B31584A9-1513-44D3-B37E-55EF575FE6C4">
+            <CreateFolder><PermissionEx Sddl="D:P(A;OICI;0x1F01FF;;;SY)(A;OICI;0x1F01FF;;;BA)" /></CreateFolder>
+          </Component>
+          <Component Id="RemoteService" Guid="A54074AC-1E89-43BB-90B4-248A6E90C639">
+            <File Id="RemoteExe" Source="$(var.RemotePublishDir)\MeshService64.exe" KeyPath="yes">
+              <PermissionEx Sddl="D:P(A;;0x1F01FF;;;SY)(A;;0x1F01FF;;;BA)(A;;0x1200A9;;;BU)" />
+            </File>
+            <ServiceInstall Id="InstallRemoteService" Name="OmniDeskRemote" DisplayName="OmniDesk Remote Engine" Description="Consent-based remote assistance managed by OmniDesk Agent" Type="ownProcess" Start="demand" ErrorControl="normal" Account="LocalSystem" Arguments="--meshServiceName=OmniDeskRemote">
+              <PermissionEx Sddl="D:P(A;;0xF01FF;;;SY)(A;;0xF01FF;;;BA)(A;;0x20005;;;IU)" />
+              <util:ServiceConfig FirstFailureActionType="restart" SecondFailureActionType="restart" ThirdFailureActionType="restart" ResetPeriodInDays="1" RestartServiceDelayInSeconds="30" />
+            </ServiceInstall>
+            <ServiceControl Id="ControlRemoteService" Name="OmniDeskRemote" Stop="both" Remove="uninstall" Wait="yes" />
+          </Component>
+        </Directory>
       </Directory>
     </StandardDirectory>
-    <Feature Id="Main" Title="OmniDesk Agent and Tray" Level="1"><ComponentRef Id="AgentService" /><ComponentRef Id="TrayApplication" /></Feature>
+    <Feature Id="Main" Title="OmniDesk Agent and Tray" Level="1"><ComponentRef Id="AgentService" /><ComponentRef Id="TrayApplication" /><ComponentRef Id="RemoteDataAcl" /><ComponentRef Id="RemoteService" /><ComponentRef Id="RemoteLicenses" /></Feature>
   </Package>
 </Wix>

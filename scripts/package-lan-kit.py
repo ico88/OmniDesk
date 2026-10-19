@@ -2,6 +2,8 @@
 """Package the verified GitHub Windows artifact and public LAN CA; no credentials."""
 import argparse
 import hashlib
+import json
+import uuid
 from pathlib import Path
 import re
 import ssl
@@ -12,10 +14,18 @@ parser.add_argument('--artifact', type=Path, required=True)
 parser.add_argument('--run', required=True)
 parser.add_argument('--commit', required=True)
 parser.add_argument('--output', type=Path, required=True)
+parser.add_argument('--version', default='0.6.0')
+parser.add_argument('--remote-engine', action='store_true')
 parser.add_argument('--ca', type=Path, default=Path('omnidesk-local-ca.crt'))
 args = parser.parse_args()
 if not args.run.isdigit() or not re.fullmatch('[a-f0-9]{40}', args.commit):
     parser.error('Run e commit GitHub non validi')
+if not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', args.version) or args.artifact.name != 'windows-' + args.version:
+    parser.error('Versione e directory artifact non corrispondenti')
+if args.output.name != f'OmniDesk.Windows.LAN-{args.version}.zip':
+    parser.error('Nome output non corrispondente alla versione')
+remote_note = ('Include il motore remoto Windows; attivarlo dalla console IT dopo enrollment. Richiede consenso e collaudo Windows.'
+               if args.remote_engine else 'Non include MeshCentral Agent: il desktop remoto completo non e disponibile con questo pacchetto.')
 expected = {}
 for line in (args.artifact / 'SHA256SUMS.txt').read_text().splitlines():
     digest, name = line.split(None, 1)
@@ -45,8 +55,8 @@ Origine: https://github.com/ico88/OmniDesk/actions/runs/{args.run}
 Commit: {args.commit}
 
 Pacchetto unsigned per laboratorio. I checksum non sostituiscono una firma.
-Non include credenziali, token o chiavi private. Non include MeshCentral Agent:
-il desktop remoto completo non e disponibile con questo pacchetto.
+Non include credenziali, token o chiavi private.
+{remote_note}
 
 1. Estrai il kit su Windows. Verifica SHA256SUMS.txt contro l'artifact GitHub.
 2. Dalla console https://192.168.1.233:8085 genera un token enrollment.
@@ -68,8 +78,18 @@ Nessuna protezione assoluta contro amministratori locali o accesso fisico.
 '''.encode()
 files['SHA256SUMS.txt'] = ''.join(f'{hashlib.sha256(data).hexdigest()}  {name}\n' for name, data in sorted(files.items())).encode()
 args.output.parent.mkdir(parents=True, exist_ok=True)
-with zipfile.ZipFile(args.output, 'w', zipfile.ZIP_DEFLATED) as archive:
-    for name, data in sorted(files.items()):
-        archive.writestr(name, data)
+temporary = args.output.with_name(args.output.name + '.' + uuid.uuid4().hex + '.tmp')
+try:
+    with zipfile.ZipFile(temporary, 'w', zipfile.ZIP_DEFLATED) as archive:
+        for name, data in sorted(files.items()):
+            archive.writestr(name, data)
+    temporary.replace(args.output)
+finally:
+    temporary.unlink(missing_ok=True)
+release = dict(version=args.version, commit=args.commit, sha256=hashlib.sha256(args.output.read_bytes()).hexdigest(),
+               size=args.output.stat().st_size, fileName=args.output.name, remoteEngineIncluded=args.remote_engine)
+metadata = args.output.parent / ('windows-release.' + uuid.uuid4().hex + '.tmp')
+metadata.write_text(json.dumps(release, indent=2) + '\n')
+metadata.replace(args.output.parent / 'windows-release.json')
 print(f'Kit creato: {args.output}')
 print('SHA256 ZIP:', hashlib.sha256(args.output.read_bytes()).hexdigest())

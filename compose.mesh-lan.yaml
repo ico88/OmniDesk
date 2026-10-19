@@ -1,0 +1,24 @@
+# Use with compose.yaml + compose.mesh.yaml. LAN laboratory only, no public release.
+services:
+  meshcentral:
+    environment:
+      MESH_PUBLIC_ORIGIN: ${MESH_PUBLIC_ORIGIN:-https://192.168.1.233:8086/}
+      NODE_EXTRA_CA_CERTS: /run/omnidesk-ca.crt
+    configs:
+      - source: omnidesk_public_ca
+        target: /run/omnidesk-ca.crt
+  api:
+    environment:
+      MeshCentral__Origin: ${MESH_PUBLIC_ORIGIN:-https://192.168.1.233:8086/}
+      SSL_CERT_FILE: /run/omnidesk-ca.crt
+    configs:
+      - source: omnidesk_public_ca
+        target: /run/omnidesk-ca.crt
+  caddy:
+    ports:
+      - "${OMNIDESK_BIND_ADDRESS:-192.168.1.233}:8086:8443"
+    volumes:
+      - ./deploy/mesh-lan.Caddyfile:/etc/caddy/Caddyfile:ro
+configs:
+  omnidesk_public_ca:
+    file: ./omnidesk-local-ca.crt

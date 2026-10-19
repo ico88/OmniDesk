@@ -39,6 +39,7 @@ public static class RemoteEndpoints
             if (!await p.Allows(c.User.UserId(), r.Capability, id)) return Results.Forbid();
             if (!await db.Devices.AnyAsync(x => x.Id == id)) return Results.NotFound();
             if (await db.DeviceCredentials.AnyAsync(x => x.DeviceId == id && x.RevokedAt != null)) return Results.Forbid();
+            if (await db.RemoteProvisionings.AnyAsync(x => x.DeviceId == id && !x.Enabled)) return Results.Forbid();
             var mapping = await db.MeshDeviceMappings.AsNoTracking().SingleOrDefaultAsync(x => x.DeviceId == id);
             if (!mesh.Configured || mapping is null) return Results.Problem("MeshCentral or device mapping unavailable", statusCode:503);
             var session = new RemoteSession { DeviceId = id, NodeId = mapping.NodeId, ActorId = c.User.UserId(), Capability = r.Capability };
@@ -49,7 +50,7 @@ public static class RemoteEndpoints
                 created = await mesh.Create(mapping.NodeId, r.Capability, c.User.UserId(), c.RequestAborted);
                 session.PublicId = created.PublicId; session.ExpiresAt = created.ExpiresAt; session.State = "active";
                 db.AuditEvents.Add(Event(c, "remote.create", session.Id)); await db.SaveChangesAsync();
-                if (!await p.Allows(c.User.UserId(), r.Capability, id) || await db.DeviceCredentials.AnyAsync(x => x.DeviceId == id && x.RevokedAt != null))
+                if (!await p.Allows(c.User.UserId(), r.Capability, id) || await db.DeviceCredentials.AnyAsync(x => x.DeviceId == id && x.RevokedAt != null) || await db.RemoteProvisionings.AnyAsync(x => x.DeviceId == id && !x.Enabled))
                 {
                     session.State = "revocation_pending";
                     db.AuditEvents.Add(Event(c, "remote.authorization.changed", session.Id)); await db.SaveChangesAsync();

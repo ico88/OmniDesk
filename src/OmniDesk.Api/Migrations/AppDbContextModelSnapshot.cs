@@ -492,6 +492,33 @@ namespace OmniDesk.Api.Migrations
                     b.ToTable("MeshDeviceMappings");
                 });
 
+            modelBuilder.Entity("OmniDesk.Api.Data.RemoteProvisioning", b =>
+                {
+                    b.Property<Guid>("DeviceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ProtectedMeshId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("ProtectedSettings")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("DeviceId");
+
+                    b.ToTable("RemoteProvisionings");
+                });
+
             modelBuilder.Entity("OmniDesk.Api.Data.RemoteSession", b =>
                 {
                     b.Property<Guid>("Id")
@@ -889,6 +916,15 @@ namespace OmniDesk.Api.Migrations
                     b.HasOne("OmniDesk.Api.Data.Device", null)
                         .WithOne()
                         .HasForeignKey("OmniDesk.Api.Data.MeshDeviceMapping", "DeviceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("OmniDesk.Api.Data.RemoteProvisioning", b =>
+                {
+                    b.HasOne("OmniDesk.Api.Data.Device", null)
+                        .WithOne()
+                        .HasForeignKey("OmniDesk.Api.Data.RemoteProvisioning", "DeviceId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

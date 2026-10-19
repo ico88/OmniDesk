@@ -66,4 +66,5 @@ builder.Services.AddSingleton<AgentRuntimeState>();
 builder.Services.AddHostedService<TrayPipeWorker>();
 builder.Services.AddHostedService<AgentWorker>();
 builder.Services.AddHostedService<UpdateWorker>();
+builder.Services.AddHostedService<RemoteAgentWorker>();
 await builder.Build().RunAsync();

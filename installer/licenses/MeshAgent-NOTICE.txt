@@ -1,0 +1,7 @@
+MeshCentral MeshAgent integration
+Copyright 2006-2022 Intel Corporation and upstream contributors.
+Source: https://github.com/Ylianst/MeshAgent
+Distribution: meshcentral npm package 1.2.5, MeshService64.exe (SHA256 pinned in OmniDesk.Contracts).
+Apache License 2.0, see Apache-2.0.txt.
+The original binary retains third-party license notices, available with MeshService64.exe -licenses.
+No upstream binary modifications.

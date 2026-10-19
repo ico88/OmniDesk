@@ -12,3 +12,13 @@ public sealed class RemoteSession
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? ExpiresAt { get; set; }
 }
+
+public sealed class RemoteProvisioning
+{
+    public Guid DeviceId { get; set; }
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string ProtectedSettings { get; set; } = "";
+    public string ProtectedMeshId { get; set; } = "";
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public bool Enabled { get; set; } = true;
+}

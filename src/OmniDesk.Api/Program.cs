@@ -56,6 +56,7 @@ if (!string.IsNullOrEmpty(keysPath))
     builder.Services.AddDataProtection().SetApplicationName("OmniDesk").PersistKeysToFileSystem(new DirectoryInfo(keysPath));
 builder.Services.AddScoped<PermissionService>();
 builder.Services.AddSingleton<IMeshCentralClient>(new MeshCentralClient(new MeshCentralOptions(builder.Configuration["MeshCentral:Origin"], builder.Configuration["MeshCentral:Username"], builder.Configuration["MeshCentral:PasswordFile"])));
+builder.Services.AddSingleton<IMeshProvisioningClient>(sp => (IMeshProvisioningClient)sp.GetRequiredService<IMeshCentralClient>());
 builder.Services.AddAuthentication().AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, DeviceAuthentication>(DeviceAuthentication.SchemeName, _ => {});
 builder.Services.AddHostedService<AssertionCleanup>();
 builder.Services.AddHostedService<RemoteSessionGuard>();
@@ -144,9 +145,11 @@ app.MapUserLifecycleEndpoints();
 app.MapAgentEndpoints();
 app.MapDeviceManagementEndpoints();
 app.MapRemoteEndpoints();
+app.MapRemoteProvisioningEndpoints();
 app.MapSupportEndpoints();
 app.MapUpdateEndpoints();
 app.MapAccountEndpoints();
 app.MapDashboardEndpoints();
+app.MapDownloadEndpoints();
 app.Run();
 public partial class Program { }

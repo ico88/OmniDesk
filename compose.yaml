@@ -67,6 +67,10 @@ services:
       DataProtection__Path: /keys
       Proxy__Network: ${OMNIDESK_PROXY_SUBNET:-172.29.84.0/24}
       Security__TotpEnabled: ${OMNIDESK_TOTP_ENABLED:-false}
+      Downloads__Directory: /packages
+    volumes:
+      - identity_keys:/keys
+      - ./artifacts/windows-lan:/packages:ro
     restart: unless-stopped
     depends_on:
       db:

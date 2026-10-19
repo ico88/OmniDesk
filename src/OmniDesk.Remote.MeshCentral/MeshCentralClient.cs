@@ -10,7 +10,7 @@ public interface IMeshCentralClient
     Task<MeshSession> Create(string nodeId, string capability, string actor, CancellationToken cancellationToken);
     Task Revoke(string nodeId, string publicId, CancellationToken cancellationToken);
 }
-public sealed class MeshCentralClient(MeshCentralOptions options) : IMeshCentralClient
+public sealed partial class MeshCentralClient(MeshCentralOptions options) : IMeshCentralClient
 {
     public bool Configured => Uri.TryCreate(options.Origin, UriKind.Absolute, out var origin) && origin.Scheme == "https" &&
         origin.AbsolutePath == "/" && string.IsNullOrEmpty(origin.UserInfo) && string.IsNullOrEmpty(origin.Query) &&
@@ -38,7 +38,7 @@ public sealed class MeshCentralClient(MeshCentralOptions options) : IMeshCentral
         if ((!reply.TryGetProperty("result", out var result) || result.GetString() != "OK") && !reply.TryGetProperty("removed", out _))
             throw new InvalidOperationException("MeshCentral refused session revocation");
     }
-    private async Task<JsonElement> Command(Dictionary<string, object> command, CancellationToken cancellationToken)
+    private async Task<JsonElement> Command(Dictionary<string, object> command, CancellationToken cancellationToken, Action<JsonElement>? serverInfo = null)
     {
         if (!Configured) throw new InvalidOperationException("MeshCentral is not configured");
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken); timeout.CancelAfter(TimeSpan.FromSeconds(15));
@@ -60,6 +60,7 @@ public sealed class MeshCentralClient(MeshCentralOptions options) : IMeshCentral
                 bytes.Write(buffer, 0, part.Count); if (bytes.Length > 1024 * 1024) throw new InvalidOperationException("MeshCentral response too large");
             } while (!part.EndOfMessage);
             using var json = JsonDocument.Parse(bytes.ToArray());
+            if (json.RootElement.TryGetProperty("action",out var action) && action.GetString() == "serverinfo" && json.RootElement.TryGetProperty("serverinfo",out var info)) serverInfo?.Invoke(info.Clone());
             if (json.RootElement.TryGetProperty("responseid", out var id) && id.GetString() == responseId) return json.RootElement.Clone();
         }
     }

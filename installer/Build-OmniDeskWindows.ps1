@@ -18,6 +18,13 @@ try {
     if ($version -ne [string]$package.Wix.Package.Version) { throw 'Versioni Agent e MSI differenti.' }
     [xml]$tray = Get-Content 'src/OmniDesk.Tray.Windows/OmniDesk.Tray.Windows.csproj'
     if ($version -ne [string]($tray.Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1)) { throw 'Versioni Agent e Tray differenti.' }
+    & npm ci --ignore-scripts --omit=dev --prefix modules/remote-meshcentral
+    if ($LASTEXITCODE -ne 0) { throw 'Restore vendor remoto fallito.' }
+    $remoteSource = 'modules/remote-meshcentral/node_modules/meshcentral/agents/MeshService64.exe'
+    $remoteHash = (Get-FileHash $remoteSource -Algorithm SHA256).Hash
+    if ($remoteHash -ne 'CBF10A37FC01F74F2473AECA0A4B391DCA6F9D0A8D0300AA7181DBCE7BACC51E') { throw 'Hash vendor remoto non corrispondente.' }
+    New-Item -ItemType Directory -Path 'artifacts/remote-win-x64' -Force | Out-Null
+    Copy-Item $remoteSource 'artifacts/remote-win-x64/MeshService64.exe'
     foreach ($component in @('Agent', 'Tray')) {
         $output = "artifacts/$($component.ToLower())-win-x64"
         Invoke-Dotnet -Arguments @('publish', "src/OmniDesk.$component.Windows", '-c', 'Release', '-r', 'win-x64', '--self-contained', 'true', '-p:PublishSingleFile=true', '-p:IncludeNativeLibrariesForSelfExtract=true', '-o', $output)
