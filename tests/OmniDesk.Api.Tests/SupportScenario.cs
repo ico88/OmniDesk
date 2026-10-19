@@ -659,6 +659,25 @@ public static class SupportScenario
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            await db.SupportAttachments.Where(x => x.Id == internalId).ExecuteUpdateAsync(update => update
+                .SetProperty(x => x.ScanState, "scan_failed").SetProperty(x => x.ScanAttempts, 10));
+        }
+        var retryUrl = $"/api/support/{participantTicketId}/attachments/{internalId}/retry-scan";
+        Assert.Equal(HttpStatusCode.Forbidden, (await readerClient.PostAsJsonAsync(retryUrl, new { })).StatusCode);
+        Assert.Equal(HttpStatusCode.Accepted, (await admin.PostAsJsonAsync(retryUrl, new { })).StatusCode);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var retried = await db.SupportAttachments.SingleAsync(x => x.Id == internalId);
+            Assert.Equal("quarantined", retried.ScanState);
+            Assert.Equal(0, retried.ScanAttempts);
+            Assert.Contains(await db.AuditEvents.ToArrayAsync(), audit => audit.Action == "ticket.attachment.scan.retry" && audit.Target == internalId.ToString());
+        }
+        Assert.True(await scanWorker.ProcessNext(CancellationToken.None));
+        Assert.Equal(HttpStatusCode.OK, (await admin.GetAsync($"{attachmentUrl}/{internalId}")).StatusCode);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             db.RemoteSessions.RemoveRange(db.RemoteSessions.Where(x => x.Id == remoteSessionId));
             db.UpdateJobs.RemoveRange(db.UpdateJobs.Where(x => x.Id == updateJobId));
             await db.SaveChangesAsync();
