@@ -448,3 +448,29 @@ basati su risposte reali, controlli remoti disabilitati fino ad associazione,
 aggiornamento stato ogni15s, apertura popup soltanto dopo link autorizzato e
 fallback visibile. Test browser adattati al flusso reale con disclosure e ricerca;
 screenshot previsti solo sull'ambiente isolato, nessun token in screenshot.
+
+### Pubblicazione policy e nuova UI LAN
+
+- Suite completa scripts/test.sh: 43 xUnit e 3 Vitest passati, con migrazioni,
+  autorizzazione policy, default consenso, override client ignorato, stale version,
+  fallimento motore senza cambio policy, tre protocolli non presidiati, revoca
+  al ritorno presidiato e cambio policy durante creazione senza consegna link.
+- Build API/dashboard Compose e config --quiet passate. Due run smoke browser
+  (secondo dopo polish mobile) passati: permessi, account/grant, enrollment,
+  rinomina/gruppo/revoca, ticket, download, ricerca e assenza overflow pagina a390px.
+  Screenshot ambiente isolato in artifacts/ui-preview: desktop/mobile e admin.
+  Controllo visivo ha individuato wrapping eccessivo nelle colonne mobile:
+  corretti tabella dispositivi e pulsante Apri, verificati nel secondo run.
+- Sonda reale UID1654/rete Docker: TLS/control, applicazione policy notifiche su
+  gruppo diagnostico, provisioning idempotente, rifiuto nodo inesistente e rimozione
+  gruppo passati. Nessuna modifica al gruppo del PC pilota da questa sonda.
+- Backup predeploy .backups/20261019T075738Z.0TrfgG; migrazione
+  20261019074810_RemoteAccessPolicy applicata. API e dashboard ricreate e avviate;
+  readiness HTTPS/CA, dashboard/assets e rifiuto anonimo passati dopo deploy.
+  Database pilota UnattendedAllowed=false/version0 confermato read-only: nessuna
+  attivazione automatica. Provare dalla UI con amministratore del dispositivo.
+- Desktop presidiato reale precedentemente confermato dall'operatore. Modalita
+  non presidiata, notifica, lock screen/senza logon e revoca tunnel in quella
+  modalita richiedono ancora collaudo interattivo; nessun test fake li sostituisce.
+- Agent0.7.2 per lancio Update corretto ancora in CI Windows al momento del deploy
+  web; vecchio risultato scan resta failed, nessuna scansione rilanciata da noi.
