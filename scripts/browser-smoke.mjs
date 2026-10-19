@@ -16,6 +16,17 @@ try {
  await page.getByLabel('Nome visualizzato',{exact:true}).fill('Federico Operatore');
  await page.getByRole('button',{name:'Salva nome',exact:true}).click();
  await page.getByText('Nome operatore aggiornato',{exact:true}).waitFor();
+ const knowledgeTitle='Guida browser '+randomBytes(5).toString('hex');
+ await page.getByRole('button',{name:'Knowledge base',exact:true}).click();
+ await page.getByRole('button',{name:'Nuovo',exact:true}).click();
+ await page.getByLabel('Slug',{exact:true}).fill('browser-'+randomBytes(5).toString('hex'));
+ await page.getByLabel('Titolo',{exact:true}).fill(knowledgeTitle);
+ await page.getByLabel('Descrizione breve',{exact:true}).fill('Guida interna di prova');
+ await page.getByLabel('Contenuto',{exact:true}).fill('Controlli iniziali.\nNon inserire segreti. <script>alert(1)</script>');
+ await page.getByLabel('Pubblica agli operatori',{exact:true}).check();
+ await page.getByRole('button',{name:'Crea articolo',exact:true}).click();
+ await page.getByRole('heading',{name:knowledgeTitle,exact:true}).waitFor();
+ assert.equal(await page.locator('.knowledge-body').locator('script').count(),0,'Knowledge body is rendered as text, not executable HTML');
  await page.reload(); await page.getByRole('heading',{name:'Panoramica',exact:true}).waitFor();
  await page.getByRole('button',{name:'Account e sicurezza',exact:true}).click();
  assert.equal(await page.getByLabel('Nome visualizzato',{exact:true}).inputValue(),'Federico Operatore','Operator display name persisted after reload');
@@ -177,6 +188,8 @@ try {
  await page.getByRole('button',{name:'Accedi',exact:true}).click(); await page.getByRole('heading',{name:'Panoramica',exact:true}).waitFor();
  assert.equal(await page.getByRole('button',{name:'Audit',exact:true}).count(),0);
  assert.equal(await page.getByRole('button',{name:'Utenti',exact:true}).count(),0);
+ assert.equal(await page.getByRole('button',{name:'Knowledge base',exact:true}).count(),0,'Viewer does not receive knowledge navigation');
+ assert.equal((await context.request.get('https://omnidesk.test/api/knowledge')).status(),403,'Viewer cannot read internal knowledge articles');
  await page.waitForFunction(()=>document.querySelectorAll('.stats .panel').length===3);
  assert.equal(await page.locator('.stats .panel').count(),3,'Viewer layout isolated');
  await page.getByRole('button',{name:'Dispositivi',exact:true}).click();
