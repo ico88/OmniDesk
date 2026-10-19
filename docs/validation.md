@@ -825,6 +825,11 @@ CI completa su questa revisione ancora da attendere.
 `TicketCategories` introduce `Category` con default `general` e indice sede/categoria/stato/data. API consente solo `general`, `hardware`, `software`, `network`, `account`, `other`; la filtrazione avviene nella query autorizzata. La console filtra la categoria e la Tray la seleziona all'apertura; è immutabile dopo l'invio per conservare la ripetibilità idempotente. L'evento outbox `ticket.created` include la categoria senza contenuti utente. `./scripts/test.sh`: 63 xUnit/PostgreSQL e 4 Vitest passati. Cross-publish Agent, Tray e Setup `win-x64`, `docker compose config -q` e `git diff --check` passati. Nessuna migrazione o pubblicazione sul database LAN effettuata. Pacchetto Windows candidato 0.8.7 e workflow CI da attendere.
 
 
+## Code ticket — sorgenti in verifica
+
+`SupportQueues` introduce code globali con nome normalizzato univoco, audit/outbox per creazione e disattivazione morbida. La gestione richiede `administration`; elenco code richiede almeno una capability ticket. Assegnazione/rimozione nel ticket richiede `tickets.manage`, coda attiva e versione attesa. Il filtro `queue=id|unassigned` si applica alla query già limitata dai normali grant `tickets.view`; nessuna coda espande la visibilità per sede/dispositivo. La UI amministrativa crea/disattiva le code, la console ticket assegna e filtra. `./scripts/test.sh`: 63 xUnit/PostgreSQL e 4 Vitest passati, incluse migrazione, default deny e vincoli di coda; `docker compose config -q` e `git diff --check` passati. Nessun deploy LAN.
+
+
 ## Terminazione processi RMM — 19 ottobre 2026
 
 Nuova capability `processes.manage`, seed solo Administrator predefinito e grant

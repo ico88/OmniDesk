@@ -50,13 +50,16 @@ Contratti ticket/screenshot, identità locale del richiedente, permessi `tickets
 
 ## Service Desk SD1
 
-`GET /api/support` restituisce i ticket visibili e include il numero stabile `OD-` (campo numerico `number`), `priority`, `category`, `assigneeId`
-e `assigneeEmail`; accetta filtri `priority=low|normal|high|urgent`, `category=general|hardware|software|network|account|other` e `assignee=email`
+`GET /api/support` restituisce i ticket visibili e include il numero stabile `OD-` (campo numerico `number`), `priority`, `category`, `queueId`, `queueName`, `assigneeId`
+e `assigneeEmail`; accetta filtri `priority=low|normal|high|urgent`, `category=general|hardware|software|network|account|other`, `queue={id|unassigned}` e `assignee=email`
 oltre a stato, ricerca, device e sede. `GET /api/support/{id}/assignees` richiede `tickets.manage`
 sull’ambito storico del ticket e restituisce fino a 200 account attivi con entrambi
 i permessi `tickets.view` e `tickets.manage` nello stesso ambito. `PUT
 /api/support/{id}` mantiene il contratto di stato/risposta e accetta inoltre
 `priority` con `updatePriority` e `assigneeId` nullable con `updateAssignment`;
+`queueId` nullable con `updateQueue` assegna o rimuove la coda;
 validazione ruolo, abilitazione, ambito e versione avvengono sul server. Priorità
 ammesse: `low`, `normal`, `high`, `urgent`; categoria ammessa tramite `category`
-e `updateCategory`. Vedere [modello Service Desk](service-desk-data-model.md).
+in sola creazione. `GET /api/support/queues` richiede almeno `tickets.view` o
+`tickets.manage`; creazione e disattivazione code richiedono amministrazione in
+`/api/admin/support-queues`. Vedere [modello Service Desk](service-desk-data-model.md).

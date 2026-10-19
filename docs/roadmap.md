@@ -259,8 +259,10 @@ La console ticket aggiunge filtri server-side per priorità e assegnatario (emai
 senza allargare l’insieme dei ticket restituiti oltre gli ambiti `tickets.view`.
 Test API verificano filtri e rifiuto di priorità/categorie non valide. Le categorie
 core sono general, hardware, software, network, account e other; la Tray le
-propone in apertura e la console le filtra. Code, contatori/SLA e
-assegnazione massiva restano da sviluppare.
+propone in apertura e la console le filtra. La tranche successiva implementa code
+globali amministrabili, assegnazione per ticket e filtro per coda, con permessi e
+migrazione verificati; membership, routing automatico, code site-scoped,
+contatori/SLA e assegnazione massiva restano da sviluppare.
 
 Il numero ticket è ora generato da Identity PostgreSQL e condiviso dalla Tray e
 dalla console nel formato `OD-000123`; non deriva dall’UUID e non promette una
