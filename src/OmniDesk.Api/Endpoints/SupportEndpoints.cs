@@ -120,8 +120,10 @@ public static class SupportEndpoints
                 .Where(rule => rule.Category == r.Ticket.Category && (rule.SiteId == siteId || rule.SiteId == null) &&
                     db.SupportQueues.Any(queue => queue.Id == rule.QueueId && queue.IsActive && (queue.SiteId == null || queue.SiteId == siteId)))
                 .OrderByDescending(rule => rule.SiteId != null).Select(rule => (Guid?)rule.QueueId).FirstOrDefaultAsync();
+            var workflowBinding = await TicketWorkflowResolver.BindForNewTicket(db, siteId);
             var ticket = new SupportTicket { DeviceId = id, SiteId = siteId, RequesterKey = r.RequesterKey, RequestId = r.Ticket.RequestId,
-                Subject = r.Ticket.Subject.Trim(), Description = r.Ticket.Description.Trim(), Category = r.Ticket.Category, QueueId = queueId, Screenshot = screenshot };
+                Subject = r.Ticket.Subject.Trim(), Description = r.Ticket.Description.Trim(), Category = r.Ticket.Category, QueueId = queueId,
+                WorkflowId = workflowBinding.WorkflowId, WorkflowVersion = workflowBinding.WorkflowVersion, Screenshot = screenshot };
             db.SupportTickets.Add(ticket);
             var primaryDeviceName = await db.Devices.Where(x => x.Id == id).Select(x => x.Name).SingleAsync();
             var primarySiteName = await db.Sites.Where(x => x.Id == siteId).Select(x => x.Name).SingleAsync();
@@ -231,11 +233,13 @@ public static class SupportEndpoints
                 .Where(rule => rule.Category == category && (rule.SiteId == device.SiteId || rule.SiteId == null) &&
                     db.SupportQueues.Any(queue => queue.Id == rule.QueueId && queue.IsActive && (queue.SiteId == null || queue.SiteId == device.SiteId)))
                 .OrderByDescending(rule => rule.SiteId != null).Select(rule => (Guid?)rule.QueueId).FirstOrDefaultAsync();
+            var workflowBinding = await TicketWorkflowResolver.BindForNewTicket(db, device.SiteId);
             var now = DateTimeOffset.UtcNow;
             var ticket = new SupportTicket {
                 DeviceId = device.Id, SiteId = device.SiteId, RequesterUserId = userId, RequesterKey = requesterKey,
                 RequestId = r.RequestId, Origin = "portal", Subject = subject, Description = description,
-                Category = category, Priority = "normal", QueueId = queueId, CreatedAt = now, UpdatedAt = now, Screenshot = screenshot
+                Category = category, Priority = "normal", QueueId = queueId, WorkflowId = workflowBinding.WorkflowId,
+                WorkflowVersion = workflowBinding.WorkflowVersion, CreatedAt = now, UpdatedAt = now, Screenshot = screenshot
             };
             db.SupportTickets.Add(ticket);
             db.SupportTicketDevices.Add(new SupportTicketDevice { TicketId = ticket.Id, DeviceId = device.Id,
@@ -320,8 +324,10 @@ public static class SupportEndpoints
                 .Where(rule => rule.Category == r.Category && (rule.SiteId == device.SiteId || rule.SiteId == null) &&
                     db.SupportQueues.Any(queue => queue.Id == rule.QueueId && queue.IsActive && (queue.SiteId == null || queue.SiteId == device.SiteId)))
                 .OrderByDescending(rule => rule.SiteId != null).Select(rule => (Guid?)rule.QueueId).FirstOrDefaultAsync();
+            var workflowBinding = await TicketWorkflowResolver.BindForNewTicket(db, device.SiteId);
             var ticket = new SupportTicket { DeviceId = device.Id, SiteId = device.SiteId, RequesterKey = requesterKey, RequestId = r.RequestId,
-                Origin = "operator", Subject = r.Subject.Trim(), Description = r.Description.Trim(), Category = r.Category, Priority = r.Priority, QueueId = queueId };
+                Origin = "operator", Subject = r.Subject.Trim(), Description = r.Description.Trim(), Category = r.Category, Priority = r.Priority,
+                QueueId = queueId, WorkflowId = workflowBinding.WorkflowId, WorkflowVersion = workflowBinding.WorkflowVersion };
             db.SupportTickets.Add(ticket);
             var deviceName = await db.Devices.Where(x => x.Id == device.Id).Select(x => x.Name).SingleAsync();
             var siteName = await db.Sites.Where(x => x.Id == device.SiteId).Select(x => x.Name).SingleAsync();
@@ -491,10 +497,20 @@ public static class SupportEndpoints
             return Results.Ok(summary ?? new { total = 0, open = 0, inProgress = 0, urgent = 0 });
         });
         staff.MapGet("", async (string? state, string? search, Guid? deviceId, Guid? siteId, string? priority, string? assignee, string? category, string? queue, Guid? ticketId, HttpContext c, AppDbContext db, PermissionService p) => {
-            if(state is not (null or "" or "open" or "in_progress" or "resolved" or "closed") || search?.Length > 200 ||
+            if((!string.IsNullOrEmpty(state) && !TicketWorkflowPolicy.IsValidStateCode(state)) || search?.Length > 200 ||
                 priority is not (null or "" or "low" or "normal" or "high" or "urgent") || assignee?.Length > 320 ||
                 (!string.IsNullOrEmpty(category) && !Categories.Contains(category)) ||
                 (!string.IsNullOrEmpty(queue) && queue != "unassigned" && !Guid.TryParse(queue, out _))) return Results.BadRequest();
+            if (!string.IsNullOrEmpty(state))
+            {
+                var knownState = TicketWorkflowDefinition.Default.States.Any(x => x.Code == state);
+                if (!knownState)
+                {
+                    var publishedDefinitions = await db.SupportWorkflowVersions.AsNoTracking().Select(x => x.DefinitionJson).ToArrayAsync();
+                    knownState = publishedDefinitions.Select(TicketWorkflowPolicy.Deserialize).Any(x => x?.States.Any(s => s.Code == state) == true);
+                }
+                if (!knownState) return Results.BadRequest();
+            }
             if(deviceId.HasValue && !await p.Allows(c.User.UserId(), "tickets.view", deviceId)) return Results.Forbid();
             if(siteId.HasValue && !await p.Allows(c.User.UserId(), "tickets.view", siteId: siteId)) return Results.Forbid();
             var term=search?.Trim().ToLowerInvariant();
@@ -517,8 +533,15 @@ public static class SupportEndpoints
             else if(Guid.TryParse(queue, out var queueId))query=query.Where(t=>t.QueueId==queueId);
             var assigneeTerm=assignee?.Trim().ToLowerInvariant();
             if(!string.IsNullOrEmpty(assigneeTerm))query=query.Where(t=>t.AssigneeId!=null&&db.Users.Any(u=>u.Id==t.AssigneeId&&u.Email!=null&&u.Email.ToLower()==assigneeTerm));
-            return Results.Ok(await query.OrderByDescending(t => t.CreatedAt).Take(100)
-                .Select(t => new {t.Id,t.Number,t.DeviceId,t.SiteId,deviceName=db.Devices.Where(d=>d.Id==t.DeviceId).Select(d=>d.Name).FirstOrDefault(),siteName=db.Sites.Where(s=>s.Id==t.SiteId).Select(s=>s.Name).FirstOrDefault(),t.Subject,t.Description,t.State,t.Priority,t.Category,t.Origin,t.QueueId,queueName=t.QueueId==null?null:db.SupportQueues.Where(q=>q.Id==t.QueueId).Select(q=>q.Name).FirstOrDefault(),t.AssigneeId,assigneeEmail=t.AssigneeId==null?null:db.Users.Where(u=>u.Id==t.AssigneeId).Select(u=>u.Email).FirstOrDefault(),canManage=manageGlobal||manageGrants.Any(g=>g.SiteId==t.SiteId||g.DeviceId==t.DeviceId||(g.GroupId!=null&&db.Devices.Any(d=>d.Id==t.DeviceId&&d.GroupId==g.GroupId))),t.Resolution,t.Version,t.CreatedAt,t.UpdatedAt,hasScreenshot=t.Screenshot != null}).ToArrayAsync());
+            var rows=await query.OrderByDescending(t => t.CreatedAt).Take(100)
+                .Select(t => new {t.Id,t.Number,t.DeviceId,t.SiteId,deviceName=db.Devices.Where(d=>d.Id==t.DeviceId).Select(d=>d.Name).FirstOrDefault(),siteName=db.Sites.Where(s=>s.Id==t.SiteId).Select(s=>s.Name).FirstOrDefault(),t.Subject,t.Description,t.State,t.WorkflowId,t.WorkflowVersion,t.Priority,t.Category,t.Origin,t.QueueId,queueName=t.QueueId==null?null:db.SupportQueues.Where(q=>q.Id==t.QueueId).Select(q=>q.Name).FirstOrDefault(),t.AssigneeId,assigneeEmail=t.AssigneeId==null?null:db.Users.Where(u=>u.Id==t.AssigneeId).Select(u=>u.Email).FirstOrDefault(),canManage=manageGlobal||manageGrants.Any(g=>g.SiteId==t.SiteId||g.DeviceId==t.DeviceId||(g.GroupId!=null&&db.Devices.Any(d=>d.Id==t.DeviceId&&d.GroupId==g.GroupId))),t.Resolution,t.Version,t.CreatedAt,t.UpdatedAt,hasScreenshot=t.Screenshot != null}).ToArrayAsync();
+            var workflowIds=rows.Where(t=>t.WorkflowId.HasValue&&t.WorkflowVersion.HasValue).Select(t=>t.WorkflowId!.Value).Distinct().ToArray();
+            var workflowVersions=await db.SupportWorkflowVersions.AsNoTracking().Where(v=>workflowIds.Contains(v.WorkflowId)).ToArrayAsync();
+            var definitions=workflowVersions.ToDictionary(v=>(v.WorkflowId,v.Version),v=>TicketWorkflowPolicy.Deserialize(v.DefinitionJson));
+            return Results.Ok(rows.Select(t=>new {t.Id,t.Number,t.DeviceId,t.SiteId,t.deviceName,t.siteName,t.Subject,t.Description,t.State,
+                stateLabel=t.WorkflowId.HasValue&&t.WorkflowVersion.HasValue&&definitions.TryGetValue((t.WorkflowId.Value,t.WorkflowVersion.Value),out var definition)&&definition is not null
+                    ?TicketWorkflowPolicy.Label(definition,t.State):TicketWorkflowPolicy.Label(TicketWorkflowDefinition.Default,t.State),
+                t.Priority,t.Category,t.Origin,t.QueueId,t.queueName,t.AssigneeId,t.assigneeEmail,t.canManage,t.Resolution,t.Version,t.CreatedAt,t.UpdatedAt,t.hasScreenshot}));
         });
         staff.MapPut("/bulk-queue", async (BulkQueueAssignment r, HttpContext c, AppDbContext db, PermissionService p) => {
             if (r.Tickets is null || r.Tickets.Length is < 1 or > 50 || r.Tickets.Any(x => x.TicketId == Guid.Empty || x.ExpectedVersion < 1) ||
@@ -597,7 +620,7 @@ public static class SupportEndpoints
             var ticket = await db.SupportTickets.AsNoTracking().SingleOrDefaultAsync(t => t.Id == id);
             if (ticket is null) return Results.NotFound();
             if (!await p.Allows(c.User.UserId(), "tickets.manage", ticket.DeviceId, siteId: ticket.SiteId)) return Results.Forbid();
-            if (r.State is not ("open" or "in_progress" or "resolved" or "closed")) return Results.BadRequest(new {error="Seleziona uno stato del ticket valido."});
+            if (string.IsNullOrWhiteSpace(r.State) || r.State.Length > 20) return Results.BadRequest(new {error="Seleziona uno stato del ticket valido."});
             if (r.UpdatePriority && !Priorities.Contains(r.Priority)) return Results.BadRequest(new { error = "Seleziona una priorità valida." });
             if (r.UpdateAssignment && r.AssigneeId?.Length > 450) return Results.BadRequest();
             if(r.Resolution?.Length>8000)return Results.BadRequest(new {error="La risposta puo contenere al massimo 8000 caratteri."});
@@ -606,16 +629,17 @@ public static class SupportEndpoints
             if (!await p.Allows(c.User.UserId(), "tickets.manage", ticket.DeviceId, siteId: ticket.SiteId)) return Results.Forbid();
             ticket=await db.SupportTickets.AsNoTracking().SingleAsync(t=>t.Id==id);
             if(ticket.Version!=r.ExpectedVersion)return Results.Conflict(new {error="Il ticket e stato aggiornato. Ricarica la conversazione prima di salvare."});
-            if (!TicketWorkflowPolicy.Allows(ticket.State, r.State))
+            var workflow = await TicketWorkflowResolver.ForTicket(db, ticket);
+            if (!TicketWorkflowPolicy.Allows(workflow, ticket.State, r.State))
                 return Results.Conflict(new { error = "Transizione non consentita dal workflow corrente.", currentState = ticket.State,
-                    allowedStates = TicketWorkflowPolicy.AllowedStates(ticket.State) });
+                    allowedStates = TicketWorkflowPolicy.AllowedStates(workflow, ticket.State) });
             var body = r.Resolution?.Trim();
             if (r.AddReply && string.IsNullOrWhiteSpace(body))
                 return Results.BadRequest(new { error = "La risposta pubblica non può essere vuota." });
             var resolution = ticket.State == "resolved" && (r.State is "open" or "in_progress")
                 ? null
                 : string.IsNullOrWhiteSpace(body) ? ticket.Resolution : body;
-            if (TicketWorkflowPolicy.RequiresResolution(r.State) && string.IsNullOrWhiteSpace(resolution))
+            if (TicketWorkflowPolicy.RequiresResolution(workflow, r.State) && string.IsNullOrWhiteSpace(resolution))
                 return Results.BadRequest(new { error = "Scrivi una risposta all'utente prima di risolvere il ticket." });
             if (r.UpdateQueue && r.QueueId is not null && !await db.SupportQueues.AnyAsync(q => q.Id == r.QueueId && q.IsActive && (q.SiteId == null || q.SiteId == ticket.SiteId)))
                 return Results.BadRequest(new { error = "La coda selezionata non è attiva." });
@@ -871,7 +895,11 @@ public static class SupportEndpoints
             c.Response.Headers.CacheControl="no-store";
             var oldest=rows.Length>0?rows[^1].Id:(long?)null;
             var hasMore=oldest.HasValue&&await query.AnyAsync(m=>m.Id<oldest.Value);
-            return Results.Ok(new {ticket.Version,ticket.State,ticket.Resolution,allowedStates=TicketWorkflowPolicy.AllowedStates(ticket.State),canReply=await p.Allows(c.User.UserId(),"tickets.manage",ticket.DeviceId,siteId:ticket.SiteId),canNote=canViewInternal,hasMore,oldestId=oldest,messages=rows.Reverse()});
+            var workflow=await TicketWorkflowResolver.ForTicket(db,ticket);
+            var stateLabels=workflow?.States.ToDictionary(x=>x.Code,x=>x.Label,StringComparer.Ordinal) ?? new Dictionary<string,string>(StringComparer.Ordinal) { [ticket.State]=ticket.State };
+            return Results.Ok(new {ticket.Version,ticket.State,ticket.Resolution,ticket.WorkflowVersion,
+                allowedStates=TicketWorkflowPolicy.AllowedStates(workflow,ticket.State),stateLabels,
+                canReply=await p.Allows(c.User.UserId(),"tickets.manage",ticket.DeviceId,siteId:ticket.SiteId),canNote=canViewInternal,hasMore,oldestId=oldest,messages=rows.Reverse()});
         });
         staff.MapGet("/{id:guid}/screenshot", async (Guid id, bool? inline, HttpContext c, AppDbContext db, PermissionService p) => {
             var ticket = await db.SupportTickets.AsNoTracking().SingleOrDefaultAsync(t => t.Id == id);

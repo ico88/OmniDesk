@@ -29,6 +29,29 @@ public sealed class SupportQueueRoutingRule
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
 
+public sealed class SupportWorkflow
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid? SiteId { get; set; }
+    public string ScopeKey { get; set; } = "global";
+    public string Name { get; set; } = "";
+    public string DraftDefinitionJson { get; set; } = "";
+    public long Version { get; set; } = 1;
+    public int ActiveVersion { get; set; }
+    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
+public sealed class SupportWorkflowVersion
+{
+    public Guid WorkflowId { get; set; }
+    public int Version { get; set; }
+    public string Name { get; set; } = "";
+    public Guid? SiteId { get; set; }
+    public string DefinitionJson { get; set; } = "";
+    public string PublishedBy { get; set; } = "";
+    public DateTimeOffset PublishedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
 public sealed class SupportTicket
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -47,6 +70,8 @@ public sealed class SupportTicket
     public Guid? QueueId { get; set; }
     public string? AssigneeId { get; set; }
     public string? Resolution { get; set; }
+    public Guid? WorkflowId { get; set; }
+    public int? WorkflowVersion { get; set; }
     public long Version { get; set; } = 1;
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;

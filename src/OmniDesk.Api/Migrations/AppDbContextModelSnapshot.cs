@@ -1280,6 +1280,12 @@ namespace OmniDesk.Api.Migrations
                     b.Property<long>("Version")
                         .HasColumnType("bigint");
 
+                    b.Property<Guid?>("WorkflowId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("WorkflowVersion")
+                        .HasColumnType("integer");
+
                     b.HasKey("Id");
 
                     b.HasIndex("AssigneeId");
@@ -1290,6 +1296,8 @@ namespace OmniDesk.Api.Migrations
                     b.HasIndex("DeviceId", "CreatedAt");
 
                     b.HasIndex("RequesterUserId", "CreatedAt");
+
+                    b.HasIndex("WorkflowId", "WorkflowVersion");
 
                     b.HasIndex("DeviceId", "RequesterKey", "RequestId")
                         .IsUnique();
@@ -1337,6 +1345,84 @@ namespace OmniDesk.Api.Migrations
                     b.HasIndex("DeviceId", "TicketId");
 
                     b.ToTable("SupportTicketDevices");
+                });
+
+            modelBuilder.Entity("OmniDesk.Api.Data.SupportWorkflow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("ActiveVersion")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("DraftDefinitionJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("ScopeKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid?>("SiteId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(1L);
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ScopeKey")
+                        .IsUnique();
+
+                    b.HasIndex("SiteId");
+
+                    b.ToTable("SupportWorkflows");
+                });
+
+            modelBuilder.Entity("OmniDesk.Api.Data.SupportWorkflowVersion", b =>
+                {
+                    b.Property<Guid>("WorkflowId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("DefinitionJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTimeOffset>("PublishedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PublishedBy")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.Property<Guid?>("SiteId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("WorkflowId", "Version");
+
+                    b.ToTable("SupportWorkflowVersions");
                 });
 
             modelBuilder.Entity("OmniDesk.Api.Data.UpdateJob", b =>
@@ -1750,6 +1836,11 @@ namespace OmniDesk.Api.Migrations
                         .HasForeignKey("SiteId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("OmniDesk.Api.Data.SupportWorkflowVersion", null)
+                        .WithMany()
+                        .HasForeignKey("WorkflowId", "WorkflowVersion")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("OmniDesk.Api.Data.SupportTicketDevice", b =>
@@ -1769,6 +1860,23 @@ namespace OmniDesk.Api.Migrations
                         .WithMany()
                         .HasForeignKey("TicketId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("OmniDesk.Api.Data.SupportWorkflow", b =>
+                {
+                    b.HasOne("OmniDesk.Api.Data.Site", null)
+                        .WithMany()
+                        .HasForeignKey("SiteId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("OmniDesk.Api.Data.SupportWorkflowVersion", b =>
+                {
+                    b.HasOne("OmniDesk.Api.Data.SupportWorkflow", null)
+                        .WithMany()
+                        .HasForeignKey("WorkflowId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 

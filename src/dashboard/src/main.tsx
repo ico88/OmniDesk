@@ -10,6 +10,7 @@ import { Icon } from './Icon';
 import { KnowledgeBase } from './KnowledgeBase';
 import { Notifications } from './Notifications';
 import { CustomerPortal } from './CustomerPortal';
+import { TicketWorkflowAdmin } from './TicketWorkflowAdmin';
 
 type User = { id: string; email: string; displayName: string | null; globalPermissions: string[]; twoFactorAvailable: boolean; twoFactorEnabled: boolean };
 type Branding = { name: string; logoUrl: string; primaryColor: string; theme: 'light' | 'dark' };
@@ -92,9 +93,9 @@ function App() {
   return <div className="shell"><aside>
     <div className="brand">{branding.logoUrl ? <img src={branding.logoUrl} alt="Logo" referrerPolicy="no-referrer"/> : <img className="brand-mark" src="/favicon.svg" alt=""/>}<strong>{branding.name}</strong></div>
     <small className="nav-label">WORKSPACE</small>
-    <nav aria-label="Navigazione">{[['overview','Panoramica'],['devices','Dispositivi'],['security','Account e sicurezza'],['myTickets','I miei ticket'],['support','Assistenza'],...(canReadKnowledge ? [['knowledge','Knowledge base']] : []),...(admin ? [['branding','Personalizzazione'],['users','Utenti'],['audit','Audit']] : [])].map(([id,label]) => <button key={id} className={tab === id ? 'active' : ''} aria-current={tab===id?'page':undefined} onClick={() => { setTab(id); setTotpSetup(null); setRecoveryCodes([]); setEnrollment(''); setStatus(null);  setError(''); setMessage(''); }}><Icon name={id}/><span>{label}</span></button>)}</nav>
+    <nav aria-label="Navigazione">{[['overview','Panoramica'],['devices','Dispositivi'],['security','Account e sicurezza'],['myTickets','I miei ticket'],['support','Assistenza'],...(canReadKnowledge ? [['knowledge','Knowledge base']] : []),...(admin ? [['branding','Personalizzazione'],['users','Utenti'],['workflows','Workflow ticket'],['audit','Audit']] : [])].map(([id,label]) => <button key={id} className={tab === id ? 'active' : ''} aria-current={tab===id?'page':undefined} onClick={() => { setTab(id); setTotpSetup(null); setRecoveryCodes([]); setEnrollment(''); setStatus(null);  setError(''); setMessage(''); }}><Icon name={id}/><span>{label}</span></button>)}</nav>
     <div className="account"><small>{user.email}</small><button disabled={busy} onClick={() => void action(async () => { await api('/auth/logout', 'POST'); setUser(null); setTotpSetup(null); setRecoveryCodes([]); setEnrollment(''); setStatus(null); setGroups([]); setBranding(defaults); setAudit([]); setDevices([]); setTab('overview'); await refreshCsrf(); })}><Icon name="logout"/>Esci</button></div>
-  </aside><main className="content" aria-busy={busy}><header><div><small className="eyebrow">WORKSPACE / GESTIONE IT</small><h1>{{overview:'Panoramica',devices:'Dispositivi',branding:'Personalizzazione',users:'Utenti',audit:'Audit amministrativo',security:'Account e sicurezza',myTickets:'I miei ticket',support:'Assistenza',knowledge:'Knowledge base'}[tab]}</h1></div><div className="header-actions"><Notifications onOpenTicket={id=>{setFocusTicketId(id);setTab('support');}}/><span className="badge"><Icon name="security" size={15}/>{admin?'Amministratore':'Accesso limitato'}</span></div></header>
+  </aside><main className="content" aria-busy={busy}><header><div><small className="eyebrow">WORKSPACE / GESTIONE IT</small><h1>{{overview:'Panoramica',devices:'Dispositivi',branding:'Personalizzazione',users:'Utenti',workflows:'Workflow ticket',audit:'Audit amministrativo',security:'Account e sicurezza',myTickets:'I miei ticket',support:'Assistenza',knowledge:'Knowledge base'}[tab]}</h1></div><div className="header-actions"><Notifications onOpenTicket={id=>{setFocusTicketId(id);setTab('support');}}/><span className="badge"><Icon name="security" size={15}/>{admin?'Amministratore':'Accesso limitato'}</span></div></header>
     {error && <p role="alert" className="error">{error}</p>}{message && <p role="status" className="notice"><Icon name="check"/>{message}</p>}
     {tab === 'support' && <SupportDesk sites={sites} devices={devices} visibleDeviceIds={devices.map(d=>d.id)} focusTicketId={focusTicketId} onTicketFocused={()=>setFocusTicketId(null)} onOpenDevice={id=>action(async()=>{const next=await api<DeviceStatus>(`/devices/${id}/status`);setStatus(next);setTab('devices');})}/>}
     {tab === 'myTickets' && <CustomerPortal onMessage={setMessage}/>}
@@ -123,6 +124,7 @@ function App() {
       {recoveryCodes.length > 0 && <section className="panel"><h2>Codici di recupero</h2><p>Salvali in un posto riservato. Ogni codice può essere usato una sola volta.</p><pre>{recoveryCodes.join('\n')}</pre><button onClick={() => setRecoveryCodes([])}>Ho salvato i codici</button></section>}
     </>}
     {tab === 'users' && admin && <AccessManagement currentUserId={user.id}/>}
+    {tab === 'workflows' && admin && <TicketWorkflowAdmin sites={sites} onMessage={setMessage}/>}
     {tab === 'audit' && admin && <section className="panel"><button disabled={busy} onClick={() => void action(async () => setAudit(await api<Audit[]>('/admin/audit')))}>Aggiorna</button><h2>Ultimi 100 eventi</h2><div className="table-wrap"><table><thead><tr><th>Data</th><th>Azione</th><th>Oggetto</th><th>Esito</th></tr></thead><tbody>{audit.map(a => <tr key={a.id}><td>{new Date(a.at).toLocaleString('it-IT')}</td><td>{a.action}</td><td>{a.target}</td><td>{a.outcome}</td></tr>)}</tbody></table></div></section>}
   </main></div>;
 }

@@ -41,6 +41,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
     public DbSet<SupportTicketDevice> SupportTicketDevices => Set<SupportTicketDevice>();
     public DbSet<PortalDeviceAccess> PortalDeviceAccesses => Set<PortalDeviceAccess>();
     public DbSet<SupportTicket> SupportTickets => Set<SupportTicket>();
+    public DbSet<SupportWorkflow> SupportWorkflows => Set<SupportWorkflow>();
+    public DbSet<SupportWorkflowVersion> SupportWorkflowVersions => Set<SupportWorkflowVersion>();
     public DbSet<SupportQueue> SupportQueues => Set<SupportQueue>();
     public DbSet<SupportQueueMember> SupportQueueMembers => Set<SupportQueueMember>();
     public DbSet<SupportQueueRoutingRule> SupportQueueRoutingRules => Set<SupportQueueRoutingRule>();
@@ -129,6 +131,19 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
         b.Entity<SupportTicket>().HasIndex(x => new { x.SiteId, x.Category, x.State, x.CreatedAt });
         b.Entity<SupportTicket>().HasIndex(x => new { x.QueueId, x.State, x.CreatedAt });
         b.Entity<SupportTicket>().HasIndex(x => x.AssigneeId);
+        b.Entity<SupportWorkflow>().Property(x => x.Name).HasMaxLength(100);
+        b.Entity<SupportWorkflow>().Property(x => x.ScopeKey).HasMaxLength(64);
+        b.Entity<SupportWorkflow>().Property(x => x.DraftDefinitionJson).HasColumnType("jsonb");
+        b.Entity<SupportWorkflow>().Property(x => x.Version).IsConcurrencyToken().HasDefaultValue(1L);
+        b.Entity<SupportWorkflow>().HasIndex(x => x.ScopeKey).IsUnique();
+        b.Entity<SupportWorkflow>().HasOne<Site>().WithMany().HasForeignKey(x => x.SiteId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<SupportWorkflowVersion>().HasKey(x => new { x.WorkflowId, x.Version });
+        b.Entity<SupportWorkflowVersion>().Property(x => x.Name).HasMaxLength(100);
+        b.Entity<SupportWorkflowVersion>().Property(x => x.DefinitionJson).HasColumnType("jsonb");
+        b.Entity<SupportWorkflowVersion>().Property(x => x.PublishedBy).HasMaxLength(450);
+        b.Entity<SupportWorkflowVersion>().HasOne<SupportWorkflow>().WithMany().HasForeignKey(x => x.WorkflowId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<SupportTicket>().HasOne<SupportWorkflowVersion>().WithMany()
+            .HasForeignKey(x => new { x.WorkflowId, x.WorkflowVersion }).OnDelete(DeleteBehavior.Restrict);
 
         b.Entity<DashboardLayout>().HasKey(x => x.UserId);
         b.Entity<DashboardLayout>().HasOne<AppUser>().WithOne().HasForeignKey<DashboardLayout>(x => x.UserId).OnDelete(DeleteBehavior.Cascade);

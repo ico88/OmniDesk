@@ -155,5 +155,6 @@ app.MapDashboardEndpoints();
 app.MapDownloadEndpoints();
 app.MapKnowledgeEndpoints();
 app.MapNotificationEndpoints();
+app.MapTicketWorkflowEndpoints();
 app.Run();
 public partial class Program { }
