@@ -278,7 +278,8 @@ Il ticket core supporta priorità `low/normal/high/urgent`, assegnatario facolta
 code, membership, routing, assegnazioni in massa e riepiloghi server-side dei
 conteggi. Le viste richiedono i grant ticket correnti; i conteggi non superano il
 limite di 100 righe della tabella. L’incremento riepilogo è testato con
-PostgreSQL/Chromium; deploy LAN in attesa della pipeline sul branch. Restano SLA,
+PostgreSQL/Chromium; deploy LAN completato dopo CI Linux. Contatori completi
+rispettano `tickets.view` e i filtri opzionali device/sede. Restano SLA,
 viste operative più ampie e automazioni Service Desk.
 
 ### Identità leggibile dell’operatore nelle sessioni remote — implementata su LAN, prova PC aperta

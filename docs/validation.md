@@ -924,4 +924,6 @@ responsive. `./scripts/test.sh` passato (64 xUnit/PostgreSQL, 4 Vitest, TypeScri
 lo scenario verifica conteggio device-scoped e zero conteggi per un account senza
 `tickets.view`. `./scripts/smoke.sh --browser` passato su container isolati con
 conteggio UI; `docker compose build api dashboard` e `git diff --check` passati.
-Non ancora distribuito su LAN; runtime installato non modificato da questo incremento.
+Deploy LAN completato dopo il CI Linux con backup protetto `.backups/20261019T134504Z.FHXrbK`; zero sessioni remote prima/dopo lo stop API, nessuna migrazione necessaria, ricreati API/dashboard. `verify-lan.py` ha confermato CA, readiness, asset e rifiuto anonimo; il bundle pubblico contiene i nuovi contatori. Nessun login o ticket di produzione è stato creato.
+
+CI Linux del commit `a331894` completato con successo: test, configurazione Compose, build API/dashboard e smoke Chromium. Il workflow Windows Agent/MSI resta in corso e non è richiesto dal riepilogo ticket.
