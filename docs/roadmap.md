@@ -54,7 +54,7 @@ Incremento gestione dispositivi: etichetta/gruppo e revoca identità dalla conso
 
 | Fase | Risultato previsto | Dipendenze e gate di ingresso/uscita |
 | --- | --- | --- |
-| SD0 — basi comuni e progetto esecutivo | **Implementato:** registro sedi e associazione Device.SiteId, sede di backfill “Sede da assegnare”, concessioni site-scoped senza ereditarietà, sede sui ticket correnti come snapshot e selezione sede per enrollment. **Da completare:** outbox/event contracts, decisioni storage, antivirus, retention e identità portale | Migrazione CoreSites versionata, grant e visibilità da verificare su upgrade con dati preesistenti; nessun gruppo trasformato implicitamente in sede. Il ticket corrente conserva la sede storica quando il dispositivo viene spostato |
+| SD0 — basi comuni e progetto esecutivo | **Implementato:** registro sedi e associazione Device.SiteId, sede di backfill “Sede da assegnare”, concessioni site-scoped senza ereditarietà, sede sui ticket correnti come snapshot e selezione sede per enrollment. **Da completare:** consumer/worker outbox, copertura di tutti gli eventi core, decisioni storage, antivirus, retention e identità portale | Migrazione CoreSites versionata, grant e visibilità da verificare su upgrade con dati preesistenti; nessun gruppo trasformato implicitamente in sede. Il ticket corrente conserva la sede storica quando il dispositivo viene spostato |
 | SD1 — ticket e console IT | Modulo separato, migrazioni proprie, ticket manuali, stati/priorità/categorie, code/assegnazioni, uno o più dispositivi e una sede, cronologia/audit; link contestuali alle azioni RMM | SD0; transazioni/ETag/idempotenza e permessi granulari testati. Le azioni RMM richiedono anche capacità correnti e collaudo del relativo motore; non aggirano gate M3/M4 |
 | SD2 — portale e collaborazione | Richieste proprie, commenti pubblici/note interne, allegati in quarantena, notifiche e KB iniziale con pubblicazione controllata | SD1; verifica identità utente/associazione dispositivi, storage privato, antivirus e worker. Gate contro fughe via email, ricerca, allegati e conteggi |
 | SD3 — ingressi agente/email e storico interventi | Intake macchina autenticati, mailbox/thread verificati, deduplicazione e qualificazione; correlazione sessioni/job e riepilogo interventi | SD1–SD2; protocollo agente esistente, account verificati, gestione segreti mailbox e test spoof/replay/loop. Nessuna identità umana derivata dal solo mittente email |
@@ -211,5 +211,18 @@ SiteId storico al successivo spostamento del device.
 TypeScript/Vite inclusa. Lo scenario auth dimostra visibilità dei dispositivi
 della sede, negazione separata di `remote.control` e revoca della visibilità;
 `git diff --check` passato. L’upgrade con dati M1–M5 e il deploy live non sono
-ancora verificati. Outbox, allarmi persistenti e il modulo Service Desk SD1
+ancora verificati. Il consumer outbox, gli allarmi persistenti e il modulo Service Desk SD1
 restano sviluppo successivo.
+
+
+### SD0 — eventi outbox core — sorgenti e migrazione verificate
+
+Aggiunta `CoreOutboxEvents` con versione schema, aggregate/event type, payload
+JSONB minimizzato, correlation ID, contatore retry, lease e timestamp
+di pubblicazione. Enrollment device, create/update sede, metadata device e
+create/update ticket scrivono l’evento nella stessa unità transazionale della
+modifica. Gli eventi ticket escludono descrizione, screenshot e testo risposta;
+sono verificati con test API e PostgreSQL. Nessun dispatcher/consumer è ancora
+attivo: gli eventi restano persistenti nel DB finché la fase worker non ne
+implementa consegna idempotente, backoff, dead-letter e retention. Non dichiarare
+notifiche o integrazioni asincrone operative.

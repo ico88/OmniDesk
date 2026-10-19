@@ -9,7 +9,7 @@
 | Sites; Devices.SiteId | **Implementato:** sedi archiviabili, FK dispositivo, enrollment per sede, sede storica sui ticket e backfill dei record esistenti a “Sede da assegnare”. Le sedi restano distinte da DeviceGroups. Migrazione e API verificate su database vuoto; upgrade di un database popolato resta da verificare |
 | Concessioni per sede | **Implementato:** `ScopeGrants.SiteId` con vincolo PostgreSQL che ammette un solo ambito; permessi di sede non si trasformano in permessi gruppo/device. Testata visibilità e separazione del permesso `view` |
 | AlertOccurrences / AlertEvents | Identità stabile di occorrenza, device, regola/versione, apertura/recupero e correlazione; gli snapshot metriche esistenti non sono allarmi |
-| Outbox core | **Da implementare:** eventi dei cambi core nella stessa transazione della modifica; payload senza segreti, tipo/versione e correlation ID |
+| Outbox core | **Fondazione implementata:** tabella `CoreOutboxEvents` e scritture transazionali per enrollment, sedi, metadata device e ticket. Payload curato senza contenuti ticket, tipo/versione e correlation ID. Da completare consumer, idempotenza di consegna, retry/backoff, dead-letter, retention e copertura di tutti gli eventi core |
 
 ## Tabelle del modulo
 

@@ -754,3 +754,15 @@ e `git diff --check` passati. Non è stato eseguito deploy né test di upgrade c
 righe preesistenti sul database live. La pipeline Windows 0.8.3 run
 39242100048 ha completato con successo build MSI/Setup e prove lifecycle; questo
 run precede il codice SD0 e non valida la migrazione Sites.
+
+
+## Outbox core transazionale — 19 ottobre 2026
+
+Migrazione EF `CoreOutbox` e API event writes per enrollment, create/update sede,
+modifica device e create/update ticket. Le scritture usano lo stesso SaveChanges
+e la stessa transazione applicativa della mutazione. Payload ticket contiene solo
+ID device/sede, stato e versione; i test verificano che descrizione, immagine e
+risposta non vi siano serializzati. `./scripts/test.sh` passato: 47 test
+xUnit/PostgreSQL e 4 Vitest; build TypeScript/Vite inclusa. `docker compose build
+api dashboard`, `docker compose config -q` e `git diff --check` passati. Nessun worker o
+consegna a sistemi esterni è implementato o testato.
