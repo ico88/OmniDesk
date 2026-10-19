@@ -89,3 +89,11 @@ Il file token va creato e protetto secondo la procedura precedente; non inviarlo
 Verificare quindi: dispositivo e heartbeat nella console, stato Tray, richiesta ticket senza screenshot, seconda richiesta con anteprima/consenso, visibilità dalla console IT e risposta/stato aggiornati nella Tray. Questi sono criteri di collaudo Windows/LAN, non risultati già attestati.
 
 Per dismettere: un amministratore OmniDesk revoca l'identità dispositivo dalla console e verifica la revoca; un amministratore Windows rimuove il prodotto tramite MSI. La rimozione locale da sola non sostituisce la revoca server. La CA di laboratorio rimane installata intenzionalmente dopo uninstall: la sua rimozione amministrativa va pianificata considerando gli altri servizi che la usano. Nessuna protezione assoluta contro amministratori locali o accesso fisico privilegiato.
+
+### Kit 0.7 dalla console
+
+Nella UI autenticata come amministratore: Dispositivi → Scarica Agent Windows. Il riquadro mostra la versione effettivamente pubblicata, dimensione e SHA256. Il server verifica l'integrita prima di inviare il file; nessun download anonimo. Il kit 0.7 contiene anche il motore remoto nativo, senza configurazione o credenziali per dispositivo. Windows non richiede Node.js: Node/npm servono soltanto alla build.
+
+Dopo enrollment e heartbeat, aprire il dispositivo → Motore e storico sessioni remote → Abilita motore sul dispositivo. Il servizio recupera la configurazione approvata e registra il nodo; usare Aggiorna sessioni per verificare il mapping. Solo dopo l'associazione aprire desktop/terminale/file con il rispettivo permesso e il consenso dell'utente. Motore LAN su HTTPS 192.168.1.233:8086, console su :8085, stessa CA pubblica. Client di collaudo concordato Windows 10 su 192.168.1.160.
+
+Se Windows blocca lo script per la provenienza Internet, verificare prima i checksum, leggere il contenuto e sbloccare quel singolo file tramite Proprieta → Sblocca. Non occorre abbassare la policy di esecuzione globale. Il pacchetto resta unsigned di laboratorio: firma produzione e collaudi interattivi non derivano dal download o dall'installazione CI.
