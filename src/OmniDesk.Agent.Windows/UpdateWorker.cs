@@ -73,15 +73,16 @@ public sealed class UpdateWorker(ILogger<UpdateWorker> logger) : BackgroundServi
         var input = Path.Combine(AgentIdentity.Folder, "update-input.json"); AgentIdentity.WriteTrusted(input, JsonSerializer.Serialize(job));
         var exe = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
         var start = new ProcessStartInfo(exe) { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
-        foreach (var arg in new[] { "-NoProfile", "-NonInteractive", "-File", scriptPath }) start.ArgumentList.Add(arg);
+        // Process-only policy for the fixed embedded local script. Group Policy still takes precedence.
+        foreach (var arg in new[] { "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "RemoteSigned", "-File", scriptPath }) start.ArgumentList.Add(arg);
         start.Environment["OMNIDESK_UPDATE_INPUT"] = input;
         using var process = Process.Start(start) ?? throw new InvalidOperationException("Cannot start Windows Update worker");
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct); deadline.CancelAfter(TimeSpan.FromMinutes(60));
         var stdout = process.StandardOutput.ReadToEndAsync(deadline.Token); var stderr = process.StandardError.ReadToEndAsync(deadline.Token);
         try { await process.WaitForExitAsync(deadline.Token); }
         catch (OperationCanceledException) { if (!process.HasExited) process.Kill(entireProcessTree:true); throw; }
-        var output = await stdout; _ = await stderr;
-        if (process.ExitCode != 0 || output.Length > 1024 * 1024) return new(job.LeaseId, false, false, [], "Windows Update process failed");
+        var output = await stdout; var errorOutput = await stderr;
+        if (process.ExitCode != 0 || output.Length > 1024 * 1024) return new(job.LeaseId, false, false, [], process.ExitCode != 0 ? $"Windows Update worker exit {process.ExitCode}" + (errorOutput.Contains("PSSecurityException",StringComparison.OrdinalIgnoreCase) ? ": PowerShell execution policy denied" : "") : "Windows Update result exceeds maximum size");
         var result = JsonSerializer.Deserialize<UpdateResultRequest>(output, Json) ?? throw new InvalidOperationException("Invalid Windows Update output");
         if (result.LeaseId != job.LeaseId) throw new InvalidOperationException("Lease mismatch");
         return result;
