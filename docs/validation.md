@@ -1335,3 +1335,24 @@ https://github.com/ico88/OmniDesk/actions/runs/39300451667 e
 https://github.com/ico88/OmniDesk/actions/runs/39300451660 sono riusciti; il
 run Windows ha ricompilato l'MSI, verificato installazione/recovery/uninstall e
 upgrade/repair/rollback contro entrambe le baseline storiche.
+
+### Portale personale — screenshot di ticket con consenso — 2026-10-19
+
+Il portale permette di allegare allo screenshot iniziale solo un PNG fino a
+512 KiB, selezionato dall'utente e accompagnato da una checkbox di consenso
+esplicito. L'API applica la stessa validazione strutturale/limiti del percorso
+Agent, conserva l'immagine nella colonna screenshot già presente e registra
+l'evento di consenso senza inserire il contenuto nei log/outbox. La lettura ha un
+endpoint autenticato che verifica account attivo, proprietà del ticket, link
+account-dispositivo attivo, sede non archiviata e credenziale dispositivo non
+revocata; restituisce `no-store`/`nosniff`, registra l'accesso e diventa 404 dopo
+revoca. Il portale mostra l'immagine nella conversazione. Gli allegati generici,
+storage esterno, antivirus e retention non sono inclusi.
+
+`./scripts/test.sh` passato con 64/64 xUnit/PostgreSQL, build TypeScript/Vite e
+5/5 Vitest. `PortalScenario` verifica consenso assente, CSRF, PNG valido,
+idempotenza, lettura byte-for-byte, isolamento dell'altro account e revoca;
+Compose standard/test e `git diff --check` passati. `docker compose build api
+dashboard` passato. Immagini aggiornate solo localmente: nessun container,
+migrazione o dato LAN è stato avviato o aggiornato. Il portale non ha ancora un
+test browser autenticato dedicato né una verifica runtime sulla LAN.
