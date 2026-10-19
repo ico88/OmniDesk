@@ -18,6 +18,7 @@ public sealed record SupportQueueMembersRequest(long ExpectedVersion, string[] U
 public sealed record SupportQueueRoutingRequest(Guid? SiteId, string Category, Guid QueueId);
 public sealed record SupportQueueRoutingEditRequest(long ExpectedVersion, Guid? SiteId, string Category, Guid QueueId);
 public sealed record SupportQueueRoutingDeleteRequest(long ExpectedVersion);
+public sealed record PortalDeviceAccessRequest(string UserId, Guid DeviceId);
 public static class ManagementEndpoints
 {
     public static void MapManagementEndpoints(this WebApplication app)
@@ -182,6 +183,47 @@ public static class ManagementEndpoints
             db.AuditEvents.Add(Event(c, "role.create", role.Id));
             await db.SaveChangesAsync(); await tx.CommitAsync();
             return Results.Created($"/api/admin/roles/{role.Id}", new { role.Id, role.Name });
+        });
+        admin.MapGet("/portal-device-access", async (AppDbContext db) => Results.Ok(await (
+            from access in db.PortalDeviceAccesses.AsNoTracking()
+            join user in db.Users.AsNoTracking() on access.UserId equals user.Id
+            join device in db.Devices.AsNoTracking() on access.DeviceId equals device.Id
+            join site in db.Sites.AsNoTracking() on device.SiteId equals site.Id
+            orderby user.Email, device.Name
+            select new { access.UserId, user.Email, user.IsDisabled, access.DeviceId, device.Name, device.SiteId, SiteName = site.Name, access.GrantedAt }
+        ).ToArrayAsync()));
+        admin.MapGet("/portal-devices", async (AppDbContext db) => Results.Ok(await (
+            from device in db.Devices.AsNoTracking()
+            join site in db.Sites.AsNoTracking() on device.SiteId equals site.Id
+            where !site.IsArchived && db.DeviceCredentials.Any(credential => credential.DeviceId == device.Id && credential.RevokedAt == null)
+            orderby site.Name, device.Name
+            select new { id = device.Id, device.Name, siteId = site.Id, siteName = site.Name }
+        ).ToArrayAsync()));
+        admin.MapPost("/portal-device-access", async (PortalDeviceAccessRequest r, HttpContext c, AppDbContext db) => {
+            if (string.IsNullOrWhiteSpace(r.UserId) || r.DeviceId == Guid.Empty ||
+                !await db.Users.AnyAsync(u => u.Id == r.UserId && !u.IsDisabled) ||
+                !await (from device in db.Devices
+                    join site in db.Sites on device.SiteId equals site.Id
+                    where device.Id == r.DeviceId && !site.IsArchived &&
+                        db.DeviceCredentials.Any(credential => credential.DeviceId == device.Id && credential.RevokedAt == null)
+                    select device.Id).AnyAsync()) return Results.BadRequest(new { error = "Account o dispositivo non disponibile." });
+            if (await db.PortalDeviceAccesses.AnyAsync(x => x.UserId == r.UserId && x.DeviceId == r.DeviceId)) return Results.Conflict();
+            var access = new PortalDeviceAccess { UserId = r.UserId, DeviceId = r.DeviceId, GrantedBy = c.User.UserId() };
+            db.PortalDeviceAccesses.Add(access);
+            db.AuditEvents.Add(Event(c, "portal.device.grant", $"{r.UserId}:{r.DeviceId}"));
+            await db.SaveChangesAsync();
+            return Results.Created($"/api/admin/portal-device-access/{r.UserId}/{r.DeviceId}", new { access.UserId, access.DeviceId, access.GrantedAt });
+        });
+        admin.MapDelete("/portal-device-access/{userId}/{deviceId:guid}", async (string userId, Guid deviceId, HttpContext c, AppDbContext db) => {
+            await using var tx = await db.Database.BeginTransactionAsync();
+            await PortalDeviceAccessLock.Acquire(db, userId, deviceId);
+            var access = await db.PortalDeviceAccesses.SingleOrDefaultAsync(x => x.UserId == userId && x.DeviceId == deviceId);
+            if (access is null) return Results.NotFound();
+            db.PortalDeviceAccesses.Remove(access);
+            db.AuditEvents.Add(Event(c, "portal.device.revoke", $"{userId}:{deviceId}"));
+            await db.SaveChangesAsync();
+            await tx.CommitAsync();
+            return Results.NoContent();
         });
         admin.MapGet("/users", async (AppDbContext db) => {
             var users = await db.Users.AsNoTracking().OrderBy(x => x.Email).Select(x => new { x.Id, x.Email, x.IsDisabled }).ToListAsync();

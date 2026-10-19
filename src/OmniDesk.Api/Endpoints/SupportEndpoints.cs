@@ -17,6 +17,11 @@ public sealed record SupportTicketDeviceChange(long ExpectedVersion, Guid Device
 public sealed record SupportTicketDeviceView(Guid DeviceId, string Name, Guid SiteId, string SiteName, bool IsPrimary);
 public sealed record SupportTicketVersion(Guid TicketId, long ExpectedVersion);
 public sealed record BulkQueueAssignment(SupportTicketVersion[] Tickets, Guid? QueueId);
+public sealed record PortalTicketCreate(Guid RequestId, Guid DeviceId, string Subject, string Description, string Category);
+public sealed record PortalTicketReply(long ExpectedVersion, string Body);
+public sealed record PortalTicketView(Guid Id, long Number, Guid DeviceId, string DeviceName, string SiteName,
+    string Subject, string State, string Category, long Version, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt);
+public sealed record PortalMessageView(long Id, string Kind, string Body, string? FromState, string? ToState, DateTimeOffset CreatedAt);
 public static class SupportEndpoints
 {
     private static readonly string[] Priorities = ["low", "normal", "high", "urgent"];
@@ -122,6 +127,147 @@ public static class SupportEndpoints
             if (screenshot != null) db.AuditEvents.Add(new AuditEvent { Action = "ticket.screenshot.consent", Target = ticket.Id.ToString() });
             await db.SaveChangesAsync(); await tx.CommitAsync();
             return Results.Created($"/api/support/{ticket.Id}", View(ticket));
+        });
+        var portal = app.MapGroup("/api/portal").RequireAuthorization();
+        portal.MapGet("/devices", async (HttpContext c, AppDbContext db) => {
+            var userId = c.User.UserId();
+            if (!await db.Users.AnyAsync(u => u.Id == userId && !u.IsDisabled)) return Results.Forbid();
+            var devices = await (from access in db.PortalDeviceAccesses.AsNoTracking()
+                join device in db.Devices.AsNoTracking() on access.DeviceId equals device.Id
+                join site in db.Sites.AsNoTracking() on device.SiteId equals site.Id
+                where access.UserId == userId && !site.IsArchived &&
+                    db.DeviceCredentials.Any(credential => credential.DeviceId == device.Id && credential.RevokedAt == null)
+                orderby site.Name, device.Name
+                select new { deviceId = device.Id, deviceName = device.Name, siteId = site.Id, siteName = site.Name })
+                .ToArrayAsync();
+            c.Response.Headers.CacheControl = "no-store";
+            return Results.Ok(devices);
+        });
+        portal.MapGet("/tickets", async (HttpContext c, AppDbContext db) => {
+            var userId = c.User.UserId();
+            if (!await db.Users.AnyAsync(u => u.Id == userId && !u.IsDisabled)) return Results.Forbid();
+            var tickets = await (from ticket in db.SupportTickets.AsNoTracking()
+                join device in db.Devices.AsNoTracking() on ticket.DeviceId equals device.Id
+                join site in db.Sites.AsNoTracking() on ticket.SiteId equals site.Id
+                where ticket.RequesterUserId == userId && !site.IsArchived &&
+                    db.PortalDeviceAccesses.Any(access => access.UserId == userId && access.DeviceId == ticket.DeviceId) &&
+                    db.DeviceCredentials.Any(credential => credential.DeviceId == ticket.DeviceId && credential.RevokedAt == null)
+                orderby ticket.UpdatedAt descending
+                select new PortalTicketView(ticket.Id, ticket.Number, ticket.DeviceId, device.Name, site.Name,
+                    ticket.Subject, ticket.State, ticket.Category, ticket.Version, ticket.CreatedAt, ticket.UpdatedAt))
+                .Take(100).ToArrayAsync();
+            c.Response.Headers.CacheControl = "no-store";
+            return Results.Ok(tickets);
+        });
+        portal.MapGet("/tickets/{id:guid}", async (Guid id, HttpContext c, AppDbContext db) => {
+            var userId = c.User.UserId();
+            var ticket = await (from item in db.SupportTickets.AsNoTracking()
+                join device in db.Devices.AsNoTracking() on item.DeviceId equals device.Id
+                join site in db.Sites.AsNoTracking() on item.SiteId equals site.Id
+                where item.Id == id && item.RequesterUserId == userId && !site.IsArchived &&
+                    db.Users.Any(user => user.Id == userId && !user.IsDisabled) &&
+                    db.PortalDeviceAccesses.Any(access => access.UserId == userId && access.DeviceId == item.DeviceId) &&
+                    db.DeviceCredentials.Any(credential => credential.DeviceId == item.DeviceId && credential.RevokedAt == null)
+                select new PortalTicketView(item.Id, item.Number, item.DeviceId, device.Name, site.Name,
+                    item.Subject, item.State, item.Category, item.Version, item.CreatedAt, item.UpdatedAt))
+                .SingleOrDefaultAsync();
+            if (ticket is null) return Results.NotFound();
+            var request = await db.SupportTickets.AsNoTracking().Where(x => x.Id == id)
+                .Select(x => new { x.Description, x.CreatedAt }).SingleAsync();
+            var replies = await db.SupportMessages.AsNoTracking().Where(message => message.TicketId == id && message.Visibility == "public")
+                .OrderBy(message => message.Id)
+                .Select(message => new PortalMessageView(message.Id, message.Kind, message.Body, message.FromState, message.ToState, message.CreatedAt))
+                .ToArrayAsync();
+            var messages = new[] { new PortalMessageView(0, "request", request.Description, null, null, request.CreatedAt) }
+                .Concat(replies).ToArray();
+            c.Response.Headers.CacheControl = "no-store";
+            return Results.Ok(new { ticket, messages });
+        });
+        portal.MapPost("/tickets", async (PortalTicketCreate r, HttpContext c, AppDbContext db) => {
+            var subject = r.Subject?.Trim();
+            var description = r.Description?.Trim();
+            var category = r.Category ?? "";
+            if (r.RequestId == Guid.Empty || r.DeviceId == Guid.Empty || string.IsNullOrWhiteSpace(subject) || subject.Length > 200 ||
+                string.IsNullOrWhiteSpace(description) || description.Length > 8000 || !Categories.Contains(category)) return Results.BadRequest();
+            var userId = c.User.UserId();
+            if (!await db.Users.AnyAsync(u => u.Id == userId && !u.IsDisabled)) return Results.Forbid();
+            await using var tx = await db.Database.BeginTransactionAsync();
+            await PortalDeviceAccessLock.Acquire(db, userId, r.DeviceId);
+            var device = await (from item in db.Devices.AsNoTracking()
+                join site in db.Sites.AsNoTracking() on item.SiteId equals site.Id
+                where item.Id == r.DeviceId && !site.IsArchived &&
+                    db.PortalDeviceAccesses.Any(access => access.UserId == userId && access.DeviceId == item.Id) &&
+                    db.DeviceCredentials.Any(credential => credential.DeviceId == item.Id && credential.RevokedAt == null)
+                select new { item.Id, item.Name, item.SiteId, SiteName = site.Name }).SingleOrDefaultAsync();
+            if (device is null) return Results.Forbid();
+            var requesterKey = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+                System.Text.Encoding.UTF8.GetBytes($"portal:{userId}:{r.RequestId:D}"))).ToLowerInvariant();
+            var previous = await db.SupportTickets.AsNoTracking().SingleOrDefaultAsync(ticket => ticket.DeviceId == device.Id &&
+                ticket.RequesterKey == requesterKey && ticket.RequestId == r.RequestId && ticket.RequesterUserId == userId);
+            if (previous is not null)
+                return previous.Subject == subject && previous.Description == description && previous.Category == r.Category
+                    ? Results.Ok(new PortalTicketView(previous.Id, previous.Number, device.Id, device.Name, device.SiteName,
+                        previous.Subject, previous.State, previous.Category, previous.Version, previous.CreatedAt, previous.UpdatedAt))
+                    : Results.Conflict();
+            var cutoff = DateTimeOffset.UtcNow.AddMinutes(-5);
+            if (await db.SupportTickets.CountAsync(ticket => ticket.RequesterUserId == userId && ticket.CreatedAt > cutoff) >= 10)
+                return Results.StatusCode(429);
+            var queueId = await db.SupportQueueRoutingRules.AsNoTracking()
+                .Where(rule => rule.Category == category && (rule.SiteId == device.SiteId || rule.SiteId == null) &&
+                    db.SupportQueues.Any(queue => queue.Id == rule.QueueId && queue.IsActive && (queue.SiteId == null || queue.SiteId == device.SiteId)))
+                .OrderByDescending(rule => rule.SiteId != null).Select(rule => (Guid?)rule.QueueId).FirstOrDefaultAsync();
+            var now = DateTimeOffset.UtcNow;
+            var ticket = new SupportTicket {
+                DeviceId = device.Id, SiteId = device.SiteId, RequesterUserId = userId, RequesterKey = requesterKey,
+                RequestId = r.RequestId, Origin = "portal", Subject = subject, Description = description,
+                Category = category, Priority = "normal", QueueId = queueId, CreatedAt = now, UpdatedAt = now
+            };
+            db.SupportTickets.Add(ticket);
+            db.SupportTicketDevices.Add(new SupportTicketDevice { TicketId = ticket.Id, DeviceId = device.Id,
+                LinkedAt = now, DeviceNameSnapshot = device.Name, SiteIdSnapshot = device.SiteId, SiteNameSnapshot = device.SiteName });
+            db.AuditEvents.Add(new AuditEvent { ActorId = userId, Action = "ticket.portal.create", Target = ticket.Id.ToString() });
+            CoreOutbox.Add(db, "ticket.created", "ticket", ticket.Id,
+                new { ticketId = ticket.Id, deviceId = ticket.DeviceId, siteId = ticket.SiteId, state = ticket.State,
+                    category = ticket.Category, queueId = ticket.QueueId, origin = ticket.Origin }, c.TraceIdentifier);
+            await db.SaveChangesAsync();
+            await tx.CommitAsync();
+            return Results.Created($"/api/portal/tickets/{ticket.Id}", new PortalTicketView(ticket.Id, ticket.Number,
+                device.Id, device.Name, device.SiteName, ticket.Subject, ticket.State, category,
+                ticket.Version, ticket.CreatedAt, ticket.UpdatedAt));
+        });
+        portal.MapPost("/tickets/{id:guid}/messages", async (Guid id, PortalTicketReply r, HttpContext c, AppDbContext db) => {
+            if (r.ExpectedVersion < 1 || string.IsNullOrWhiteSpace(r.Body) || r.Body.Trim().Length > 8000) return Results.BadRequest();
+            var userId = c.User.UserId();
+            var deviceId = await db.SupportTickets.AsNoTracking().Where(ticket => ticket.Id == id && ticket.RequesterUserId == userId &&
+                db.PortalDeviceAccesses.Any(access => access.UserId == userId && access.DeviceId == ticket.DeviceId))
+                .Select(ticket => (Guid?)ticket.DeviceId).SingleOrDefaultAsync();
+            if (deviceId is null) return Results.NotFound();
+            await using var tx = await db.Database.BeginTransactionAsync();
+            await PortalDeviceAccessLock.Acquire(db, userId, deviceId.Value);
+            var ticket = await db.SupportTickets.AsNoTracking().SingleOrDefaultAsync(item => item.Id == id && item.RequesterUserId == userId &&
+                db.Users.Any(user => user.Id == userId && !user.IsDisabled) &&
+                db.PortalDeviceAccesses.Any(access => access.UserId == userId && access.DeviceId == item.DeviceId) &&
+                db.DeviceCredentials.Any(credential => credential.DeviceId == item.DeviceId && credential.RevokedAt == null));
+            if (ticket is null) return Results.NotFound();
+            if (ticket.Version != r.ExpectedVersion) return Results.Conflict(new { error = "Il ticket è stato aggiornato. Ricarica la conversazione." });
+            if (ticket.State is "resolved" or "closed") return Results.Conflict(new { error = "Il ticket è chiuso. Apri una nuova richiesta per ricevere assistenza." });
+            var cutoff = DateTimeOffset.UtcNow.AddMinutes(-5);
+            if (await db.SupportMessages.CountAsync(message => message.TicketId == id && message.Kind == "portal_reply" && message.CreatedAt > cutoff) >= 10)
+                return Results.StatusCode(429);
+            var now = DateTimeOffset.UtcNow;
+            var changed = await db.SupportTickets.Where(item => item.Id == id && item.RequesterUserId == userId &&
+                    item.Version == r.ExpectedVersion && item.State != "resolved" && item.State != "closed" &&
+                    db.PortalDeviceAccesses.Any(access => access.UserId == userId && access.DeviceId == item.DeviceId))
+                .ExecuteUpdateAsync(update => update.SetProperty(item => item.UpdatedAt, now).SetProperty(item => item.Version, item => item.Version + 1));
+            if (changed == 0) return Results.Conflict(new { error = "Il ticket è stato aggiornato. Ricarica la conversazione." });
+            db.SupportMessages.Add(new SupportMessage { TicketId = id, ActorId = userId, Kind = "portal_reply", Visibility = "public", Body = r.Body.Trim(), CreatedAt = now });
+            db.AuditEvents.Add(new AuditEvent { ActorId = userId, Action = "ticket.portal.reply", Target = id.ToString() });
+            CoreOutbox.Add(db, "ticket.requester_replied", "ticket", id,
+                new { ticketId = id, deviceId = ticket.DeviceId, siteId = ticket.SiteId, queueId = ticket.QueueId,
+                    assigneeId = ticket.AssigneeId, state = ticket.State, version = r.ExpectedVersion + 1 }, c.TraceIdentifier);
+            await db.SaveChangesAsync();
+            await tx.CommitAsync();
+            return Results.NoContent();
         });
         var staff = app.MapGroup("/api/support").RequireAuthorization();
         staff.MapPost("/manual", async (ManualSupportCreate r, HttpContext c, AppDbContext db, PermissionService p) => {

@@ -37,6 +37,7 @@ public sealed class SupportTicket
     public Guid DeviceId { get; set; }
     public Guid SiteId { get; set; }
     public string RequesterKey { get; set; } = "";
+    public string? RequesterUserId { get; set; }
     public string Origin { get; set; } = "device";
     public string Subject { get; set; } = "";
     public string Description { get; set; } = "";
@@ -50,6 +51,14 @@ public sealed class SupportTicket
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
     public byte[]? Screenshot { get; set; }
+}
+
+public sealed class PortalDeviceAccess
+{
+    public string UserId { get; set; } = "";
+    public Guid DeviceId { get; set; }
+    public DateTimeOffset GrantedAt { get; set; } = DateTimeOffset.UtcNow;
+    public string? GrantedBy { get; set; }
 }
 
 public sealed class SupportMessage

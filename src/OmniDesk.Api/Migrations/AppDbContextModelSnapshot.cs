@@ -719,6 +719,29 @@ namespace OmniDesk.Api.Migrations
                     b.ToTable("MeshDeviceMappings");
                 });
 
+            modelBuilder.Entity("OmniDesk.Api.Data.PortalDeviceAccess", b =>
+                {
+                    b.Property<string>("UserId")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("DeviceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("GrantedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("GrantedBy")
+                        .HasColumnType("text");
+
+                    b.HasKey("UserId", "DeviceId");
+
+                    b.HasIndex("DeviceId");
+
+                    b.HasIndex("GrantedBy");
+
+                    b.ToTable("PortalDeviceAccesses");
+                });
+
             modelBuilder.Entity("OmniDesk.Api.Data.RemoteProvisioning", b =>
                 {
                     b.Property<Guid>("DeviceId")
@@ -1225,6 +1248,9 @@ namespace OmniDesk.Api.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
+                    b.Property<string>("RequesterUserId")
+                        .HasColumnType("text");
+
                     b.Property<string>("Resolution")
                         .HasMaxLength(8000)
                         .HasColumnType("character varying(8000)");
@@ -1259,6 +1285,8 @@ namespace OmniDesk.Api.Migrations
                         .IsUnique();
 
                     b.HasIndex("DeviceId", "CreatedAt");
+
+                    b.HasIndex("RequesterUserId", "CreatedAt");
 
                     b.HasIndex("DeviceId", "RequesterKey", "RequestId")
                         .IsUnique();
@@ -1568,6 +1596,26 @@ namespace OmniDesk.Api.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("OmniDesk.Api.Data.PortalDeviceAccess", b =>
+                {
+                    b.HasOne("OmniDesk.Api.Data.Device", null)
+                        .WithMany()
+                        .HasForeignKey("DeviceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("OmniDesk.Api.Data.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("GrantedBy")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("OmniDesk.Api.Data.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("OmniDesk.Api.Data.RemoteProvisioning", b =>
                 {
                     b.HasOne("OmniDesk.Api.Data.Device", null)
@@ -1688,6 +1736,11 @@ namespace OmniDesk.Api.Migrations
                         .WithMany()
                         .HasForeignKey("QueueId")
                         .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OmniDesk.Api.Data.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("RequesterUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
 
                     b.HasOne("OmniDesk.Api.Data.Site", null)
                         .WithMany()

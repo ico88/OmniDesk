@@ -9,6 +9,8 @@ type Grant = { id: string; userId: string; roleId: string; groupId: string | nul
 type SupportQueue = { id: string; name: string; siteId: string | null; siteName: string | null; isActive: boolean; version: number; ticketCount: number };
 type QueueMember = { id: string; email: string; isDisabled: boolean };
 type QueueRoutingRule = { id: string; siteId: string | null; siteName: string | null; category: string; queueId: string; queueName: string | null; version: number };
+type PortalAccess = { userId:string; email:string; isDisabled:boolean; deviceId:string; name:string; siteId:string; siteName:string; grantedAt:string };
+type PortalDevice = { id:string; name:string; siteId:string; siteName:string };
 const ticketCategories = [['general','Generale'],['hardware','Hardware'],['software','Software'],['network','Rete'],['account','Account'],['other','Altro']];
 
 export function AccessManagement({ currentUserId }: { currentUserId: string }) {
@@ -20,6 +22,10 @@ export function AccessManagement({ currentUserId }: { currentUserId: string }) {
   const [grants, setGrants] = useState<Grant[]>([]);
   const [supportQueues, setSupportQueues] = useState<SupportQueue[]>([]);
   const [routingRules, setRoutingRules] = useState<QueueRoutingRule[]>([]);
+  const [portalAccesses, setPortalAccesses] = useState<PortalAccess[]>([]);
+  const [portalDevices, setPortalDevices] = useState<PortalDevice[]>([]);
+  const [portalUserId, setPortalUserId] = useState('');
+  const [portalDeviceId, setPortalDeviceId] = useState('');
   const [routingSite, setRoutingSite] = useState('');
   const [selectedQueueId, setSelectedQueueId] = useState('');
   const [selectedQueueVersion, setSelectedQueueVersion] = useState(0);
@@ -31,12 +37,14 @@ export function AccessManagement({ currentUserId }: { currentUserId: string }) {
   const [selectedId, setSelectedId] = useState('');
   const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
   async function load() {
-    const [a, r, g, d, s, locations, queues, routing] = await Promise.all([
+    const [a, r, g, d, s, locations, queues, routing, portal, portalDeviceList] = await Promise.all([
       api<Account[]>('/admin/users'), api<Role[]>('/admin/roles'), api<Target[]>('/admin/groups'),
       api<Target[]>('/devices'), api<Grant[]>('/admin/grants'), api<Site[]>('/admin/sites'), api<SupportQueue[]>('/admin/support-queues'), api<QueueRoutingRule[]>('/admin/support-routing'),
+      api<PortalAccess[]>('/admin/portal-device-access'),
+      api<PortalDevice[]>('/admin/portal-devices'),
     ]);
     setAccounts(a); setRoles(r); setGroups(g); setDevices(d); setGrants(s); setSites(locations); setSupportQueues(queues);
-    setRoutingRules(routing);
+    setRoutingRules(routing); setPortalAccesses(portal); setPortalDevices(portalDeviceList);
   }
   async function run(work: () => Promise<void>) {
     setBusy(true); setError(''); setMessage('');
@@ -49,6 +57,16 @@ export function AccessManagement({ currentUserId }: { currentUserId: string }) {
   return <>
     {error && <p role="alert" className="error">{error}</p>}
     {message && <p role="status">{message}</p>}
+    <section className="panel">
+      <h2>Dispositivi visibili nel portale personale</h2>
+      <p>Associa account e dispositivi dopo aver verificato il richiedente. L’associazione concede solo l’accesso ai ticket creati da quell’account; non assegna permessi RMM.</p>
+      <form className="settings" onSubmit={e=>{e.preventDefault();void run(async()=>{await api('/admin/portal-device-access','POST',{userId:portalUserId,deviceId:portalDeviceId});await load();setMessage('Dispositivo associato al portale');});}}>
+        <label>Account<select required value={portalUserId} onChange={e=>setPortalUserId(e.target.value)}><option value="">Seleziona un account</option>{accounts.filter(account=>!account.isDisabled).map(account=><option key={account.id} value={account.id}>{account.email}</option>)}</select></label>
+        <label>Dispositivo<select required value={portalDeviceId} onChange={e=>setPortalDeviceId(e.target.value)}><option value="">Seleziona un dispositivo</option>{portalDevices.map(device=><option key={device.id} value={device.id}>{device.name} · {device.siteName}</option>)}</select></label>
+        <button disabled={busy||!portalUserId||!portalDeviceId||!portalDevices.length}>Associa dispositivo</button>
+      </form>
+      {portalAccesses.length===0?<p>Nessuna associazione configurata.</p>:<div className="table-wrap"><table><thead><tr><th>Account</th><th>Dispositivo</th><th>Sede</th><th>Concesso</th><th></th></tr></thead><tbody>{portalAccesses.map(access=><tr key={`${access.userId}:${access.deviceId}`}><td>{access.email}{access.isDisabled?' · sospeso':''}</td><td>{access.name}</td><td>{access.siteName}</td><td>{new Date(access.grantedAt).toLocaleString('it-IT')}</td><td><button className="secondary compact" disabled={busy} onClick={()=>{if(window.confirm(`Revocare l’accesso al portale di ${access.email} per ${access.name}?`))void run(async()=>{await api(`/admin/portal-device-access/${access.userId}/${access.deviceId}`,'DELETE');await load();setMessage('Accesso al dispositivo revocato');});}}>Revoca</button></td></tr>)}</tbody></table></div>}
+    </section>
     <section className="panel"><h2>Account e ruoli globali</h2>
       <button disabled={busy} onClick={() => void run(load)}>Aggiorna utenti e concessioni</button>
       <div className="table-wrap"><table><thead><tr><th>Email</th><th>Ruoli globali</th><th>Stato</th><th>Azioni</th></tr></thead>
