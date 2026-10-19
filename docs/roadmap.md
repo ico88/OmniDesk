@@ -350,6 +350,19 @@ da verificare il comando contro una sessione MeshCentral interattiva. Il deploy
 LAN e la migrazione sono stati completati dopo backup e verifica di zero job e
 zero sessioni; smoke HTTPS/CA e bundle aggiornato passano.
 
+### Revoca del collegamento remoto e blocco durante la conferma
+
+La barra desktop ora usa un'unica azione «Disconnetti e revoca»: rimuove il link
+condiviso, invece di chiudere soltanto lo stream lasciando valido lo stesso grant.
+Se MeshCentral non conferma la revoca, il server mantiene lo stato
+`revocation_pending`, impedisce nuove sessioni per quel dispositivo e continua i
+tentativi; la UI attende la conferma prima di consentire un nuovo collegamento.
+Una volta chiusa la revoca, ogni nuova connessione passa di nuovo da RBAC e dalla
+policy di consenso/unattended configurata. API/PostgreSQL coprono il blocco e il
+riavvio dopo il retry; Chromium isolato verifica la barra e il flusso UI con URL
+Mesh simulato. Il comportamento del motore e della sessione Windows reale resta
+da verificare prima del deploy LAN.
+
 ### SD1 — vincolo sede per ticket multi-dispositivo — sorgenti e test verificati
 
 Il collegamento multi-dispositivo esiste già con snapshot, permessi, limite dieci,

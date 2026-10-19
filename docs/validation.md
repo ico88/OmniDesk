@@ -1086,6 +1086,17 @@ richiesta di disconnessione. Il comando MeshCentral reale non è stato ancora
 eseguito contro una sessione desktop interattiva; la chiusura usa protocollo
 interno della versione installata e richiede regressione dopo ogni upgrade.
 
+Correzione successiva: la barra usa «Disconnetti e revoca» per non lasciare
+riutilizzabile il grant corrente. Se la revoca è pending, l'interfaccia mantiene
+lo stato in attesa e l'API blocca nuove sessioni sul dispositivo fino alla
+conferma MeshCentral; dopo la conferma, una nuova sessione è possibile solo con
+le autorizzazioni e la policy correnti. La suite PostgreSQL copre pending,
+blocco nuove sessioni, retry riuscito e sessione autorizzata successiva; smoke
+Chromium usa una risposta Mesh simulata per verificare conferma, toolbar e
+ritorno allo stato pronto. Build API/dashboard, Compose e smoke Chromium passati.
+Il comportamento del motore remoto e una sessione Windows reale non sono stati
+verificati.
+
 SD2 aggiunge migrazione con backfill del device primario, API link/unlink con
 permessi su ticket e dispositivo, versione concorrente, limite 10, lock,
 audit/outbox e UI ticket. Suite PostgreSQL isolata: 64/64 xUnit passati,
