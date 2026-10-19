@@ -21,6 +21,7 @@ public static class UpdateScenario
         var lease = (await claimed.Content.ReadFromJsonAsync<UpdateLease>())!;
         agent.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", assertion());
         Assert.Equal(HttpStatusCode.NoContent, (await agent.PostAsync("/api/agent/jobs/claim", null)).StatusCode);
+
         Assert.Equal(HttpStatusCode.Conflict, (await admin.DeleteAsync($"/api/devices/{device}/updates/{lease.Id}")).StatusCode);
         var updateId = Guid.NewGuid();
         var result = new UpdateResultRequest(lease.LeaseId, true, false, [new(updateId, 1, "Fixture update", ["123"], false)]);
@@ -39,5 +40,19 @@ public static class UpdateScenario
         Assert.Equal(HttpStatusCode.NoContent, (await admin.DeleteAsync($"/api/devices/{device}/updates/{installId}")).StatusCode);
         agent.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", assertion());
         Assert.Equal(HttpStatusCode.NoContent, (await agent.PostAsync("/api/agent/jobs/claim", null)).StatusCode);
+
+        var diagnostic = new DiagnosticRequest(Guid.NewGuid());
+        Assert.Equal(HttpStatusCode.Forbidden, (await scoped.PostAsJsonAsync($"/api/devices/{device}/diagnostics/processes", diagnostic)).StatusCode);
+        Assert.Equal(HttpStatusCode.Created, (await admin.PostAsJsonAsync($"/api/devices/{device}/diagnostics/processes", diagnostic)).StatusCode);
+        agent.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", assertion());
+        var diagnosticClaim = await agent.PostAsync("/api/agent/jobs/claim", null);
+        Assert.Equal(HttpStatusCode.OK, diagnosticClaim.StatusCode);
+        var diagnosticLease = (await diagnosticClaim.Content.ReadFromJsonAsync<UpdateLease>())!;
+        Assert.Equal("diagnostics.processes", diagnosticLease.Kind);
+        var diagnosticResult = new UpdateResultRequest(diagnosticLease.LeaseId, true, false, [], DiagnosticJson: "{\"Kind\":\"diagnostics.processes\",\"CollectedAt\":\"2026-10-19T00:00:00+00:00\",\"Processes\":[]}");
+        agent.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", assertion());
+        Assert.Equal(HttpStatusCode.NoContent, (await agent.PostAsJsonAsync($"/api/agent/jobs/{diagnosticLease.Id}/result", diagnosticResult)).StatusCode);
+        var diagnostics = await admin.GetFromJsonAsync<JsonElement[]>($"/api/devices/{device}/diagnostics");
+        Assert.Single(diagnostics!);
     }
 }
