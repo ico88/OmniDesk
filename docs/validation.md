@@ -368,3 +368,17 @@ rimozione successiva sul PC. Prevista riparazione MSI con log, senza cancellare
 identita o allargare ACL. Estesa CI: upgrade sia da baseline 0.6 sia da 0.7.0,
 verifica esplicita servizio/payload dopo upgrade; fixture con eliminazione di
 servizio e payload sul runner e verifica ripristino mediante /fa. Esito pendente.
+
+### Errore repair 1706: sorgente MSI temporanea eliminata
+
+Log reale operatore: 1603/1706 durante InstallFinalize; Windows Installer cerca
+agent.msi nella cartella OmniDesk-Install-* eliminata dal finally del launcher.
+Questo conferma un difetto del nostro script per manutenzione, non dimostra da
+solo la causa originaria della scomparsa del motore. Corretto il cleanup:
+MSI verificato e directory privata SYSTEM/Administrators vengono conservati dal
+momento in cui inizia msiexec; token e CA temporanei vengono comunque eliminati.
+Prima di tale momento il cleanup rimuove tutto. Test regressione sul finally
+reale aggiunto alla CI Windows. Ripristino client previsto mediante recache v e
+repair amus dalla copia originale dello stesso pacchetto, rinominata agent.msi.
+Fonte flag v: https://learn.microsoft.com/windows-server/administration/windows-commands/msiexec
+Esito CI/client ancora da registrare; niente promessa di repair riuscito.

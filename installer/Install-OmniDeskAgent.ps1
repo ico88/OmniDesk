@@ -32,6 +32,7 @@ Set-Acl -LiteralPath $root -AclObject $acl
 $stagedMsi = Join-Path $root 'agent.msi'
 $stagedCa = Join-Path $root 'root.crt'
 $stagedToken = Join-Path $root 'enrollment.txt'
+$keepPackage = $false
 try {
     [IO.File]::Copy((Resolve-Path -LiteralPath $MsiPath).Path, $stagedMsi, $false)
     [IO.File]::Copy((Resolve-Path -LiteralPath $CaCertificatePath).Path, $stagedCa, $false)
@@ -92,6 +93,8 @@ try {
         if ($token -notmatch '^[A-Fa-f0-9]{64}$') { throw 'Invalid enrollment token file.' }
         $token = $null
     }
+    # Windows Installer needs this original source for future repair/maintenance.
+    $keepPackage = $true
     $install = Start-Process -FilePath "$env:SystemRoot\System32\msiexec.exe" -ArgumentList @('/i', ('"' + $stagedMsi + '"'), '/qn', '/norestart') -Wait -PassThru
     if ($install.ExitCode -notin @(0, 3010)) { throw ('MSI installation failed: ' + $install.ExitCode) }
     if ($install.ExitCode -eq 3010) { Write-Warning 'Windows Installer reports a restart is required; no automatic restart was performed.' }
@@ -108,8 +111,12 @@ try {
     if ($service.Status -ne 'Running') { Start-Service -Name OmniDeskAgent }
     Write-Output 'Agent installed/configured. Verify a real heartbeat and inventory in the dashboard; collection may take about a minute.'
     if ($EnrollmentTokenFile) { Write-Output 'Remove the original enrollment token file after successful enrollment.' }
-    Write-Output 'Temporary staging files are deleted; deletion is not a guarantee of secure disk erasure.'
+    Write-Output ('Verified MSI source retained for Windows Installer maintenance: ' + $stagedMsi)
+    Write-Output 'Temporary token and CA staging files are deleted; deletion is not a guarantee of secure disk erasure.'
 } finally {
-    foreach ($path in @($stagedToken, $stagedMsi, $stagedCa)) { if ([IO.File]::Exists($path)) { [IO.File]::Delete($path) } }
-    if ([IO.Directory]::Exists($root)) { [IO.Directory]::Delete($root, $false) }
+    foreach ($path in @($stagedToken, $stagedCa)) { if ([IO.File]::Exists($path)) { [IO.File]::Delete($path) } }
+    if (-not $keepPackage) {
+        if ([IO.File]::Exists($stagedMsi)) { [IO.File]::Delete($stagedMsi) }
+        if ([IO.Directory]::Exists($root)) { [IO.Directory]::Delete($root, $false) }
+    }
 }

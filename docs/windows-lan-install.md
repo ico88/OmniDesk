@@ -122,3 +122,13 @@ revocare il dispositivo: sullo stesso server lo script conserva l'identita
 protetta esistente e non richiede un altro token. Dopo l'aggiornamento avviare
 la Tray dalla sessione ordinaria (oppure logoff/logon) e verificarne lo stato.
 Queste sono istruzioni di collaudo: registrare esito CI e prova PC in validation.
+
+### Sorgente MSI per manutenzione
+
+Lo script aggiornato conserva agent.msi verificato nella propria directory
+privata ProgramData/OmniDesk-Install-* per consentire repair e manutenzione MSI.
+Token e CA temporanei sono rimossi come prima. Non eliminare tale sorgente mentre
+il prodotto resta installato. I kit precedenti eliminavano anche il pacchetto e
+potevano causare errore 1706 in repair: usare la copia originale del medesimo MSI
+con recache/repair, senza rimuovere l'identita dispositivo. La conservazione della
+sorgente non sostituisce il backup delle chiavi o una firma di produzione.

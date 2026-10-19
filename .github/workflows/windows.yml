@@ -27,6 +27,9 @@ jobs:
       - name: Verify masked enrollment prompt
         shell: powershell
         run: '& .\installer\Test-OmniDeskEnrollmentPrompt.ps1'
+      - name: Verify installer source retention and sensitive cleanup
+        shell: powershell
+        run: '& .\installer\Test-OmniDeskInstallerCleanup.ps1'
       - name: Verify Tray protocol contracts
         run: dotnet test tests/OmniDesk.Api.Tests -c Release --filter FullyQualifiedName~TrayProtocolTests
       - name: Build Agent, Tray and single MSI
