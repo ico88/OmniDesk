@@ -142,3 +142,9 @@ interattiva di apparizione/rimozione sul PC pilota ancora necessaria.
 Kit 0.7.3 compilato/testato su Windows (run39223715334 riuscita) e pubblicato nel
 download autenticato della console. Restano prove client: consultazione ticket
 ripetuta durante polling e avviso/barra durante nuova sessione remota.
+
+0.8.0 in sviluppo: Setup WinForms nativo chiede il token mascherato ed esegue
+installazione/enrollment senza script lato utente; invio token su stdin. Il normale
+Disinstalla MSI revoca prima identità e accessi sul server e si interrompe se il
+server non risponde. API/Agent/Setup compilati localmente; WiX/runner Windows e
+collaudo interattivo restano da completare. Nessun test runtime dichiarato.

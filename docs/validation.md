@@ -590,3 +590,19 @@ artifacts/windows-lan/OmniDesk.Windows.LAN-0.7.3.zip, SHA256
 Manifest 0.7.3 e ZIP leggibili dall'UID API 1654; HTTPS/readiness/asset e rifiuto
 anonimo passati. Log CI /tmp/omnidesk-windows-073-ci.log. Nessuna installazione
 sul pilota o prova della lettura ticket/notifica remota interattiva dichiarata.
+
+## Setup nativo e rimozione 0.8.0 — 19 ottobre 2026
+
+Nuova UI WinForms richiede token mascherato, verifica CA pubblica tramite pin,
+readiness HTTPS, installa MSI senza reboot e invia enrollment via stdin. Aggiunto
+comando macchina revoke con firma dispositivo e endpoint self-service che revoca
+credenziale, sessioni remote, provisioning e update in coda; MSI lo esegue come
+SYSTEM prima di RemoveFiles e non rimuove durante major-upgrade. La rimozione
+interrompe se il server non conferma (401 è già revocato). Kit aggiornato a Setup.exe,
+MSI, CA e istruzioni, senza script eseguibili dall'utente. Queste sono proprietà
+implementate nel sorgente, da convalidare sul runner Windows e sul PC.
+
+Solo compilazioni cross-target eseguite: Setup net10.0-windows, Agent
+net10.0-windows, API net10.0; zero warning/error. Comando:
+`docker run --rm -u 1000:1000 -v "$PWD:/work" -w /work -e DOTNET_CLI_HOME=/tmp/dotnet mcr.microsoft.com/dotnet/sdk:10.0 sh -c 'dotnet build src/OmniDesk.Setup.Windows -c Release && dotnet build src/OmniDesk.Agent.Windows -c Release && dotnet build src/OmniDesk.Api -c Release'`.
+Non eseguiti test, compilazione WiX Windows, installazione, enrollment o disinstallazione reali.

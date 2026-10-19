@@ -156,3 +156,30 @@ kit verificato quando pubblicato, chiudendo prima l'icona Tray; enrollment
 esistente conservato. Il collaudo richiede aprire e aggiornare I miei ticket
 ripetutamente mentre il polling stato rimane attivo. La correzione della
 contesa non dimostra che fosse l'unica causa dell'errore generico sul pilota.
+
+## Installazione guidata nativa e rimozione server-aware 0.8.0
+
+Per il kit LAN Windows 0.8.0 l'utente apre `OmniDesk.Setup.exe`: la finestra
+WinForms richiede il token monouso in un campo mascherato. Il token passa allo
+Agent tramite pipe stdin, non compare nella command line o in un file temporaneo.
+Setup verifica l'impronta pin della sola CA pubblica nel kit, installa il trust
+LocalMachine, verifica readiness HTTPS, installa l'MSI senza riavvio automatico,
+esegue enrollment e conferma che l'Agent possa leggere l'identità protetta.
+Se l'identità locale dello stesso server esiste già, preserva l'enrollment e non
+consuma un altro token. Il kit non contiene script PowerShell da avviare; gli
+script usati nei build e nei collaudi CI restano interni alla pipeline.
+
+Windows Installer registra il prodotto in Impostazioni > App > OmniDesk Agent.
+La disinstallazione MSI, anche avviata dalla UI standard di Windows, prima chiama
+l'endpoint firmato dell'identità dispositivo: server revoca credenziale, sessioni,
+configurazione remota e lavori in coda. Solo dopo successo (o identità già
+revocata) il pacchetto rimuove servizio, Tray e motore. Se il server è irraggiungibile,
+l'azione MSI fallisce e il rollback conserva l'installazione; riconnettere il PC
+alla LAN e riprovare. La CA pubblica resta nel trust store intenzionalmente.
+Un amministratore locale può comunque forzare la rimozione e controlla il PC.
+
+Il sorgente 0.8.0 è compilato in locale per `net10.0-windows` (Setup, Agent) e
+net10.0 (API), senza warning. L'MSI WiX e la verifica sul runner Windows sono
+ancora da eseguire; il build-only workflow `windows-agent-package` produce
+l'artifact senza eseguire test. Nessun runtime Windows, token o revoca reale è
+stato verificato in questo incremento.
