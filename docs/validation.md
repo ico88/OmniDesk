@@ -1665,5 +1665,9 @@ Lo scenario PostgreSQL verifica che un lettore scoped riceva la notifica per il
 file pubblico pulito ma non per gli allegati interni, e copre insieme il retry
 autorizzato della scansione fallita. Suite API 82/82, build dashboard e 6/6
 Vitest passati; `docker build` API e dashboard riusciti. Configurazioni Compose,
-`bash -n` e `git diff --check` passati. Modifica non pubblicata e non inclusa nei
-job CI Windows attivi/in coda.
+`bash -n`, `git diff --check` e `./scripts/smoke.sh --browser` passati sulle
+immagini aggiornate, incluse scansioni ClamAV clean/EICAR e prove Chromium.
+Modifica non pubblicata e non inclusa nei job CI Windows attivi/in coda.
+I gruppi di concorrenza GitHub Actions sono stati differenziati per SHA commit,
+così un push successivo non sostituisce un job precedente ancora in attesa. I run
+Windows in corso e in coda non sono stati cancellati.
