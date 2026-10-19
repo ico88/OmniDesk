@@ -55,13 +55,13 @@ Ogni ticket avrà una sede e almeno un dispositivo; richieste incomplete rimarra
 
 Specifiche: [Service Desk](service-desk.md), [schema proposto](service-desk-data-model.md), [fasi e dipendenze](roadmap.md#percorso-futuro-omnidesk-service-desk). Nessun nuovo deployment o codice viene introdotto da questa progettazione.
 
-## Estensione Windows proposta: Agent e Tray distinti
+## Componenti Windows Agent e Tray
 
-[Specifica tecnica Agent/Tray](windows-agent-tray.md): servizio .NET automatico indipendente dal logon e processo Tray non elevato per ogni sessione utente, installati da un unico MSI per-machine futuro. La console IT Windows esistente è un'altra applicazione e non assume il ruolo della Tray.
+[Specifica tecnica Agent/Tray](windows-agent-tray.md): servizio .NET automatico indipendente dal logon e processo Tray non elevato per ogni sessione utente, installati da un unico MSI per-machine. La console IT Windows esistente è un'altra applicazione e non assume il ruolo della Tray.
 
 ```mermaid
 flowchart LR
- MSI[MSI unico futuro - installazione elevata] --> Agent[OmniDesk Agent - servizio Windows]
+ MSI[MSI unico - installazione elevata] --> Agent[OmniDesk Agent - servizio Windows]
  MSI --> Tray[OmniDesk Tray - sessione utente non elevata]
  Tray -->|Named pipe locale con ACL e validazione| Agent
  Agent -->|HTTPS e identità dispositivo| Backend[Backend RMM e futuro Service Desk]
@@ -71,13 +71,13 @@ flowchart LR
  Backend --> Consent[Consenso remoto legato a sessione e logon]
 ```
 
-Il servizio possiede credenziali protette da ACL/DPAPI o futuro Certificate Store; la Tray riceve solo operazioni IPC allowlist e non può arrestare, modificare o disinstallare il servizio. Recovery SCM, heartbeat/offline con audit, dismissione elevata e revoca server sono requisiti da implementare/collaudare. Nessuna protezione assoluta contro amministratori locali o accesso fisico privilegiato è promessa.
+Il servizio possiede credenziali protette da ACL/DPAPI o futuro Certificate Store; la Tray riceve solo operazioni IPC allowlist e non può arrestare, modificare o disinstallare il servizio. Recovery SCM, heartbeat/offline con audit e revoca server sono implementati nel sorgente 0.8.0; Setup e MSI sono compilati. La prova interattiva di installazione/rimozione resta da eseguire sul PC Windows pilota. Nessuna protezione assoluta contro amministratori locali o accesso fisico privilegiato è promessa.
 
 Richieste assistenza associate dal server al dispositivo dell'agente; lettura ticket vincolata anche all'utente verificato. Named pipe locale per logon con controllo dell'identità effettiva, protezione da server contraffatti e limiti sui messaggi, senza proxy privilegiato generico. Screenshot acquisiti nella sessione utente dopo anteprima/conferma. L'autorizzazione IT e il consenso utente remoto sono controlli distinti, entrambi correlati alla sessione; la chiusura della Tray non arresta il servizio né abilita automaticamente accesso non presidiato.
 
-Il MSI attuale installa solo l'Agent. Questa estensione non cambia codice, installer, porte o milestone corrente. Sequenza e gate: [percorso Windows WT](roadmap.md#percorso-futuro-windows-agent-e-tray).
+La versione 0.8.0 include Agent e Tray nello stesso MSI. Stato di build e collaudo: [roadmap Windows](roadmap.md#percorso-futuro-windows-agent-e-tray).
 
-L'autorizzazione remota è applicata dal backend al rilascio/consumo del grant e durante la sessione: `view`, `remote.control`, `terminal`, `files`, `updates` e `administration` restano separati negli ambiti global/group/device. Accesso unattended, elevazione e dismissione avranno capacità aggiuntive esplicite, ancora progettuali. La [matrice Windows](windows-agent-tray.md#matrice-di-autorizzazione-proposta) distingue permessi IT, consenso del logon destinatario e privilegi locali; nessun ticket o messaggio Tray concede implicitamente controllo remoto.
+L'autorizzazione remota è applicata dal backend al rilascio/consumo del grant e durante la sessione: `view`, `remote.control`, `terminal`, `files`, `updates` e `administration` restano separati negli ambiti global/group/device. Accesso unattended ed elevazione mantengono capacità esplicite e separate; la dismissione richiede la revoca server. La [matrice Windows](windows-agent-tray.md#matrice-di-autorizzazione-proposta) distingue permessi IT, consenso del logon destinatario e privilegi locali; nessun ticket o messaggio Tray concede implicitamente controllo remoto.
 
 
 ## Hardening account e lifecycle corrente

@@ -74,4 +74,4 @@ Documenti: [architettura](docs/architecture.md), [database](docs/database.md), [
 
 OmniDesk Service Desk è un modulo futuro, **solo progettato**: [specifiche e confini](docs/service-desk.md), [schema PostgreSQL proposto](docs/service-desk-data-model.md), [fasi e dipendenze](docs/roadmap.md#percorso-futuro-omnidesk-service-desk). Non è disponibile nell'interfaccia corrente e non modifica le milestone implementate.
 
-Architettura Windows futura: [OmniDesk Agent e OmniDesk Tray](docs/windows-agent-tray.md), componenti distinti con privilegi separati e un unico MSI previsto. Tray, named pipe e relativi workflow sono solo progettati; il pacchetto corrente installa esclusivamente l'Agent.
+Kit Windows 0.8.0: [OmniDesk Agent e OmniDesk Tray](docs/windows-agent-tray.md), installati con Setup grafico e MSI unico; la disinstallazione MSI richiede la revoca dell’identità sul server. Il pacchetto è compilato, ma installazione, enrollment e rimozione richiedono ancora il collaudo sul PC Windows pilota. Non è firmato per la distribuzione pubblica.
