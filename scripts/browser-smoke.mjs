@@ -12,6 +12,13 @@ try {
  await page.getByLabel('Password',{exact:true}).fill(readFileSync('/run/secrets/bootstrap_password','utf8').trim());
  await page.getByRole('button',{name:'Accedi',exact:true}).click();
  await page.getByRole('heading',{name:'Panoramica',exact:true}).waitFor();
+ await page.getByRole('button',{name:'Account e sicurezza',exact:true}).click();
+ await page.getByLabel('Nome visualizzato',{exact:true}).fill('Federico Operatore');
+ await page.getByRole('button',{name:'Salva nome',exact:true}).click();
+ await page.getByText('Nome operatore aggiornato',{exact:true}).waitFor();
+ await page.reload(); await page.getByRole('heading',{name:'Panoramica',exact:true}).waitFor();
+ await page.getByRole('button',{name:'Account e sicurezza',exact:true}).click();
+ assert.equal(await page.getByLabel('Nome visualizzato',{exact:true}).inputValue(),'Federico Operatore','Operator display name persisted after reload');
  await page.getByRole('button',{name:'Personalizzazione',exact:true}).click();
  await page.getByLabel('Nome',{exact:true}).fill('Browser smoke');
  await page.getByRole('button',{name:'Salva personalizzazione'}).click();
