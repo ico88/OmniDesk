@@ -228,6 +228,7 @@ try {
  await page.getByRole('button',{name:'Assistenza',exact:true}).click();
  await page.waitForFunction(()=>document.querySelector('.ticket-summary article strong')?.textContent==='2');
  assert.equal(await page.locator('.ticket-summary article').nth(0).locator('strong').textContent(),'2','Scoped ticket summary includes customer portal and Agent tickets');
+ assert.deepEqual(await page.getByLabel('Filtra priorità ticket',{exact:true}).locator('option').evaluateAll(options=>options.map(option=>option.value)),['','p1','p2','p3','p4'],'Ticket filters use canonical P1-P4 priorities');
  await page.getByRole('row').filter({has:page.getByRole('cell',{name:ticketSubject,exact:true})}).getByRole('button',{name:fixtureName,exact:true}).waitFor();
  assert.equal(await page.getByRole('table').innerText().then(text=>text.includes(fixtureDevice)),false,'Ticket table shows computer name, not enrollment device UUID');
  await page.getByLabel('Cerca richieste',{exact:true}).fill(fixtureName.toUpperCase());
@@ -235,7 +236,9 @@ try {
  await page.getByRole('button',{name:'Filtra',exact:true}).click();
  const supportRowResponse=await context.request.get(`https://omnidesk.test/api/support?ticketId=${smokeTicketId}`);
  assert.equal(supportRowResponse.status(),200);
- assert.equal((await supportRowResponse.json())[0].canManage,true,'Authorized staff can manage the selected ticket');
+ const supportRow=(await supportRowResponse.json())[0];
+ assert.equal(supportRow.canManage,true,'Authorized staff can manage the selected ticket');
+ assert.equal(supportRow.priority,'p3','New intake defaults to canonical P3');
  await page.getByRole('row').filter({has:page.getByRole('cell',{name:ticketSubject,exact:true})}).getByRole('button',{name:'Apri ticket',exact:true}).click();
  await page.locator('.ticket-interventions').waitFor();
  assert.equal(await page.locator('.ticket-intervention-link').isVisible(),true,'Ticket manager receives the RMM correlation control');

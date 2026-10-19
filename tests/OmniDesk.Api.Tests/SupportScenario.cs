@@ -184,7 +184,7 @@ public static class SupportScenario
         var adminSiteQueues = await admin.GetFromJsonAsync<System.Text.Json.JsonElement[]>($"/api/support/queues?siteId={siteId}");
         Assert.Contains(adminSiteQueues!, x => x.GetProperty("id").GetGuid() == siteQueueId);
         Assert.DoesNotContain(adminSiteQueues!, x => x.GetProperty("id").GetGuid() == otherSiteQueueId);
-        Assert.Equal("normal",(await admin.GetFromJsonAsync<System.Text.Json.JsonElement[]>($"/api/support?deviceId={device}"))!.Single().GetProperty("priority").GetString());
+        Assert.Equal("p3",(await admin.GetFromJsonAsync<System.Text.Json.JsonElement[]>($"/api/support?deviceId={device}"))!.Single().GetProperty("priority").GetString());
         Assert.Equal(HttpStatusCode.Created,(await admin.PostAsJsonAsync("/api/admin/roles",new {name="Ticket technician",permissions=new[]{"tickets.view","tickets.manage"}})).StatusCode);
         Assert.Equal(HttpStatusCode.Created,(await admin.PostAsJsonAsync("/api/admin/grants",new {userId=scopedId,role="Ticket technician",groupId=group,deviceId=(Guid?)null})).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await admin.PostAsJsonAsync("/api/admin/support-queues", new { name = " rete " })).StatusCode);
@@ -285,7 +285,7 @@ public static class SupportScenario
         Assert.Equal(HttpStatusCode.Conflict,(await admin.PutAsJsonAsync($"/api/support/{ticket.Id}",new SupportEdit(4,"closed","Risolto"))).StatusCode);
         Assert.Equal(HttpStatusCode.NoContent,(await admin.PutAsJsonAsync($"/api/support/{ticket.Id}",new {expectedVersion=4,state="resolved",resolution="Risolto fixture",addReply=true,priority="urgent",updatePriority=true,queueId=siteQueueId,updateQueue=true,assigneeId=scopedId,updateAssignment=true})).StatusCode);
         var assignedTicket=(await admin.GetFromJsonAsync<System.Text.Json.JsonElement[]>($"/api/support?deviceId={device}"))!.Single();
-        Assert.Equal("urgent",assignedTicket.GetProperty("priority").GetString());
+        Assert.Equal("p1",assignedTicket.GetProperty("priority").GetString());
         Assert.Equal("software",assignedTicket.GetProperty("category").GetString());
         Assert.Equal(siteQueueId,assignedTicket.GetProperty("queueId").GetGuid());
         Assert.Equal("Rete",assignedTicket.GetProperty("queueName").GetString());
@@ -294,6 +294,7 @@ public static class SupportScenario
         Assert.DoesNotContain(queueAssignees!,x=>x.GetProperty("id").GetString()==adminUser);
         Assert.True(assignedTicket.GetProperty("number").GetInt64() > 0);
         Assert.Equal(scopedId,assignedTicket.GetProperty("assigneeId").GetString());
+        Assert.Single((await admin.GetFromJsonAsync<System.Text.Json.JsonElement[]>($"/api/support?priority=p1"))!);
         Assert.Single((await admin.GetFromJsonAsync<System.Text.Json.JsonElement[]>($"/api/support?priority=urgent"))!);
         Assert.Single((await admin.GetFromJsonAsync<System.Text.Json.JsonElement[]>("/api/support?category=software"))!);
         Assert.Empty((await admin.GetFromJsonAsync<System.Text.Json.JsonElement[]>("/api/support?category=hardware"))!);
@@ -366,7 +367,7 @@ public static class SupportScenario
             var evt = await db.CoreOutboxEvents.SingleAsync(x => x.EventType == "ticket.internal_note.created" && x.AggregateId == ticket.Id);
             Assert.DoesNotContain("Nota interna solo per assistenza", evt.Payload);
         }
-        var manual = new ManualSupportCreate(Guid.NewGuid(), device, "Intervento telefonico", "Segnalazione raccolta dall'operatore", "network", "high");
+        var manual = new ManualSupportCreate(Guid.NewGuid(), device, "Intervento telefonico", "Segnalazione raccolta dall'operatore", "network", "p2");
         Assert.Equal(HttpStatusCode.Forbidden, (await scoped.PostAsJsonAsync("/api/support/manual", manual with { DeviceId = Guid.NewGuid() })).StatusCode);
         var scopedManual = await scoped.PostAsJsonAsync("/api/support/manual", manual with { RequestId = Guid.NewGuid() });
         Assert.Equal(HttpStatusCode.Created, scopedManual.StatusCode);
@@ -380,9 +381,10 @@ public static class SupportScenario
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             var saved = await db.SupportTickets.SingleAsync(x => x.Id == manualTicket.Id);
             Assert.Equal(siteId, saved.SiteId);
-            Assert.Equal("high", saved.Priority);
+            Assert.Equal("p2", saved.Priority);
         }
         Assert.Equal(HttpStatusCode.OK, (await admin.PostAsJsonAsync("/api/support/manual", manual)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await admin.PostAsJsonAsync("/api/support/manual", manual with { Priority = "high" })).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await admin.PostAsJsonAsync("/api/support/manual", manual with { Subject = "Richiesta diversa" })).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await admin.PostAsJsonAsync("/api/support/manual", manual with { Priority = "emergency" })).StatusCode);
         Assert.Contains((await admin.GetFromJsonAsync<System.Text.Json.JsonElement[]>($"/api/support?deviceId={device}"))!, row => row.GetProperty("id").GetGuid() == manualTicket.Id && row.GetProperty("origin").GetString() == "operator");

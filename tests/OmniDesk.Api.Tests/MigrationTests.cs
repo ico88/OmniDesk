@@ -19,7 +19,12 @@ public sealed class MigrationTests
         await using (var create = new NpgsqlCommand($"CREATE SCHEMA \"{schema}\"", admin)) await create.ExecuteNonQueryAsync();
         var connection = new NpgsqlConnectionStringBuilder(baseConnection) { SearchPath = schema }.ConnectionString;
         var options = new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(connection).Options;
-        var siteId = Guid.NewGuid(); var groupId = Guid.NewGuid(); var deviceId = Guid.NewGuid(); var ticketId = Guid.NewGuid();
+        var siteId = Guid.NewGuid(); var groupId = Guid.NewGuid(); var deviceId = Guid.NewGuid();
+        var legacyPriorities = new Dictionary<Guid, string>
+        {
+            [Guid.NewGuid()] = "urgent", [Guid.NewGuid()] = "high", [Guid.NewGuid()] = "normal", [Guid.NewGuid()] = "low"
+        };
+        var ticketId = legacyPriorities.Single(x => x.Value == "normal").Key;
         try
         {
             await using (var db = new AppDbContext(options))
@@ -29,8 +34,11 @@ public sealed class MigrationTests
                 await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO \"Sites\" (\"Id\",\"Name\",\"IsArchived\",\"CreatedAt\") VALUES ({siteId},'Migration fixture',false,now())");
                 await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO \"DeviceGroups\" (\"Id\",\"Name\") VALUES ({groupId},'Migration fixture')");
                 await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO \"Devices\" (\"Id\",\"Name\",\"GroupId\",\"SiteId\") VALUES ({deviceId},'Existing device',{groupId},{siteId})");
-                var oldRequestId = Guid.NewGuid();
-                await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO \"SupportTickets\" (\"Id\",\"RequestId\",\"DeviceId\",\"SiteId\",\"RequesterKey\",\"Subject\",\"Description\",\"State\",\"Priority\",\"AssigneeId\",\"Resolution\",\"Version\",\"CreatedAt\",\"UpdatedAt\",\"Screenshot\") VALUES ({ticketId},{oldRequestId},{deviceId},{siteId},{new string('C', 64)},'Existing ticket','Before upgrade','open','normal',NULL,NULL,1,now(),now(),NULL)");
+                foreach (var (legacyTicketId, priority) in legacyPriorities)
+                {
+                    var requesterKey = Convert.ToHexString(Guid.NewGuid().ToByteArray()) + Convert.ToHexString(Guid.NewGuid().ToByteArray());
+                    await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO \"SupportTickets\" (\"Id\",\"RequestId\",\"DeviceId\",\"SiteId\",\"RequesterKey\",\"Subject\",\"Description\",\"State\",\"Priority\",\"AssigneeId\",\"Resolution\",\"Version\",\"CreatedAt\",\"UpdatedAt\",\"Screenshot\") VALUES ({legacyTicketId},{Guid.NewGuid()},{deviceId},{siteId},{requesterKey},'Existing ticket','Before upgrade','open',{priority},NULL,NULL,1,now(),now(),NULL)");
+                }
                 await migrator.MigrateAsync("20261019155141_KnowledgeBase");
                 var articleId = Guid.NewGuid();
                 await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO \"KnowledgeArticles\" (\"Id\",\"Slug\",\"NormalizedSlug\",\"Title\",\"Summary\",\"Body\",\"IsPublished\",\"Version\",\"CreatedAt\",\"UpdatedAt\",\"PublishedAt\") VALUES ({articleId},'legacy-guide','legacy-guide','Legacy guide','Before scope rollout','Existing content',true,4,now(),now(),now())");
@@ -43,6 +51,12 @@ public sealed class MigrationTests
                 Assert.True(existing.Number > 0);
                 Assert.Equal("general", existing.Category);
                 Assert.Null(existing.QueueId);
+                var upgradedTickets = await db.SupportTickets.AsNoTracking().Where(x => legacyPriorities.Keys.Contains(x.Id)).ToArrayAsync();
+                Assert.Equal(4, upgradedTickets.Length);
+                Assert.Equal("p1", upgradedTickets.Single(x => legacyPriorities[x.Id] == "urgent").Priority);
+                Assert.Equal("p2", upgradedTickets.Single(x => legacyPriorities[x.Id] == "high").Priority);
+                Assert.Equal("p3", upgradedTickets.Single(x => legacyPriorities[x.Id] == "normal").Priority);
+                Assert.Equal("p4", upgradedTickets.Single(x => legacyPriorities[x.Id] == "low").Priority);
                 var next = new SupportTicket { RequestId = Guid.NewGuid(), DeviceId = deviceId, SiteId = siteId,
                     RequesterKey = new string('D', 64), Subject = "New ticket", Description = "After upgrade" };
                 db.SupportTickets.Add(next);
