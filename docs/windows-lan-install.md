@@ -73,3 +73,19 @@ Da un checkout su Windows x64 con .NET SDK 10, eseguire senza elevazione:
 ```
 
 Lo script compila Agent e Tray, esegue il self-test Agent, genera il singolo MSI e copia MSI, script di installazione e checksum in `artifacts/windows-0.6.0`. È richiamato anche dal workflow `windows-agent-package`, avviabile manualmente. Non installa servizi né modifica certificati. Il pacchetto è unsigned per laboratorio; i checksum non sono una firma. L'installazione elevata e la CA esplicita restano gestite dalla procedura precedente. Questo percorso è stato scritto ma non eseguito: l'MSI 0.6.0 non è ancora disponibile e non contiene ancora il provisioning Mesh agent o ticket/screenshot.
+
+### Aggiornamento: artifact Windows 0.6.0 generato
+
+Il workflow Windows sul branch `feature/windows-support-lan` ha ora generato l'MSI Agent + Tray. Usare l'artifact del run indicato nel registro validation, verificando il commit; il kit diagnostico 0.5.2 precedente rimane distinto e non contiene questo MSI. Il nuovo MSI comprende le funzionalità ticket/screenshot descritte in [supporto](support-implementation.md), ma non installa automaticamente l'agente MeshCentral: non è un pacchetto desktop remoto completo.
+
+Per il collaudo LAN servono l'MSI, `Install-OmniDeskAgent.ps1`, la CA pubblica del server e un token enrollment generato dalla console. Verificare il checksum contro l'artifact GitHub, quindi eseguire da PowerShell elevata:
+
+```powershell
+.\Install-OmniDeskAgent.ps1 -MsiPath .\OmniDesk.Agent.msi -ServerUrl https://192.168.1.233:8085 -CaCertificatePath .\omnidesk-local-ca.crt -CaSha256 45926C7ACA3D49E6619E377AD0FA2110951F6F0E54DF9B83A6C6E3AD712BE5B2 -TrustServerCa -AllowUnsignedForTesting -MsiSha256 '<SHA256 MSI verificato>' -EnrollmentTokenFile .\enrollment-token.txt
+```
+
+Il file token va creato e protetto secondo la procedura precedente; non inviarlo in chat o committarlo. Non inserire letteralmente il placeholder del checksum. Al termine eliminare il file originale del token. Lo script non avvia la Tray nel contesto elevato: eseguire il logoff/logon o avviarla separatamente dalla sessione standard. L'uscita dalla Tray deve lasciare attivo il servizio.
+
+Verificare quindi: dispositivo e heartbeat nella console, stato Tray, richiesta ticket senza screenshot, seconda richiesta con anteprima/consenso, visibilità dalla console IT e risposta/stato aggiornati nella Tray. Questi sono criteri di collaudo Windows/LAN, non risultati già attestati.
+
+Per dismettere: un amministratore OmniDesk revoca l'identità dispositivo dalla console e verifica la revoca; un amministratore Windows rimuove il prodotto tramite MSI. La rimozione locale da sola non sostituisce la revoca server. La CA di laboratorio rimane installata intenzionalmente dopo uninstall: la sua rimozione amministrativa va pianificata considerando gli altri servizi che la usano. Nessuna protezione assoluta contro amministratori locali o accesso fisico privilegiato.

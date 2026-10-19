@@ -26,3 +26,7 @@ Ticket e immagini sono conservati nel database PostgreSQL e inclusi nei backup. 
 - Pipe: GetConnectionStatus, CreateTicket e ListTickets. Nessun comando stop/start/uninstall o shell.
 
 La build e i test server non attestano cattura schermo o IPC su Windows reale. Vedere validation.md per risultati effettivi e gate ancora aperti.
+
+## Collaudo e distribuzione
+
+Server pubblicato su LAN dopo backup e migrazione. Scenario PostgreSQL e smoke Chromium verificano realmente l'intake tramite credenziale RSA, autorizzazione, download e risoluzione ticket; i ticket fixture sono creati solo in ambienti isolati. Agent/Tray compilati e MSI generato su GitHub Actions Windows. Questi risultati non attestano ancora le interazioni reali Tray/screenshot sul PC dell'utente: installazione/enrollment e sessione interattiva vanno collaudati sul client LAN.
