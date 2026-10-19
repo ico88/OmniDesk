@@ -1127,6 +1127,7 @@ L'API aggiunge `online`, `revoked` e `lastSeen` a `GET /api/devices`. Online usa
 la stessa soglia di tre minuti dell'endpoint scheda dispositivo; una credenziale
 revocata è visualizzata separatamente. La UI aggiorna l'elenco ogni 30 secondi
 mentre la scheda Dispositivi è aperta. `AgentScenario` verifica heartbeat recente,
+heartbeat oltre la soglia dei tre minuti, rientro online dopo un nuovo heartbeat,
 ultimo contatto e revoca. `./scripts/test.sh` passato con 64/64 xUnit/PostgreSQL,
 build TypeScript/Vite e 5/5 Vitest. `docker compose build api dashboard` e
 `docker compose config --quiet` passati. Nessun login autenticato nel browser;
