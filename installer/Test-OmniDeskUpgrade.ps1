@@ -9,12 +9,21 @@ if ($baseline.Contains('"') -or $current.Contains('"')) {throw 'Percorso MSI non
 if (Get-Service OmniDeskAgent -ErrorAction SilentlyContinue) {throw 'Runner non pulito.'}
 $installer=New-Object -ComObject WindowsInstaller.Installer
 function Get-ProductState([string]$code) {
-    return $installer.GetType().InvokeMember('ProductState',[Reflection.BindingFlags]::GetProperty,$null,$installer,@($code))
+    # Use a fresh automation object: Installer caches product registration state.
+    $query=New-Object -ComObject WindowsInstaller.Installer
+    try { return $query.GetType().InvokeMember('ProductState',[Reflection.BindingFlags]::GetProperty,$null,$query,@($code)) }
+    finally { [Runtime.InteropServices.Marshal]::FinalReleaseComObject($query) | Out-Null }
 }
 function Get-ProductCode([string]$path) {
     $db=$installer.OpenDatabase($path,0)
     $view=$db.OpenView("SELECT ``Value`` FROM ``Property`` WHERE ``Property``='ProductCode'")
-    $view.Execute();$row=$view.Fetch();return $row.StringData(1)
+    $null=$view.Execute()
+    $row=$view.Fetch()
+    $code=[string]$row.GetType().InvokeMember('StringData',[Reflection.BindingFlags]::GetProperty,$null,$row,@(1))
+    $null=$view.Close()
+    foreach ($com in @($row,$view,$db)) { [Runtime.InteropServices.Marshal]::FinalReleaseComObject($com) | Out-Null }
+    if ($code -notmatch '^\{[A-Fa-f0-9-]{36}\}$') { throw 'ProductCode MSI non valido.' }
+    return $code
 }
 function Install-Package([string]$path,[string]$operation,[string]$name) {
     $log=Join-Path (Get-Location) "artifacts/msi-$name.log"
@@ -41,7 +50,8 @@ try {
     [IO.File]::WriteAllText($marker,'isolated-upgrade-fixture')
     if ((Install-Package $current '/i' 'upgrade') -notin @(0,3010)) {throw 'Upgrade fallito.'}
     Assert-Installed
-    if ((Get-ProductState $oldCode) -ne -1) {throw 'Baseline ancora registrata dopo major upgrade.'}
+    $oldState=Get-ProductState $oldCode
+    if ($oldState -ne -1) {throw ('Baseline ancora registrata dopo major upgrade: ' + $oldCode + ' state=' + $oldState)}
     if ([IO.File]::ReadAllText($marker) -ne 'isolated-upgrade-fixture') {throw 'Stato locale perso durante upgrade.'}
     & sc.exe sdset OmniDeskAgent 'D:P(A;;0xF01FF;;;SY)(A;;0xF01FF;;;BA)(A;;0xF01FF;;;IU)' | Out-Null
     if ($LASTEXITCODE -ne 0) {throw 'Preparazione fixture ACL fallita.'}
