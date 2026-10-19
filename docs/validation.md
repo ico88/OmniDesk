@@ -999,5 +999,16 @@ Verifiche: `docker compose -f compose.test.yaml run --build --rm tests` — 64/6
 test passati, incluse richieste Processi+Servizi in coda e nuova migrazione
 versionata; `docker compose build api dashboard`, `npm test -- --run` nella
 dashboard, `docker compose config --quiet`, `docker compose -f compose.test.yaml
-config --quiet` e `git diff --check` passati. Il server LAN non è ancora stato
-aggiornato con questa migrazione; la conferma dal PC pilota resta aperta.
+config --quiet` e `git diff --check` passati. Il server LAN è stato aggiornato
+con backup verificato e migrazione; la conferma dal PC pilota resta aperta.
+
+
+Deploy LAN della correzione diagnostica: backup `.backups/20261019T142835Z.6lW51s`
+verificato su PostgreSQL temporaneo (26 migrazioni, 1 account, 1 dispositivo);
+conteggio job attivi e sessioni remote prima del deploy era zero. Applicata la
+migrazione `20261019142600_ConcurrentDiagnosticJobs`, quindi ricreato solo il
+container API. L’istanza riporta la nuova migrazione e zero job attivi.
+`verify-lan.py --server https://192.168.1.233:8085 --ca omnidesk-local-ca.crt`
+ha passato readiness HTTPS/CA, dashboard e rifiuto anonimo. Nessun login o
+comando diagnostico sul dispositivo di produzione è stato eseguito; test
+interattivo da browser ancora da fare.

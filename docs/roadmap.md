@@ -319,5 +319,6 @@ diagnostica è pendente; una nuova richiesta per la stessa categoria riutilizza
 il job attivo. La migrazione rimuove l’indice DB che impediva più job pendenti
 per dispositivo. Gli interventi che cambiano lo stato (update, processi e
 servizi) mantengono la serializzazione reciproca. Test API/PostgreSQL 64/64,
-build API e dashboard e Vitest passati. Deploy LAN e prova interattiva ancora
-da completare.
+build API e dashboard e Vitest passati. Deploy API LAN effettuato dopo backup
+verificato e migrazione applicata; readiness HTTPS/CA e rifiuto anonimo passati.
+Prova interattiva Processi/Servizi dal browser ancora da fare.
