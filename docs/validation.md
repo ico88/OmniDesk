@@ -1792,11 +1792,10 @@ protetto da `tickets.view` e pannello degli obiettivi nel dettaglio ticket; lo
 browser smoke crea una policy, verifica i due target, vede entrambi e controlla
 il completamento dopo la risposta/risoluzione. Dopo rebuild API/dashboard,
 `./scripts/test.sh` e `./scripts/smoke.sh --browser` sono passati (88 test API,
-6 Vitest, migrazioni, Chromium, ClamAV e restore isolato). Questa estensione UI
-deve ancora essere inclusa nella CI con il prossimo push. Il worker breach è
+6 Vitest, migrazioni, Chromium, ClamAV e restore isolato). L’estensione SLA iniziale è stata verificata localmente. Il worker breach è
 stato validato con la suite PostgreSQL e il rebuild API; il successivo smoke
 Chromium ha verificato migrazioni, UI SLA e restore. Nessun servizio LAN è stato
-modificato.
+modificato; ogni nuova estensione attende la propria CI sul push.
 
 ### SLA breach notification — 2026-10-19
 
@@ -1805,3 +1804,12 @@ modificato.
 - `docker build -t omnidesk-dashboard:local -f src/dashboard/Dockerfile .` — passed. (The Docker build context is the repository root because the Dockerfile copies `deploy/dashboard.Caddyfile`.)
 - `docker compose config --quiet`, `docker compose -f compose.test.yaml config --quiet`, and `git diff --check` — passed.
 - `./scripts/smoke.sh --browser` — passed with isolated containers: migrations, HTTPS/UI, ClamAV, Chromium portal/ticket/SLA workflows and full isolated DB/blob/identity-key/CA restore. The live LAN service was not touched. Runtime worker delivery of an actual expired SLA notification was not separately observed; that path is covered by the PostgreSQL integration test.
+
+
+### Amministrazione policy SLA — 2026-10-19
+
+- `./scripts/test.sh` — passed after adding the scoped `/api/admin/support-sla/scopes` endpoint and the immutable policy-name behavior: 88 API/PostgreSQL tests, production dashboard build, 6/6 Vitest. The SLA test checks anonymous denial, site-only scope disclosure, cross-site denial, stable policy identity and per-version names.
+- `docker build -t omnidesk-api:local -f src/OmniDesk.Api/Dockerfile .` and `docker build -t omnidesk-dashboard:local -f src/dashboard/Dockerfile .` — passed.
+- `docker compose config --quiet`, `docker compose -f compose.test.yaml config --quiet`, `git diff --check`, and `node --check scripts/browser-smoke.mjs` in `node:22-alpine` — passed.
+- `./scripts/smoke.sh --browser` — passed with isolated containers. Chromium created a policy in the dashboard, published two immutable revisions, edited a split-day calendar, verified the stored two-interval definition and confirmed a newly created ticket snapshots version 3. Migration/HTTPS/ClamAV, ticket/portal flows and full isolated DB/blob/identity-key/CA restore also passed. Live LAN services were not modified.
+- CI `39342551037` (build/test) and `39342551020` (Windows package) passed for parent commit `ada0320`; the policy-admin changes in this entry are uncommitted at validation time and require CI after push.
