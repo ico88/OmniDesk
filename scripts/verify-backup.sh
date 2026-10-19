@@ -59,7 +59,7 @@ if [[ -d "$backup_path/identity_keys" && -d "$backup_path/caddy_data" && -f "$ba
   export RESTORE_CHECK_DIR="$restore_dir"
   docker compose -p "$restore_project" -f compose.restore-check.yaml config --quiet
   docker compose -p "$restore_project" -f compose.restore-check.yaml up -d --wait db
-  docker compose -p "$restore_project" -f compose.restore-check.yaml run --rm --no-deps restore-seed
+  docker compose -p "$restore_project" -f compose.restore-check.yaml run --pull missing --rm --no-deps restore-seed
   docker compose -p "$restore_project" -f compose.restore-check.yaml exec -T db sh -ec \
     'PGPASSWORD="$(cat /run/secrets/db_password)" pg_restore --exit-on-error --no-owner --no-privileges -U omnidesk -d omnidesk /backup/database.dump'
   docker compose -p "$restore_project" -f compose.restore-check.yaml run --rm migrate
