@@ -3,11 +3,15 @@ import { Expand, ExternalLink, LoaderCircle, MonitorPlay, RotateCcw, ShieldCheck
 import { api } from './api';
 
 type RemoteSession = { id: string; url: string; expiresAt: string };
-type ViewState = 'idle' | 'creating' | 'loading' | 'page-loaded' | 'error' | 'expired';
+type ViewState = 'idle' | 'creating' | 'renewing' | 'loading' | 'page-loaded' | 'error' | 'expired';
 
 function remaining(expiresAt: string, now: number) {
   const seconds = Math.max(0, Math.floor((new Date(expiresAt).getTime() - now) / 1000));
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+}
+
+function secondsRemaining(expiresAt: string, now: number) {
+  return Math.floor((new Date(expiresAt).getTime() - now) / 1000);
 }
 
 export function RemoteConsole({ deviceId, deviceName, capability, allowed, ready, revoked, onMessage }: {
@@ -49,8 +53,10 @@ export function RemoteConsole({ deviceId, deviceName, capability, allowed, ready
   }, [expired]);
 
   async function start() {
+    const previous = session;
+    const renewing = !!previous && new Date(previous.expiresAt).getTime() > Date.now();
     setError('');
-    setViewState('creating');
+    setViewState(renewing ? 'renewing' : 'creating');
     try {
       const created = await api<RemoteSession>(`/devices/${deviceId}/remote-sessions`, 'POST', { capability });
       let valid = false;
@@ -65,12 +71,31 @@ export function RemoteConsole({ deviceId, deviceName, capability, allowed, ready
         try { await api(`/devices/${deviceId}/remote-sessions/${created.id}`, 'DELETE'); } catch { /* expires server-side */ }
         throw new Error('Il server ha restituito un collegamento remoto non valido.');
       }
+      // Keep the operator in this console. The API rechecks the same capability,
+      // device policy and attended consent before issuing the replacement grant.
+      // Revoke the old grant before switching the iframe; if revocation is pending,
+      // the server guard continues retrying it and its original expiry remains bounded.
+      let revokePending = false;
+      if (previous) {
+        try {
+          const revoked = await api<{ state?: string }>(`/devices/${deviceId}/remote-sessions/${previous.id}`, 'DELETE');
+          revokePending = revoked?.state === 'revocation_pending';
+        } catch (cause) {
+          // Do not leave an unused replacement share active when the old grant
+          // could not be closed and the UI therefore cannot switch to it safely.
+          try { await api(`/devices/${deviceId}/remote-sessions/${created.id}`, 'DELETE'); } catch { /* server expiry/guard remains the fallback */ }
+          throw cause;
+        }
+      }
       setSession(created);
       setNow(Date.now());
       setViewState('loading');
+      if (renewing) onMessage(revokePending
+        ? 'Sessione rinnovata. La revoca del collegamento precedente è in verifica.'
+        : 'Sessione rinnovata. Il desktop remoto si sta ricollegando.');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Non è stato possibile creare la sessione.');
-      setViewState('error');
+      setViewState(renewing ? 'page-loaded' : 'error');
     }
   }
 
@@ -108,6 +133,9 @@ export function RemoteConsole({ deviceId, deviceName, capability, allowed, ready
       </div>
       <div className="remote-console-actions">
         {active && <span className="session-countdown"><Wifi size={15}/><span>Scade tra {timeLeft}</span></span>}
+        {active && session && secondsRemaining(session.expiresAt, now) <= 300 && <button type="button" className="secondary compact" disabled={viewState === 'renewing'} onClick={() => void start()} title="Rinnova il collegamento mantenendo aperta questa console">
+          {viewState === 'renewing' ? <LoaderCircle className="spin" size={15}/> : <RotateCcw size={15}/>}Rinnova sessione
+        </button>}
         {active && <button type="button" className="secondary compact" onClick={() => window.open(session.url, '_blank', 'noopener,noreferrer')} title="Apri la sessione in una nuova scheda"><ExternalLink size={16}/>Apri scheda</button>}
         {active && <button type="button" className="secondary compact" onClick={() => void fullscreen()} title="Schermo intero"><Expand size={16}/><span className="sr-only">Schermo intero</span></button>}
         {active && <button type="button" className="danger-button compact" onClick={() => void stop()}><Square size={15}/>Termina</button>}
