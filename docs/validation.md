@@ -547,3 +547,10 @@ ingrandimento/chiusura dialog, risposta persistente dopo ricaricamento thread e
 stato Risolto, oltre ai controlli permessi/download/account esistenti.
 Screenshot artifacts/ui-preview/support-conversation.png ispezionato: fixture
 isolata, nessun dato del pilota. Log /tmp/omnidesk-ticket-chat-{tests,browser,docker-build}.log.
+
+Pubblicazione LAN riuscita: backup .backups/20261019T082343Z.4wgbTE (Mesh copiato
+ a caldo, non prova di restore consistente), Compose config, migrazione
+20261019081809_SupportConversation applicata, API/dashboard avviate.
+python3 scripts/verify-lan.py: HTTPS/CA, readiness, pagina/asset e rifiuto anonimo
+passati. Nessuna modifica di stato su ticket reali durante il collaudo; nessun
+nuovo test client Windows o chat bidirezionale in tempo reale dichiarato.

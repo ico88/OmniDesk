@@ -126,3 +126,5 @@ La Tray esistente mostra stato e ultima risposta con «Aggiorna ticket» in
 notifiche in tempo reale restano sviluppo successivo. Nessun nuovo MSI richiesto.
 Conversazione compilata e verificata con 43 xUnit, 4 Vitest e Chromium isolato;
 collaudo su ticket reale a cura dell'operatore dopo pubblicazione LAN.
+Conversazione pubblicata su LAN con migrazione applicata e verifica HTTPS/runtime
+riuscita; utente finale ancora su stato/ultima risposta nella Tray esistente.
