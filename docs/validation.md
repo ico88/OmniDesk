@@ -700,7 +700,18 @@ Versione Agent/Tray/Setup e WiX incrementata a 0.8.2 senza modifiche
 funzionali, per fornire una release successiva con cui collaudare l'updater
 remoto dopo bootstrap manuale dell'Agent 0.8.1. `./scripts/test.sh` passato:
 47 xUnit PostgreSQL isolati e 4 Vitest, build dashboard inclusa. Cross-build
-Agent Windows riuscito con 0 warning e 0 errori. Compose config e `git diff
---check` passati. Build MSI, installazione/upgrade su runner Windows,
-confezionamento e pubblicazione della release 0.8.2 sono ancora in attesa del
-workflow CI; non è stato accodato alcun aggiornamento al dispositivo pilota.
+Agent Windows riuscito con 0 warning e 0 errori. Compose config e `git diff --check`
+passati. GitHub Actions Windows run 39239145131 ha superato build MSI,
+installazione/recovery/disinstallazione e upgrade/repair/rollback dalle baseline
+0.6.0 e 0.7.0. Artifact verificato e kit LAN 0.8.2 pubblicato in
+`artifacts/windows-lan/OmniDesk.Windows.LAN-0.8.2.zip`; SHA-256 ZIP
+`11a8905ac1e4e431fd84f2680bfabab6d1b110ebc21e26a907ec4324a848fa00`, SHA-256
+MSI `0e63696ed06fa17a03a5ac3ac6cd9fca0d1b78abc56754ebe6365d8b5d6df5d8`.
+L'API nel container legge il manifesto 0.8.2 dal volume `/packages`; dashboard
+HTTPS 200, readiness `ready` e download anonimo 401. Nessun job agent.update
+accodato: nella coda pilota era in corso `install` Windows Update.
+
+Il test end-to-end dell'updater resta aperto: l'Agent pilota 0.8.0 non include
+l'updater e deve essere installato manualmente alla 0.8.1. Poi l'amministratore
+potrà accodare la 0.8.2 e verificare stato finale/ricevuta dopo il riavvio del
+servizio. Installare direttamente la 0.8.2 non testa l'aggiornamento remoto.

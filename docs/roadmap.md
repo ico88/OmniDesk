@@ -184,8 +184,8 @@ installazione/recovery/disinstallazione e upgrade/repair/rollback da baseline
 ([run 39236894238](https://github.com/ico88/OmniDesk/actions/runs/39236894238)).
 Il kit LAN 0.8.1 è pubblicato e disponibile dalla console agli amministratori;
 il kit 0.8.0 non contiene updater e richiede una singola installazione manuale
-della 0.8.1. È in preparazione la 0.8.2, build di validazione senza modifiche
-funzionali, per rendere disponibile una release successiva all’Agent 0.8.1 e
-provare l’aggiornamento remoto sul PC pilota. Il publish resta subordinato al
-workflow Windows. Firma Authenticode e invio Microsoft restano fuori da questa
-implementazione; i checksum del server non attestano l’editore.
+della 0.8.1. La 0.8.2, build di validazione senza modifiche funzionali, ha
+superato il workflow Windows e ora è il target pubblicato per testare
+l’aggiornamento remoto dal client 0.8.1. Il collaudo di installazione e ricevuta
+sul PC pilota resta aperto. Firma Authenticode e invio Microsoft restano fuori
+da questa implementazione; i checksum del server non attestano l’editore.
