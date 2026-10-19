@@ -1,6 +1,6 @@
 # Service Desk — schema PostgreSQL proposto
 
-**Il Service Desk è incrementale:** ticket, conversazione, code, membership, routing, priorità e assegnazione esistono nel core OmniDesk; non è ancora stato creato lo schema PostgreSQL separato `service_desk`. Workflow configurabili, partecipanti, allegati generici, SLA, email, automazioni e knowledge base restano proposte per le fasi successive. UUID, timestamp UTC, versioni per concorrenza ottimistica e FK esplicite; JSONB è riservato a snapshot/eventi versionati, non sostituisce relazioni e vincoli.
+**Il Service Desk è incrementale:** ticket, conversazione, code, membership, routing, priorità, assegnazione e Knowledge Base interna esistono nel core OmniDesk; non è ancora stato creato lo schema PostgreSQL separato `service_desk`. Workflow configurabili, partecipanti, allegati generici, SLA, email e automazioni restano proposte per le fasi successive. UUID, timestamp UTC, versioni per concorrenza ottimistica e FK esplicite; JSONB è riservato a snapshot/eventi versionati, non sostituisce relazioni e vincoli.
 
 ## Prerequisiti core — stato
 
@@ -57,6 +57,6 @@ Stato schema effettivo al 2026-10-19: i messaggi di conversazione risiedono in `
 
 Indici composti su sede/stato/priorità/coda/assegnatario e date; TicketDevices(DeviceId, TicketId), commenti e cronologia per ticket/time/Id; indici parziali per worker pronti e lease scadute. Unicità sulle chiavi di idempotenza degli ingressi, eventi e notifiche. Paginazione a cursore con ordinamento stabile e filtri autorizzativi prima di conteggi e risultati.
 
-Ricerca PostgreSQL full-text con GIN proposta per ticket e KB; proiezioni pubbliche separate dalle note interne e controlli di ambito anche nei suggerimenti/snippet. Nessun indice globale restituito al portale senza filtri. Politiche di retention per email/allegati/eventi da definire in SD0; backup PostgreSQL, blob privati e chiavi applicative ripristinati e verificati insieme prima della produzione.
+La ricerca KB attuale interroga titolo, descrizione e testo articolo sul server, filtra prima i risultati con grant globali/sede/gruppo e restituisce al massimo 50 metadati senza il corpo. La ricerca full-text PostgreSQL con GIN, ricerca ticket e proiezioni dedicate al portale restano proposte; note interne e articoli fuori ambito non devono comparire in suggerimenti/snippet. Nessun indice globale è restituito al portale senza filtri. Politiche di retention per email/allegati/eventi da definire in SD0; backup PostgreSQL, blob privati e chiavi applicative ripristinati e verificati insieme prima della produzione.
 
 Per ogni migrazione futura: prova database vuoto, upgrade da dati M1–M5, backfill sedi, rollback operativo tramite backup e test concorrenza. Queste verifiche sono pianificate, non eseguite.

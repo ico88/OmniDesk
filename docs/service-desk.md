@@ -1,6 +1,6 @@
 # OmniDesk Service Desk — specifica e stato
 
-**Stato: implementazione parziale nel core API/dashboard.** Sono disponibili ticket da Agent/Tray, viste e aggiornamenti IT, categorie, code con membership/routing, cronologia chat e note interne autorizzate. Migrazioni, test PostgreSQL e smoke browser sono registrati in [validation.md](validation.md). Restano progettati, non implementati, il portale con identità personale, allegati generici e quarantena antivirus, notifiche, email, KB, interventi correlati, allarmi persistenti, SLA e automazioni. Questo percorso non chiude i gate M1–M5 o produzione.
+**Stato: implementazione parziale nel core API/dashboard.** Sono disponibili ticket da Agent/Tray, viste e aggiornamenti IT, categorie, code con membership/routing, cronologia chat e note interne autorizzate. La KB interna supporta bozze, revisioni, lettura globale/sede/gruppo e ricerca autorizzata in titolo, descrizione e testo; la gestione resta globale. Migrazioni, test PostgreSQL e smoke browser sono registrati in [validation.md](validation.md). Restano progettati, non implementati, il portale con identità personale verificata, allegati generici e quarantena antivirus, email, interventi correlati, allarmi persistenti, SLA e automazioni. La KB non supporta ancora Markdown/HTML né allegati. Questo percorso non chiude i gate M1–M5 o produzione.
 
 ## Confini e dipendenze
 

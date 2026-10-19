@@ -1281,3 +1281,21 @@ standard/test validato e `git diff --check` passato. Nessun dato, container o
 schema LAN è stato modificato. GitHub Actions `build-and-test` run
 39295874327 e `windows-agent-package` run 39295874352 passate; il secondo ha
 incluso MSI, recovery/uninstall e upgrade/repair/rollback su runner Windows.
+
+### KB — ricerca autorizzata nei contenuti — 2026-10-19
+
+`GET /api/knowledge/search?q=...` accetta 2–100 caratteri, interroga titolo,
+descrizione e corpo sul server, limita a 50 metadati e non include il corpo
+nella risposta. I filtri di pubblicazione e grant sono applicati alla query
+prima di cercare: `knowledge.view` globale vede gli articoli pubblicati,
+`knowledge.view` scoped vede solo gli scope concessi; bozze richiedono
+`knowledge.manage` globale. La dashboard usa la query dopo 250 ms e scarta
+risposte obsolete quando cambia la ricerca. La ricerca locale per parole brevi
+resta limitata ai metadati già consegnati dall'API.
+
+`./scripts/test.sh` passato: 64 test xUnit/PostgreSQL e 5 Vitest, inclusi
+risultati trovati nel corpo, output senza corpo articolo, negazione senza grant,
+limite minimo e isolamento sede/gruppo. `docker compose build api dashboard`
+passato; `./scripts/smoke.sh --browser` passato verificando API e campo di ricerca
+con Chromium su Compose isolato. Compose standard/test e `git diff --check`
+passati. Nessun dato, container o schema LAN è stato modificato.
