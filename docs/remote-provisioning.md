@@ -19,3 +19,14 @@ L'overlay compose.mesh-lan.yaml si combina con compose.yaml e compose.mesh.yaml.
 La migrazione dall'entrypoint precedente che promuoveva l'account a site admin richiede intervento esplicito; il nuovo entrypoint rifiuta quel marker anziche riutilizzare silenziosamente un account privilegiato.
 
 La revoca del dispositivo o la disabilitazione del provisioning avvia anche la rimozione durevole del gruppo MeshCentral dedicato, con retry. Disabilitazione DB e rimozione del motore hanno commit distinti; un errore del motore non riabilita il dispositivo. Un lock dispositivo impedisce che una riapprovazione venga cancellata da una rimozione precedente. Il backup locale ora include dati/file Mesh e password servizio quando il motore e presente; la copia del database Mesh a caldo non e attestata come restore consistente e mantiene il gate di restore completo.
+
+### Permessi CA pubblica nel container API
+
+Il file `omnidesk-local-ca.crt` montato come config Compose deve essere leggibile
+anche dall'utente API (UID 1654). Con file config locali Compose puo mantenere i
+permessi del file sorgente invece del mode dichiarato. Per questa sola CA
+pubblica, dopo verifica del contenuto/fingerprint, usare `chmod 644
+omnidesk-local-ca.crt` e verificare `docker compose exec -T api test -r
+/run/omnidesk-ca.crt`. Non applicare questa regola alle chiavi private o ai
+segreti. Dopo una correzione del trust riavviare il container API per ricaricare
+lo store TLS. La sonda host da sola non verifica permessi e trust dell'API.

@@ -342,3 +342,18 @@ Kit 0.7.1 pubblicato nella directory montata dal download UI. SHA256 ZIP:
 Verificati ZIP definitivo/CRC, tutti i checksum, uguaglianza MSI con artifact
 originale e versione/hash manifest. Sonda HTTPS readiness/dashboard/asset e
 rifiuto anonimo passata dopo la pubblicazione. Attesa prova Tray del client.
+
+### Correzione runtime provisioning 503: permessi CA container
+
+Le richieste reali POST remote-provisioning raggiungevano l'API ma fallivano con
+WebSocketException; nessuna approvazione salvata, Agent riceveva correttamente
+204 senza configurazione. CA pubblica host mode 0600 UID1000, montata con gli
+stessi permessi nell'API UID1654: test -r falliva. Corretto esclusivamente il
+file pubblico in 0644 e verificata leggibilita dall'API, poi riavviato il solo
+container API. Nessun bypass TLS, cambiamento firewall o chiavi private.
+Sonda reale con immagine API, UID/GID1654 e rete Docker proxy, stessa CA e
+credenziale servizio montate read-only: PASS TLS/control auth, provisioning
+idempotente e rifiuto nodo inesistente, rimozione gruppo diagnostico. Nessun
+mapping dispositivo o autorizzazione amministrativa scritti fuori dagli endpoint.
+Attendere nuovo tentativo UI dell'operatore e mapping Agent per verificare il
+provisioning del PC; nessuna sessione desktop ancora attestata.
