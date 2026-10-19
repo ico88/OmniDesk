@@ -370,3 +370,13 @@ retry e conflitto per payload diverso. Build API/dashboard e Vitest passati. Dep
 verificato e migrazione applicata; readiness e bundle aggiornato verificati. La UI
 riusa RequestId per retry senza modifiche e ne genera una nuova se i campi cambiano.
 L’affinamento retry UI è pubblicato dopo CI Linux; prova interattiva autenticata ancora da completare.
+
+### Dashboard — badge online/offline dispositivi
+
+L’elenco Dispositivi mostra lo stato effettivo dell’Agent dal heartbeat: online
+se ricevuto negli ultimi tre minuti, offline in caso contrario, e Revocato per
+identità revocate. Il criterio coincide con la scheda dispositivo; tooltip e
+`lastSeen` identificano l’ultimo contatto. L’elenco si aggiorna automaticamente
+ogni 30 secondi mentre la sezione è aperta. Build e test API/dashboard in corso;
+nessun collaudo autenticato nel browser né deploy LAN registrato finché non
+vengono effettuati esplicitamente.
