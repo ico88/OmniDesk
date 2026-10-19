@@ -44,6 +44,9 @@ public static class UpdateScenario
         var diagnostic = new DiagnosticRequest(Guid.NewGuid());
         Assert.Equal(HttpStatusCode.Forbidden, (await scoped.PostAsJsonAsync($"/api/devices/{device}/diagnostics/processes", diagnostic)).StatusCode);
         Assert.Equal(HttpStatusCode.Created, (await admin.PostAsJsonAsync($"/api/devices/{device}/diagnostics/processes", diagnostic)).StatusCode);
+        var servicesDiagnostic = new DiagnosticRequest(Guid.NewGuid());
+        Assert.Equal(HttpStatusCode.Created, (await admin.PostAsJsonAsync($"/api/devices/{device}/diagnostics/services", servicesDiagnostic)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await admin.PostAsJsonAsync($"/api/devices/{device}/diagnostics/services", new DiagnosticRequest(Guid.NewGuid()))).StatusCode);
         agent.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", assertion());
         var diagnosticClaim = await agent.PostAsync("/api/agent/jobs/claim", null);
         Assert.Equal(HttpStatusCode.OK, diagnosticClaim.StatusCode);
@@ -53,8 +56,17 @@ public static class UpdateScenario
             "diagnostics.processes", DateTimeOffset.UtcNow, Processes: [new ProcessDiagnostic(12345, "notepad.exe", DateTimeOffset.UtcNow.AddSeconds(-10), true)])));
         agent.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", assertion());
         Assert.Equal(HttpStatusCode.NoContent, (await agent.PostAsJsonAsync($"/api/agent/jobs/{diagnosticLease.Id}/result", diagnosticResult)).StatusCode);
+        agent.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", assertion());
+        var servicesDiagnosticClaim = await agent.PostAsync("/api/agent/jobs/claim", null);
+        Assert.Equal(HttpStatusCode.OK, servicesDiagnosticClaim.StatusCode);
+        var servicesDiagnosticLease = (await servicesDiagnosticClaim.Content.ReadFromJsonAsync<UpdateLease>())!;
+        Assert.Equal("diagnostics.services", servicesDiagnosticLease.Kind);
+        agent.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", assertion());
+        var servicesResult = new UpdateResultRequest(servicesDiagnosticLease.LeaseId, true, false, [], DiagnosticJson: System.Text.Json.JsonSerializer.Serialize(new DiagnosticResult(
+            "diagnostics.services", DateTimeOffset.UtcNow, Services: [new ServiceDiagnostic("Spooler", "Print Spooler", "Running", "Automatic")])));
+        Assert.Equal(HttpStatusCode.NoContent, (await agent.PostAsJsonAsync($"/api/agent/jobs/{servicesDiagnosticLease.Id}/result", servicesResult)).StatusCode);
         var diagnostics = await admin.GetFromJsonAsync<JsonElement[]>($"/api/devices/{device}/diagnostics");
-        Assert.Single(diagnostics!);
+        Assert.Equal(2, diagnostics!.Length);
 
         var serviceAction = new ServiceControlRequest(Guid.NewGuid(), "Spooler", "stop");
         Assert.Equal(HttpStatusCode.Forbidden, (await scoped.PostAsJsonAsync($"/api/devices/{device}/services/actions", serviceAction)).StatusCode);

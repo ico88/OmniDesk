@@ -18,6 +18,10 @@ describe('API session boundaries', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({error:'Deve rimanere almeno un amministratore attivo.'}),{status:409})));
     await expect(api('/admin/users/user/roles', 'PUT', {roles:[]})).rejects.toThrow('Deve rimanere almeno un amministratore attivo.');
   });
+  it('shows the server explanation when a device already has an active intervention', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({code:'job_active',message:'Attendi il completamento e riprova.'}),{status:409})));
+    await expect(api('/devices/fixture/services/actions', 'POST', {})).rejects.toThrow('Attendi il completamento e riprova.');
+  });
 });
 
 it('shows actionable ticket validation errors', async () => {

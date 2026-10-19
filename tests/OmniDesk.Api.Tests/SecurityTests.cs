@@ -45,7 +45,8 @@ public sealed class SecurityTests : IClassFixture<ApiFactory>, IAsyncLifetime
         async Task<string> Create(string email, string? role)
         {
             var user = new AppUser { Email = email, UserName = email };
-            Assert.True((await users.CreateAsync(user, Password)).Succeeded);
+            var created = await users.CreateAsync(user, Password);
+            Assert.True(created.Succeeded, string.Join("; ", created.Errors.Select(error => error.Code + ": " + error.Description)));
             if (role is not null) Assert.True((await users.AddToRoleAsync(user, role)).Succeeded);
             return user.Id;
         }
