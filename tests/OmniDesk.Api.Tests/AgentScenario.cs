@@ -85,11 +85,15 @@ public static class AgentScenario
         Assert.True(status.GetProperty("online").GetBoolean());
         Assert.Equal(42.5, status.GetProperty("metrics").GetProperty("cpuPercent").GetDouble());
         Assert.Equal("Test app", status.GetProperty("inventory").GetProperty("software")[0].GetProperty("name").GetString());
+        await SupportScenario.Run(admin, scoped, agent, () => Assertion(key), id);
         await UpdateScenario.Run(admin, scoped, agent, () => Assertion(key), id);
+        await DeviceManagementScenario.Run(factory, admin, scoped, scopedId, agent, () => Assertion(key), id, group);
         Assert.Equal(HttpStatusCode.NoContent, (await admin.PostAsync($"/api/admin/devices/{id}/revoke", null)).StatusCode);
         agent.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Assertion(key));
         Assert.Equal(HttpStatusCode.Unauthorized, (await agent.PostAsJsonAsync("/api/agent/metrics", metrics)).StatusCode);
         status = await scoped.GetFromJsonAsync<JsonElement>($"/api/devices/{id}/status");
+        agent.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Assertion(key));
+        Assert.Equal(HttpStatusCode.Unauthorized, (await agent.GetAsync("/api/agent/support/" + new string('A',64))).StatusCode);
         Assert.True(status.GetProperty("revoked").GetBoolean()); Assert.False(status.GetProperty("online").GetBoolean());
     }
 }

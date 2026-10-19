@@ -14,4 +14,8 @@ describe('API session boundaries', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null,{status:403})));
     await expect(api('/admin/audit')).rejects.toThrow('Permesso non concesso');
   });
+  it('shows the server explanation when account changes would remove the last administrator', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({error:'Deve rimanere almeno un amministratore attivo.'}),{status:409})));
+    await expect(api('/admin/users/user/roles', 'PUT', {roles:[]})).rejects.toThrow('Deve rimanere almeno un amministratore attivo.');
+  });
 });
