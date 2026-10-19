@@ -1494,3 +1494,32 @@ riusciti [build-and-test 39316014360](https://github.com/ico88/OmniDesk/actions/
 e [windows-agent-package 39316014371](https://github.com/ico88/OmniDesk/actions/runs/39316014371),
 inclusi lifecycle MSI e baseline upgrade/repair/rollback. Il successivo commit
 `562bfe7` aggiorna solo questa documentazione.
+
+## SD1 — workflow ticket configurabili e versionati — 2026-10-19
+
+Aggiunte bozze workflow globali o per sede, modifica con versione attesa,
+pubblicazione in snapshot immutabili e disattivazione per i soli nuovi ticket.
+Alla creazione, un ticket fissa la versione attiva della propria sede, altrimenti
+il workflow globale; quando nessun workflow è attivo usa la policy predefinita.
+I ticket esistenti continuano a risolvere la propria versione dopo nuove
+pubblicazioni o disattivazioni. API e UI amministrative sono protette dal permesso
+globale `administration`; le transizioni restano server-authoritative, con
+etichette e stati ammessi esposti alla console. La migrazione aggiunge tabelle
+versionate e binding nullable, senza riscrivere i ticket precedenti.
+
+`./scripts/test.sh`: 79/79 test xUnit con PostgreSQL effimero/migrazioni e 5/5
+Vitest; include autorizzazione admin/scoped, precedenza sede/fallback globale,
+conflitto su workflow duplicato e versione attesa, immutabilità/binding delle
+versioni ticket, validazione delle transizioni e risoluzione. Build TypeScript e
+Vite incluse nella suite. `docker compose build api dashboard` passato;
+`docker compose config -q`, `docker compose -f compose.test.yaml config -q` e
+`BACKUP_CHECK_FILE=/tmp/omnidesk-test-backup.dump docker compose -f
+compose.backup-check.yaml config -q` passati. `./scripts/smoke.sh --browser`
+passato su stack temporaneo separato: migrazioni/bootstrap/HTTPS e Chromium
+creano, modificano, pubblicano e disattivano un workflow dall'interfaccia admin,
+poi verificano i flussi UI esistenti. `git diff --check` passato.
+
+Nessuna migrazione o immagine è stata applicata al server LAN; nessun servizio
+live è stato riavviato. Questa registrazione copre solo la suite isolata e non
+è attestazione runtime del server Windows/LAN. La pipeline GitHub sul nuovo
+commit deve ancora passare prima della consegna remota.
