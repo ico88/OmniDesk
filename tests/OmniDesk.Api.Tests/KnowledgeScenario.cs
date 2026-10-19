@@ -19,6 +19,13 @@ public static class KnowledgeScenario
         var article = await created.Content.ReadFromJsonAsync<JsonElement>();
         var id = article.GetProperty("id").GetGuid();
         Assert.Equal(1, article.GetProperty("version").GetInt64());
+        var initialVersions = await admin.GetFromJsonAsync<JsonElement[]>($"/api/knowledge/{id}/versions");
+        Assert.Single(initialVersions!);
+        Assert.Equal(1, initialVersions![0].GetProperty("version").GetInt64());
+        Assert.False(initialVersions[0].TryGetProperty("body", out _), "Version list does not send stored article bodies.");
+        Assert.Equal("Never paste credentials.", (await admin.GetFromJsonAsync<JsonElement>($"/api/knowledge/{id}/versions/1")).GetProperty("body").GetString()!.Split('\n')[1]);
+        Assert.Equal(HttpStatusCode.Forbidden, (await viewer.GetAsync($"/api/knowledge/{id}/versions")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await viewer.GetAsync($"/api/knowledge/{id}/versions/1")).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await admin.PostAsJsonAsync("/api/knowledge", new { slug, title = "Duplicate", summary = "", body = "duplicate", isPublished = true })).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await admin.PostAsJsonAsync("/api/knowledge", new { slug = "Not a slug", title = "Invalid", summary = "", body = "Body", isPublished = true })).StatusCode);
 
@@ -44,9 +51,17 @@ public static class KnowledgeScenario
             admin.PutAsJsonAsync($"/api/knowledge/{id}", new { slug, title = "First line update B", summary = "Updated B", body = "Step one.\nStep two.", isPublished = true, expectedVersion = 1 }));
         Assert.Single(concurrent, x => x.StatusCode == HttpStatusCode.OK);
         Assert.Single(concurrent, x => x.StatusCode == HttpStatusCode.Conflict);
+        var afterConcurrent = await admin.GetFromJsonAsync<JsonElement[]>($"/api/knowledge/{id}/versions");
+        Assert.Equal([2L, 1L], afterConcurrent!.Select(x => x.GetProperty("version").GetInt64()).ToArray());
+        var original = await admin.GetFromJsonAsync<JsonElement>($"/api/knowledge/{id}/versions/1");
+        Assert.Equal("First line", original.GetProperty("title").GetString());
+        Assert.Equal("Read-only checks first.\nNever paste credentials.", original.GetProperty("body").GetString());
         Assert.Equal(HttpStatusCode.Conflict, (await admin.PutAsJsonAsync($"/api/knowledge/{id}", new { slug, title = "Stale write", summary = "", body = "stale", isPublished = true, expectedVersion = 1 })).StatusCode);
         var unpublish = await admin.PutAsJsonAsync($"/api/knowledge/{id}", new { slug, title = "First line updated", summary = "Updated", body = "Step one.\nStep two.", isPublished = false, expectedVersion = 2 });
         Assert.Equal(HttpStatusCode.OK, unpublish.StatusCode);
+        var afterUnpublish = await admin.GetFromJsonAsync<JsonElement[]>($"/api/knowledge/{id}/versions");
+        Assert.Equal(new long[] { 3, 2, 1 }, afterUnpublish!.Select(x => x.GetProperty("version").GetInt64()).ToArray());
+        Assert.Equal("First line", (await admin.GetFromJsonAsync<JsonElement>($"/api/knowledge/{id}/versions/1")).GetProperty("title").GetString());
         Assert.Equal(HttpStatusCode.NotFound, (await operatorClient.GetAsync($"/api/knowledge/{id}")).StatusCode);
     }
 

@@ -30,6 +30,15 @@ try {
  await page.getByRole('button',{name:'Crea articolo',exact:true}).click();
  await page.getByRole('heading',{name:knowledgeTitle,exact:true}).waitFor();
  assert.equal(await page.locator('.knowledge-body').locator('script').count(),0,'Knowledge body is rendered as text, not executable HTML');
+ await page.getByRole('button',{name:'Modifica',exact:true}).click();
+ await page.getByLabel('Descrizione breve',{exact:true}).fill('Guida aggiornata');
+ await page.getByRole('button',{name:'Salva modifiche',exact:true}).click();
+ await page.getByText('Articolo aggiornato',{exact:true}).waitFor();
+ await page.locator('.knowledge-history summary').click();
+ await page.getByRole('button',{name:`Apri versione 1: ${knowledgeTitle}`,exact:true}).click();
+ await page.getByText('STORICO · VERSIONE 1',{exact:true}).waitFor();
+ await page.locator('.knowledge-version-preview').getByText('Guida interna di prova',{exact:true}).waitFor();
+ await page.getByRole('button',{name:'Versione corrente',exact:true}).click();
  await page.reload(); await page.getByRole('heading',{name:'Panoramica',exact:true}).waitFor();
  await page.getByRole('button',{name:'Account e sicurezza',exact:true}).click();
  assert.equal(await page.getByLabel('Nome visualizzato',{exact:true}).inputValue(),'Federico Operatore','Operator display name persisted after reload');
