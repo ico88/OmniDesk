@@ -30,7 +30,7 @@ public static class SupportScenario
         using (var z = new ZLibStream(compressed,CompressionLevel.Fastest,true)) z.Write(new byte[]{0,128,128,128,255});
         Chunk("IDAT",compressed.ToArray()); Chunk("IEND",[]); return png.ToArray();
     }
-    public static async Task Run(ApiFactory factory, HttpClient admin, HttpClient scoped, HttpClient agent, Func<string> assertion, Guid device)
+    public static async Task Run(ApiFactory factory, HttpClient admin, HttpClient scoped, HttpClient agent, string scopedId, Func<string> assertion, Guid device, Guid group)
     {
         void Auth() => agent.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer",assertion());
         var owner = new string('A',64); var other = new string('B',64);
@@ -58,20 +58,30 @@ public static class SupportScenario
         Assert.DoesNotContain((await scoped.GetFromJsonAsync<SupportTicketView[]>("/api/support"))!,t=>t.Id==ticket.Id);
         Assert.Equal(HttpStatusCode.Forbidden,(await scoped.GetAsync($"/api/support/{ticket.Id}/screenshot")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden,(await scoped.PutAsJsonAsync($"/api/support/{ticket.Id}",new SupportEdit(1,"resolved","Done"))).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,(await scoped.GetAsync($"/api/support/{ticket.Id}/assignees")).StatusCode);
+        var ticketAssignees=await admin.GetFromJsonAsync<System.Text.Json.JsonElement[]>($"/api/support/{ticket.Id}/assignees");
+        Assert.Contains(ticketAssignees!,x=>x.GetProperty("email").GetString()=="admin@example.test");
+        Assert.Equal("normal",(await admin.GetFromJsonAsync<System.Text.Json.JsonElement[]>($"/api/support?deviceId={device}"))!.Single().GetProperty("priority").GetString());
+        Assert.Equal(HttpStatusCode.Created,(await admin.PostAsJsonAsync("/api/admin/roles",new {name="Ticket technician",permissions=new[]{"tickets.view","tickets.manage"}})).StatusCode);
+        Assert.Equal(HttpStatusCode.Created,(await admin.PostAsJsonAsync("/api/admin/grants",new {userId=scopedId,role="Ticket technician",groupId=group,deviceId=(Guid?)null})).StatusCode);
+        var scopedAssignees=await scoped.GetFromJsonAsync<System.Text.Json.JsonElement[]>($"/api/support/{ticket.Id}/assignees");
+        Assert.Contains(scopedAssignees!,x=>x.GetProperty("id").GetString()==scopedId);
+        Assert.Equal(HttpStatusCode.BadRequest,(await admin.PutAsJsonAsync($"/api/support/{ticket.Id}",new {expectedVersion=1,state="open",resolution=(string?)null,priority="emergency",updatePriority=true})).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,(await admin.PutAsJsonAsync($"/api/support/{ticket.Id}",new {expectedVersion=1,state="open",resolution=(string?)null,assigneeId="new-user-without-scope",updateAssignment=true})).StatusCode);
         Assert.Contains((await admin.GetFromJsonAsync<SupportTicketView[]>("/api/support"))!,t=>t.Id==ticket.Id);
         Assert.Single((await admin.GetFromJsonAsync<SupportTicketView[]>($"/api/support?deviceId={device}"))!);
-        Assert.Equal(HttpStatusCode.Forbidden,(await scoped.GetAsync($"/api/support?deviceId={device}")).StatusCode);
+        Assert.Contains((await scoped.GetFromJsonAsync<SupportTicketView[]>($"/api/support?deviceId={device}"))!,t=>t.Id==ticket.Id);
         var names=(await admin.GetFromJsonAsync<System.Text.Json.JsonElement>("/api/support")).EnumerateArray();
         Assert.Equal("Windows fixture",names.Single(t=>t.GetProperty("id").GetGuid()==ticket.Id).GetProperty("deviceName").GetString());
         Assert.Single((await admin.GetFromJsonAsync<SupportTicketView[]>("/api/support?search=WINDOWS%20FIXTURE&state=open"))!);
-        Assert.Empty((await scoped.GetFromJsonAsync<SupportTicketView[]>("/api/support?search=WINDOWS%20FIXTURE"))!);
+        Assert.Single((await scoped.GetFromJsonAsync<SupportTicketView[]>("/api/support?search=WINDOWS%20FIXTURE"))!);
         Assert.Empty((await admin.GetFromJsonAsync<SupportTicketView[]>("/api/support?search=%25"))!);
         Assert.Equal(HttpStatusCode.BadRequest,(await admin.GetAsync("/api/support?state=invalid")).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest,(await admin.GetAsync("/api/support?search="+new string('a',201))).StatusCode);
         var image = await admin.GetAsync($"/api/support/{ticket.Id}/screenshot");
         Assert.Equal(HttpStatusCode.OK,image.StatusCode); Assert.Equal("attachment",image.Content.Headers.ContentDisposition!.DispositionType);
         Assert.Equal(Screenshot(),await image.Content.ReadAsByteArrayAsync());
-        Assert.Equal(HttpStatusCode.Forbidden,(await scoped.GetAsync($"/api/support/{ticket.Id}/messages")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,(await scoped.GetAsync($"/api/support/{ticket.Id}/messages")).StatusCode);
         var inline = await admin.GetAsync($"/api/support/{ticket.Id}/screenshot?inline=true");
         Assert.Equal(HttpStatusCode.OK,inline.StatusCode);
         Assert.Null(inline.Content.Headers.ContentDisposition);
@@ -80,7 +90,10 @@ public static class SupportScenario
         var invalid = await admin.PutAsJsonAsync($"/api/support/{ticket.Id}",new SupportEdit(1,"resolved","   "));
         Assert.Contains("Scrivi una risposta",await invalid.Content.ReadAsStringAsync());
         Assert.Equal(HttpStatusCode.BadRequest,(await admin.PutAsJsonAsync($"/api/support/{ticket.Id}",new SupportEdit(1,"resolved",null))).StatusCode);
-        Assert.Equal(HttpStatusCode.NoContent,(await admin.PutAsJsonAsync($"/api/support/{ticket.Id}",new SupportEdit(1,"resolved","Risolto fixture"))).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent,(await admin.PutAsJsonAsync($"/api/support/{ticket.Id}",new {expectedVersion=1,state="resolved",resolution="Risolto fixture",addReply=true,priority="urgent",updatePriority=true,assigneeId=scopedId,updateAssignment=true})).StatusCode);
+        var assignedTicket=(await admin.GetFromJsonAsync<System.Text.Json.JsonElement[]>($"/api/support?deviceId={device}"))!.Single();
+        Assert.Equal("urgent",assignedTicket.GetProperty("priority").GetString());
+        Assert.Equal(scopedId,assignedTicket.GetProperty("assigneeId").GetString());
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();

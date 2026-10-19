@@ -93,7 +93,7 @@ public static class AgentScenario
         Assert.Equal(42.5, status.GetProperty("metrics").GetProperty("cpuPercent").GetDouble());
         Assert.Equal("Test app", status.GetProperty("inventory").GetProperty("software")[0].GetProperty("name").GetString());
         await RemoteProvisioningScenario.Run(factory, admin, scoped, agent, () => Assertion(key), id);
-        await SupportScenario.Run(factory, admin, scoped, agent, () => Assertion(key), id);
+        await SupportScenario.Run(factory, admin, scoped, agent, scopedId, () => Assertion(key), id, group);
         await UpdateScenario.Run(admin, scoped, agent, scopedId, () => Assertion(key), id, group);
         await RemoteAgentUpdateScenario.Run(factory, admin, scoped, agent, () => Assertion(key), id);
         await DeviceManagementScenario.Run(factory, admin, scoped, scopedId, agent, () => Assertion(key), id, group);
