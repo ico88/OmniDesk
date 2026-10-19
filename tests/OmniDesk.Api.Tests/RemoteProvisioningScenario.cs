@@ -33,6 +33,8 @@ public static class RemoteProvisioningScenario
         Auth();Assert.Equal(HttpStatusCode.Forbidden,(await agent.PostAsJsonAsync("/api/agent/remote/node",report with {ConfigurationId=Guid.NewGuid()})).StatusCode);
         Auth();Assert.Equal(HttpStatusCode.NoContent,(await agent.PostAsJsonAsync("/api/agent/remote/node",report)).StatusCode);
         Auth();Assert.Equal(HttpStatusCode.NoContent,(await agent.PostAsJsonAsync("/api/agent/remote/node",report)).StatusCode);
+        var availability=(await admin.GetFromJsonAsync<System.Text.Json.JsonElement>($"/api/devices/{device}/remote-sessions/availability"));
+        Assert.True(availability.GetProperty("enabled").GetBoolean());
         var policyRoute=route+"/access-policy";
         async Task<long> Version()=> (await admin.GetFromJsonAsync<System.Text.Json.JsonElement>(route)).GetProperty("accessPolicyVersion").GetInt64();
         var version=await Version();
@@ -66,6 +68,8 @@ public static class RemoteProvisioningScenario
             Assert.True(await db.AuditEvents.AnyAsync(x=>x.Action=="remote.unattended.disable"&&x.Target==device.ToString()));
         }
         Assert.Equal(HttpStatusCode.NoContent,(await admin.DeleteAsync(route)).StatusCode);
+        availability=await admin.GetFromJsonAsync<System.Text.Json.JsonElement>($"/api/devices/{device}/remote-sessions/availability");
+        Assert.False(availability.GetProperty("enabled").GetBoolean());
         var guard=new RemoteProvisioningGuard(factory.Services.GetRequiredService<IServiceScopeFactory>(),NullLogger<RemoteProvisioningGuard>.Instance);
         await guard.Sweep(CancellationToken.None);
         using(var scope=factory.Services.CreateScope()) {
