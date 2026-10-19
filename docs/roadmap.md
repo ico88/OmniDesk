@@ -243,6 +243,18 @@ modificato sul dispositivo pilota; test interattivo Windows, pubblicazione LAN
 e firma restano aperti.
 
 
+### RMM — terminazione processi autorizzata — sorgenti e test in corso
+
+La terminazione usa una capability nuova `processes.manage`, assegnata al solo
+ruolo Administrator predefinito e concedibile esplicitamente tramite ruolo scoped.
+API serializza l’azione nella coda device e rivalida il permesso al claim; la UI
+richiede conferma. Agent ricontrolla PID, nome e timestamp d’avvio, rifiuta nomi
+di processi critici e OmniDesk e conserva una ricevuta che impedisce il replay
+automatico dopo crash. Self-test Windows crea e termina esclusivamente un `cmd.exe`
+temporaneo. Release MSI candidata 0.8.5. Il test su un processo applicativo
+reale del PC pilota e la verifica CI Windows sono ancora aperti.
+
+
 ### SD1 — priorità e assegnazione ticket — sorgenti e test verificati
 
 Il ticket core supporta priorità `low/normal/high/urgent` e assegnatario

@@ -23,6 +23,8 @@ JSON, stessa origine, cookie Identity. Errori 400/401/403/409/429; nessun redire
 | POST /api/admin/roles | administration globale + CSRF; {name,permissions[]}; permessi indipendenti, nomi univoci |
 | POST /api/devices/{id}/services/actions | `services.manage` globale o scoped + CSRF; coda idempotente start/stop/restart; no shell; nomi e servizi protetti validati |
 | GET/DELETE /api/devices/{id}/services/jobs[/{jobId}] | `services.manage` sul dispositivo; storico limitato e annullamento solo queued |
+| POST /api/devices/{id}/processes/actions | `processes.manage` sul dispositivo + CSRF; termina PID/nome/ora avvio selezionati; policy critica server e Agent |
+| GET /api/devices/{id}/processes/jobs | `processes.manage`; storico limitato |
 | GET /api/admin/grants | administration globale; elenco concessioni |
 | GET/POST/PUT /api/admin/sites | administration globale; catalogo sedi; create/update/archive con conflitto se sede assegnata a device |
 | POST /api/admin/users | administration globale + CSRF; {email,password,role} nome ruolo esistente oppure null (solo concessioni locali); 201 |
@@ -30,7 +32,7 @@ JSON, stessa origine, cookie Identity. Errori 400/401/403/409/429; nessun redire
 | DELETE /api/admin/grants/{id} | administration globale + CSRF; revoca; 204 |
 | GET /api/admin/audit | administration globale; ultimi 100 eventi decrescenti |
 
-Permessi distinti: view, remote.control, terminal, files, updates, administration. Endpoint di controllo remoto/terminale/file/update assenti in M1. Grant locale administration non abilita gli endpoint globali. Nessuna registrazione pubblica. Bootstrap amministratore tramite comando dedicato e secret file temporaneo, una sola volta quando non esistono utenti.
+Permessi distinti: `view`, `remote.control`, `terminal`, `files`, `updates`, `diagnostics.view`, `services.manage`, `processes.manage`, `tickets.view`, `tickets.manage` e `administration`. Ogni capability RMM mutante è separata dalla lettura diagnostica. Grant locale administration non abilita gli endpoint amministrativi globali. Nessuna registrazione pubblica. Bootstrap amministratore tramite comando dedicato e secret file temporaneo, una sola volta quando non esistono utenti.
 
 M2: enrollment token monouso, heartbeat con identità device separata, gruppi, inventario e metriche. M3: adapter MeshCentral, sessioni effimere dopo autorizzazione, audit ed esplicita revoca; nessuna condivisione credenziali admin MeshCentral con browser. M4: job Windows Update idempotenti con approvazione, stato, timeout e audit. API future non ancora disponibili.
 

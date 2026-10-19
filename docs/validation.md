@@ -801,3 +801,20 @@ api dashboard`, `docker compose config -q` e `git diff --check` passati. Workflo
 Windows MSI 0.8.4 ha superato build, installazione, recovery e disinstallazione;
 upgrade/repair/rollback è ancora in corso. Nessun deploy o test di upgrade su DB
 LAN con record reali.
+
+
+## Terminazione processi RMM — 19 ottobre 2026
+
+Nuova capability `processes.manage`, seed solo Administrator predefinito e grant
+scoped per ruoli custom; endpoint queue/storico con lock device, idempotenza,
+audit e outbox. Il claim rivalida il permesso. L’Agent registra una ricevuta
+protetta prima di eseguire e non ripete un’azione interrotta; ricontrolla PID,
+nome e ora d’avvio per evitare PID riutilizzati. Policy blocca processi Windows
+critici, Defender, MeshCentral e OmniDesk. UI richiede conferma esplicita.
+
+La suite aggiornata verifica default deny, validazione timestamp/PID, blocco
+processi protetti, assegnazione custom scoped, idempotenza e claim/result senza
+eseguire processi sul PC pilota. L’Agent self-test Windows crea un `cmd.exe`
+temporaneo e prova ad arrestare solo quella fixture. `dotnet publish` cross-target
+win-x64 e build API/dashboard passati. Workflow Actions 0.8.5 da eseguire dopo push;
+nessun deploy LAN né azione su processi reali.

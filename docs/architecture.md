@@ -98,12 +98,15 @@ restano i controlli nativi presenti in MeshCentral; React non manipola il DOM
 remoto. Il load della pagina non prova l'attività dello stream. Processi, servizi
 ed eventi Windows sono raccolti on-demand dall'Agent con permesso dedicato
 `diagnostics.view`, coda e audit. La raccolta diagnostica resta in sola lettura;
-il controllo servizi è una capability indipendente `services.manage`, negata di
-default ai ruoli Operator/Viewer e rivalidata al claim del job. La UI richiede
+il controllo servizi è una capability indipendente `services.manage`, e la
+terminazione processi usa `processes.manage`; entrambe sono negate ai ruoli
+Operator/Viewer predefiniti e rivalidate al claim del job. La UI richiede
 conferma e l’Agent accetta solo start/stop/restart su nomi validi, rifiutando
 servizi OmniDesk e un elenco di servizi Windows critici. Ricevute locali evitano
-la riesecuzione automatica dopo interruzioni. I risultati sono limitati; la
-verifica di azioni reali e della nuova MSI 0.8.4 su Windows resta aperta.
+la riesecuzione automatica dopo interruzioni. La terminazione ricontrolla PID,
+nome e timestamp d’avvio, rifiuta i processi OmniDesk e i processi Windows
+critici; la self-test Windows collauda un `cmd.exe` temporaneo. I risultati sono
+limitati; la verifica della candidata MSI 0.8.5 e delle azioni sul pilota resta aperta.
 
 
 ## Hardening account e lifecycle corrente
