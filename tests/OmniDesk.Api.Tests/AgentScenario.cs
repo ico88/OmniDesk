@@ -94,6 +94,20 @@ public static class AgentScenario
         Assert.True(listed.GetProperty("online").GetBoolean());
         Assert.False(listed.GetProperty("revoked").GetBoolean());
         Assert.True(listed.GetProperty("lastSeen").ValueKind != JsonValueKind.Null);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var metricsRow = await db.DeviceMetrics.SingleAsync(x => x.DeviceId == id);
+            metricsRow.ReceivedAt = DateTimeOffset.UtcNow.AddMinutes(-4);
+            await db.SaveChangesAsync();
+        }
+        listed = (await scoped.GetFromJsonAsync<JsonElement[]>("/api/devices"))!.Single(x => x.GetProperty("id").GetGuid() == id);
+        Assert.False(listed.GetProperty("online").GetBoolean());
+        Assert.True(listed.GetProperty("lastSeen").ValueKind != JsonValueKind.Null);
+        agent.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Assertion(key));
+        Assert.Equal(HttpStatusCode.NoContent, (await agent.PostAsJsonAsync("/api/agent/metrics", metrics)).StatusCode);
+        listed = (await scoped.GetFromJsonAsync<JsonElement[]>("/api/devices"))!.Single(x => x.GetProperty("id").GetGuid() == id);
+        Assert.True(listed.GetProperty("online").GetBoolean());
         Assert.Equal(42.5, status.GetProperty("metrics").GetProperty("cpuPercent").GetDouble());
         Assert.Equal("Test app", status.GetProperty("inventory").GetProperty("software")[0].GetProperty("name").GetString());
         await RemoteProvisioningScenario.Run(factory, admin, scoped, agent, () => Assertion(key), id);
