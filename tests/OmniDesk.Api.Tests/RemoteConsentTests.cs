@@ -3,6 +3,7 @@ using Xunit;
 namespace OmniDesk.Api.Tests;
 public class RemoteConsentTests
 {
+    [Fact] public void Session_lifetime_is_thirty_minutes()=>Assert.Equal(TimeSpan.FromMinutes(30),MeshCentralClient.SessionLifetime);
     [Theory]
     [InlineData("remote.control",true,73)]
     [InlineData("terminal",true,18)]

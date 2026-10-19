@@ -12,6 +12,7 @@ public interface IMeshCentralClient
 }
 public sealed partial class MeshCentralClient(MeshCentralOptions options) : IMeshCentralClient
 {
+    internal static readonly TimeSpan SessionLifetime = TimeSpan.FromMinutes(30);
     public bool Configured => Uri.TryCreate(options.Origin, UriKind.Absolute, out var origin) && origin.Scheme == "https" &&
         origin.AbsolutePath == "/" && string.IsNullOrEmpty(origin.UserInfo) && string.IsNullOrEmpty(origin.Query) &&
         string.IsNullOrEmpty(origin.Fragment) && !string.IsNullOrWhiteSpace(options.Username) && File.Exists(options.PasswordFile);
@@ -20,7 +21,7 @@ public sealed partial class MeshCentralClient(MeshCentralOptions options) : IMes
         // Exactly one protocol. Consent policy comes only from the authorized server; no administrative UI or broad account handed to browser.
         var protocol = capability switch { "remote.control" => 2, "terminal" => 1, "files" => 4, _ => throw new ArgumentException("Unsupported remote capability") };
         var consent = SessionConsent(capability, consentRequired);
-        var expires = DateTimeOffset.UtcNow.AddMinutes(30);
+        var expires = DateTimeOffset.UtcNow + SessionLifetime;
         var reply = await Command(new Dictionary<string, object> {
             ["action"] = "createDeviceShareLink", ["nodeid"] = nodeId, ["guestname"] = actor[..Math.Min(actor.Length, 80)],
             ["p"] = protocol, ["consent"] = consent, ["start"] = DateTimeOffset.UtcNow.ToUnixTimeSeconds(), ["end"] = expires.ToUnixTimeSeconds(), ["viewOnly"] = false
