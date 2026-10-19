@@ -1381,7 +1381,32 @@ monitor, mantenendo il blu OmniDesk. La favicon è un asset SVG servito
 direttamente dalla dashboard.
 
 `favicon.svg` supera il parsing XML e `git diff --check`. In questo ambiente
-non sono disponibili `npm` né `dotnet`, quindi le build dashboard/Windows non
-sono state eseguite localmente. Restano da verificare nella GitHub Actions
-Linux la build Vite e nella Windows la compilazione Tray/MSI; nessun servizio
-LAN è stato riavviato.
+host non sono installati `npm` né `dotnet`; il packaging Windows e le verifiche
+Linux hanno superato GitHub Actions sul commit `91a8522` (run 39306240849 e
+39306240756). La compilazione Docker del successivo incremento SD1 è registrata
+qui sotto; nessun servizio LAN è stato riavviato.
+
+### SD1 — correlazione ticket e interventi RMM — 2026-10-19
+
+La console IT elenca sessioni remote e job RMM già registrati sui dispositivi
+collegati al ticket e consente di associarli alla cronologia interna. Creazione
+e lettura rivalidano sul server i permessi ticket (`tickets.manage`/`tickets.view`)
+e la capability corrispondente sul dispositivo collegato. I riferimenti sono
+idempotenti per ticket, tipo e ID artefatto anche se lo stato del job cambia;
+viene conservato uno snapshot con dispositivo, capability, tipo, stato e orario.
+Payload, risultati diagnostici, URL di sessione e credenziali non entrano nella
+cronologia. Il messaggio RMM non appare nella chat pubblica né nella proiezione
+interna note, ma nell'endpoint dedicato che filtra i risultati per permesso.
+Non avvia sessioni o job e non introduce migrazioni.
+
+`./scripts/test.sh` passato: 64/64 test API/PostgreSQL, build TypeScript/Vite e
+5/5 Vitest. I test coprono autorizzazione negata, device non collegato, tipo
+artefatto non supportato, associazione idempotente dopo cambio stato, snapshot
+senza output sensibile e isolamento scoped. `./scripts/smoke.sh --browser`
+passato dopo aver ricostruito prima `omnidesk-api:local` e
+`omnidesk-dashboard:local`: Chromium crea un job diagnostico isolato, lo
+seleziona nella UI ticket e verifica il collegamento persistito. Compose smoke
+è isolato e rimosso al termine; nessuna istanza LAN è stata aggiornata. Le
+immagini locali riflettono questo sorgente, ma non sono state distribuite.
+`docker compose config -q`, Compose test config e `git diff --check` sono
+passati. CI sul commit di questo incremento ancora pendente.
