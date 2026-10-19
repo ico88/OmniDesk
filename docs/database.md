@@ -29,9 +29,9 @@ DeviceEnrollment: EnrollmentTokens (hash univoco, gruppo FK, scadenza/consumo/re
 
 Aggiunge `AspNetUsers.IsDisabled boolean NOT NULL DEFAULT false`: conserva gli account precedenti attivi, senza cambiare hash/password/ruoli o concedere nuovi permessi. La sospensione e le mutazioni ruoli aggiornano security stamp e audit in transazione. Lo stato remoto `revocation_pending` usa la colonna testuale esistente, senza nuova tabella. La migrazione va applicata prima dell'API aggiornata; backup e prova restore in [backup-restore.md](backup-restore.md).
 
-## Schema futuro Service Desk — non implementato
+## Service Desk — implementazione incrementale nel core API
 
 
-Il [modello dati proposto](service-desk-data-model.md) definisce uno schema PostgreSQL `service_desk` separato con ticket, dispositivi collegati, code, workflow versionati, commenti pubblici/note interne, allegati privati, cronologia, interventi, intake/email, SLA/calendari, automazioni, notifiche e Knowledge Base. AI e approvazioni specifiche restano estensioni future senza esecuzione automatica di comandi.
+Il [modello dati proposto](service-desk-data-model.md) descrive l'evoluzione Service Desk, mentre lo schema corrente usa migrazioni versionate nello stesso database PostgreSQL dell'API. Sono implementati ticket, dispositivi collegati, code, workflow versionati, commenti pubblici/note interne, allegati privati, cronologia, interventi, notifiche, Knowledge Base e policy/target SLA iniziali. Intake email, automazioni complete, timer SLA, allarmi e viste SLA restano incrementi futuri. AI e approvazioni specifiche non eseguono comandi automaticamente.
 
-Sedi, associazioni e concessioni per sede, ticket core e outbox sono implementati con migrazioni EF; priorità e assegnatario hanno la migrazione `TicketAssignmentAndPriority`. Gruppi e sedi sono distinti. Restano da implementare allarmi persistenti e le tabelle Service Desk estese (code, workflow, partecipanti, intake, SLA, KB e notifiche). Il modello proposto descrive i vincoli multi-riga ancora da progettare prima di introdurre ticket multi-dispositivo.
+Sedi, associazioni e concessioni per sede, ticket core e outbox sono implementati con migrazioni EF; priorità e assegnatario hanno la migrazione `TicketAssignmentAndPriority`. Gruppi e sedi sono distinti. Restano da implementare allarmi persistenti, pause/completamento dei timer SLA e gli altri incrementi indicati nel modello. Il ticket multi-dispositivo è già supportato con snapshot e verifiche autorizzative per ogni dispositivo.

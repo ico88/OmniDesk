@@ -1755,20 +1755,28 @@ avanzano al primo minuto valido; nell'ora autunnale ripetuta, l'intervallo apre
 alla prima e chiude all'ultima occorrenza. I quattro test del calcolatore coprono
 weekend/festività e i due cambi DST.
 
-La migrazione PostgreSQL `SupportSlaPolicies` aggiunge policy globali/per sede e
-versioni immutabili JSONB con autore/data di pubblicazione, calendario e minuti
-di primo riscontro/risoluzione. Gli endpoint amministrativi esigono
+Le migrazioni PostgreSQL `SupportSlaPolicies` e `TicketSlaTargets` aggiungono
+policy globali/per sede e versioni immutabili JSONB con autore/data di
+pubblicazione, calendario e minuti di primo riscontro/risoluzione. Tutte le tre
+origini ticket (Agent, portale e operatore) applicano la policy della sede, con
+fallback globale, e persistono due target iniziali che conservano policy,
+versione, ciclo e istanti di inizio/scadenza. Gli endpoint amministrativi esigono
 `tickets.sla.manage`, rispettano lo scope della sede e il versionamento
 ottimistico. Il test API/PostgreSQL verifica diniego anonimo, gestione site
 scoped, diniego cross-site, pubblicazione di una nuova versione, conflitto stale
-e assenza del permesso per Operator. Test mirato 1/1; `./scripts/test.sh` passa
-88/88 test API, build production dashboard e 6/6 Vitest. Le policy non sono
-ancora applicate ai ticket: target, pause, timer, escalation e UI restano aperti.
+e assenza del permesso per Operator; verifica inoltre snapshot della versione e
+scadenze calcolate sul calendario lavorativo, inclusa la settimana successiva.
+`./scripts/test.sh` passa: 88 test API/PostgreSQL, build production dashboard e
+6/6 Vitest. I target iniziali sono applicati ai nuovi ticket. Restano il loro
+completamento agli eventi ticket, pause/ripresa, cicli di riapertura, worker
+breach, escalation, allarmi e visualizzazione SLA nella UI.
 
-CI Linux e Windows `39337919629`/`39337919622` sono verdi per il precedente
-incremento calendario. Per questa migrazione è stato ricostruito
-`omnidesk-api:local` dai sorgenti aggiornati e poi `./scripts/smoke.sh --browser`
-è passato: ha applicato `20261019225641_SupportSlaPolicies`, verificato stack
-HTTPS, Chromium, ClamAV clean/EICAR, backup con allegato e restore completo
-isolato DB/blob/chiavi/CA con probe HTTPS/CSRF/anonimo. La CI per la nuova
-migrazione/API SLA partirà dopo il push. Nessun servizio LAN è stato modificato.
+CI Linux e Windows `39339233583`/`39339233542` sono verdi per il commit base
+policy SLA, inclusi smoke browser e install/upgrade/repair/rollback MSI.
+Ricostruito `omnidesk-api:local` dai sorgenti aggiornati, `./scripts/smoke.sh
+--browser` è passato applicando entrambe le migrazioni
+`20261019225641_SupportSlaPolicies` e `20261019230803_TicketSlaTargets`;
+verificati stack HTTPS, Chromium, ClamAV clean/EICAR, backup con allegato e
+restore completo isolato DB/blob/chiavi/CA con probe HTTPS/CSRF/anonimo. La CI
+per l'estensione target SLA partirà dopo il push. Nessun servizio LAN è stato
+modificato.
