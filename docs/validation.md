@@ -474,3 +474,21 @@ screenshot previsti solo sull'ambiente isolato, nessun token in screenshot.
   modalita richiedono ancora collaudo interattivo; nessun test fake li sostituisce.
 - Agent0.7.2 per lancio Update corretto ancora in CI Windows al momento del deploy
   web; vecchio risultato scan resta failed, nessuna scansione rilanciata da noi.
+
+### Kit 0.7.2 verificato e scaricabile
+
+Windows Actions https://github.com/ico88/OmniDesk/actions/runs/39219223914 riuscito
+sul commit 89e366d. Passati prompt, cleanup con sorgente MSI conservata, fixture
+PowerShell con policy process restrittiva ereditata (nessuna chiamata WUA),
+contratti e self-test, build MSI, install/crash/recovery/uninstall e due cicli di
+upgrade/repair/rollback da baseline 0.6 e 0.7.0. Il messaggio test stampava ancora
+"major upgrade 0.6" in entrambi i cicli: le baseline sono esplicite nel workflow.
+Linux run 39219223812 riuscito con suite e browser del commit.
+
+Artifact originale scaricato e usato senza overlay per il kit 0.7.2. SHA256 ZIP:
+27823081bf91fd4ec894472ebeb2b1635627e39f094f2ac101c074412724c27c.
+CRC ZIP, tutti i checksum interni, manifest e MSI identico all'artifact verificati
+anche dopo pubblicazione; sonda HTTPS readiness/dashboard/asset/anonymous401
+passata. Windows Update reale dopo aggiornamento ancora da eseguire, il vecchio
+job failed resta tale. Nessun test dichiara risolto un eventuale errore WUA/WSUS
+che emerga dopo il lancio del processo.

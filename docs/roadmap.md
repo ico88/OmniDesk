@@ -97,3 +97,5 @@ avvio remoto con apertura scheda e link di riserva. Supporto responsive e temi.
 Scansione Windows Update segnalata fallita sul pilota: correzione avvio processo
 PowerShell con RemoteSigned solo nel processo, precedenza Group Policy preservata,
 nessun riavvio automatico; nuovo Agent/MSI 0.7.2 da compilare e collaudare.
+
+Consegna corrente: UI ridisegnata e policy non presidiata pubblicate su LAN dopo 43 xUnit, 3 Vitest, smoke Chromium desktop/mobile e sonda motore reale. Policy pilota disattivata per default, attivabile dall'amministratore dalla scheda dispositivo. Windows kit 0.7.2 pubblicato dopo run Windows 39219223914 riuscito (incluse entrambe le baseline upgrade, repair e rollback). Scansione WUA reale e prove non presidiate restano collaudi client separati; revisione Microsoft del rilevamento ancora non inviata.
