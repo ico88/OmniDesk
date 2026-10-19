@@ -8,6 +8,9 @@ $current=(Resolve-Path $NewMsi).Path
 if ($baseline.Contains('"') -or $current.Contains('"')) {throw 'Percorso MSI non valido.'}
 if (Get-Service OmniDeskAgent -ErrorAction SilentlyContinue) {throw 'Runner non pulito.'}
 $installer=New-Object -ComObject WindowsInstaller.Installer
+function Get-ProductState([string]$code) {
+    return $installer.GetType().InvokeMember('ProductState',[Reflection.BindingFlags]::GetProperty,$null,$installer,@($code))
+}
 function Get-ProductCode([string]$path) {
     $db=$installer.OpenDatabase($path,0)
     $view=$db.OpenView("SELECT ``Value`` FROM ``Property`` WHERE ``Property``='ProductCode'")
@@ -38,7 +41,7 @@ try {
     [IO.File]::WriteAllText($marker,'isolated-upgrade-fixture')
     if ((Install-Package $current '/i' 'upgrade') -notin @(0,3010)) {throw 'Upgrade fallito.'}
     Assert-Installed
-    if ($installer.ProductState($oldCode) -ne -1) {throw 'Baseline ancora registrata dopo major upgrade.'}
+    if ((Get-ProductState $oldCode) -ne -1) {throw 'Baseline ancora registrata dopo major upgrade.'}
     if ([IO.File]::ReadAllText($marker) -ne 'isolated-upgrade-fixture') {throw 'Stato locale perso durante upgrade.'}
     & sc.exe sdset OmniDeskAgent 'D:P(A;;0xF01FF;;;SY)(A;;0xF01FF;;;BA)(A;;0xF01FF;;;IU)' | Out-Null
     if ($LASTEXITCODE -ne 0) {throw 'Preparazione fixture ACL fallita.'}
@@ -65,7 +68,7 @@ try {
         if(Get-Service $name -ErrorAction SilentlyContinue) {throw 'Servizio residuo dopo rollback.'}
     }
     if(Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run' -Name OmniDeskTray -ErrorAction SilentlyContinue) {throw 'Startup Tray residuo dopo rollback.'}
-    if($installer.ProductState($newCode) -ne -1) {throw 'Prodotto registrato dopo rollback.'}
+    if((Get-ProductState $newCode) -ne -1) {throw 'Prodotto registrato dopo rollback.'}
     if((Get-FileHash $current -Algorithm SHA256).Hash -ne $originalHash) {throw 'Artifact originale modificato.'}
     Write-Host 'PASS MSI: major upgrade 0.6, preserved local state, repair restores service ACL, deferred failure rolls back services/startup. Delivery MSI unchanged.'
 }
