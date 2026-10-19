@@ -928,6 +928,47 @@ namespace OmniDesk.Api.Migrations
                     b.ToTable("SupportQueueMembers");
                 });
 
+            modelBuilder.Entity("OmniDesk.Api.Data.SupportQueueRoutingRule", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("QueueId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("SiteId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(1L);
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Category")
+                        .IsUnique()
+                        .HasFilter("\"SiteId\" IS NULL");
+
+                    b.HasIndex("QueueId");
+
+                    b.HasIndex("SiteId", "Category")
+                        .IsUnique()
+                        .HasFilter("\"SiteId\" IS NOT NULL");
+
+                    b.ToTable("SupportQueueRoutingRules");
+                });
+
             modelBuilder.Entity("OmniDesk.Api.Data.SupportTicket", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1284,6 +1325,20 @@ namespace OmniDesk.Api.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("OmniDesk.Api.Data.SupportQueueRoutingRule", b =>
+                {
+                    b.HasOne("OmniDesk.Api.Data.SupportQueue", null)
+                        .WithMany()
+                        .HasForeignKey("QueueId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OmniDesk.Api.Data.Site", null)
+                        .WithMany()
+                        .HasForeignKey("SiteId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("OmniDesk.Api.Data.SupportTicket", b =>

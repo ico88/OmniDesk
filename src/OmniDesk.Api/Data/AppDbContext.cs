@@ -41,6 +41,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
     public DbSet<SupportTicket> SupportTickets => Set<SupportTicket>();
     public DbSet<SupportQueue> SupportQueues => Set<SupportQueue>();
     public DbSet<SupportQueueMember> SupportQueueMembers => Set<SupportQueueMember>();
+    public DbSet<SupportQueueRoutingRule> SupportQueueRoutingRules => Set<SupportQueueRoutingRule>();
     public DbSet<DeviceGroup> DeviceGroups => Set<DeviceGroup>();
     public DbSet<Site> Sites => Set<Site>();
     public DbSet<Device> Devices => Set<Device>();
@@ -92,6 +93,12 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
         b.Entity<SupportQueueMember>().HasOne<SupportQueue>().WithMany().HasForeignKey(x => x.QueueId).OnDelete(DeleteBehavior.Cascade);
         b.Entity<SupportQueueMember>().HasOne<AppUser>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<SupportQueueMember>().HasIndex(x => x.UserId);
+        b.Entity<SupportQueueRoutingRule>().Property(x => x.Category).HasMaxLength(32);
+        b.Entity<SupportQueueRoutingRule>().Property(x => x.Version).IsConcurrencyToken().HasDefaultValue(1L);
+        b.Entity<SupportQueueRoutingRule>().HasOne<SupportQueue>().WithMany().HasForeignKey(x => x.QueueId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<SupportQueueRoutingRule>().HasOne<Site>().WithMany().HasForeignKey(x => x.SiteId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<SupportQueueRoutingRule>().HasIndex(x => x.Category).IsUnique().HasFilter("\"SiteId\" IS NULL");
+        b.Entity<SupportQueueRoutingRule>().HasIndex(x => new { x.SiteId, x.Category }).IsUnique().HasFilter("\"SiteId\" IS NOT NULL");
         b.Entity<SupportTicket>().HasOne<AppUser>().WithMany().HasForeignKey(x => x.AssigneeId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<SupportTicket>().HasIndex(x => new { x.SiteId, x.State, x.Priority, x.CreatedAt });
         b.Entity<SupportTicket>().HasIndex(x => new { x.SiteId, x.Category, x.State, x.CreatedAt });

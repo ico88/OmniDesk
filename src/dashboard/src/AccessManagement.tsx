@@ -8,6 +8,8 @@ type Site = Target & { isArchived: boolean; deviceCount: number; ticketCount: nu
 type Grant = { id: string; userId: string; roleId: string; groupId: string | null; deviceId: string | null; siteId: string | null };
 type SupportQueue = { id: string; name: string; isActive: boolean; version: number; ticketCount: number };
 type QueueMember = { id: string; email: string; isDisabled: boolean };
+type QueueRoutingRule = { id: string; siteId: string | null; siteName: string | null; category: string; queueId: string; queueName: string | null; version: number };
+const ticketCategories = [['general','Generale'],['hardware','Hardware'],['software','Software'],['network','Rete'],['account','Account'],['other','Altro']];
 
 export function AccessManagement({ currentUserId }: { currentUserId: string }) {
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -17,6 +19,7 @@ export function AccessManagement({ currentUserId }: { currentUserId: string }) {
   const [sites, setSites] = useState<Site[]>([]);
   const [grants, setGrants] = useState<Grant[]>([]);
   const [supportQueues, setSupportQueues] = useState<SupportQueue[]>([]);
+  const [routingRules, setRoutingRules] = useState<QueueRoutingRule[]>([]);
   const [selectedQueueId, setSelectedQueueId] = useState('');
   const [selectedQueueVersion, setSelectedQueueVersion] = useState(0);
   const [queueMemberIds, setQueueMemberIds] = useState<string[]>([]);
@@ -27,11 +30,12 @@ export function AccessManagement({ currentUserId }: { currentUserId: string }) {
   const [selectedId, setSelectedId] = useState('');
   const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
   async function load() {
-    const [a, r, g, d, s, locations, queues] = await Promise.all([
+    const [a, r, g, d, s, locations, queues, routing] = await Promise.all([
       api<Account[]>('/admin/users'), api<Role[]>('/admin/roles'), api<Target[]>('/admin/groups'),
-      api<Target[]>('/devices'), api<Grant[]>('/admin/grants'), api<Site[]>('/admin/sites'), api<SupportQueue[]>('/admin/support-queues'),
+      api<Target[]>('/devices'), api<Grant[]>('/admin/grants'), api<Site[]>('/admin/sites'), api<SupportQueue[]>('/admin/support-queues'), api<QueueRoutingRule[]>('/admin/support-routing'),
     ]);
     setAccounts(a); setRoles(r); setGroups(g); setDevices(d); setGrants(s); setSites(locations); setSupportQueues(queues);
+    setRoutingRules(routing);
   }
   async function run(work: () => Promise<void>) {
     setBusy(true); setError(''); setMessage('');
@@ -83,6 +87,15 @@ export function AccessManagement({ currentUserId }: { currentUserId: string }) {
       <form className="settings" onSubmit={e => { e.preventDefault(); const form = e.currentTarget; const values = new FormData(form); void run(async () => { await api('/admin/support-queues', 'POST', { name: values.get('name') }); form.reset(); await load(); setMessage('Coda creata'); }); }}><label>Nuova coda<input name="name" required maxLength={100}/></label><button disabled={busy}>Crea coda</button></form>
       <div className="table-wrap"><table><thead><tr><th>Coda</th><th>Ticket</th><th>Stato</th><th>Azioni</th></tr></thead><tbody>{supportQueues.map(queue => <tr key={queue.id}><td>{queue.name}</td><td>{queue.ticketCount}</td><td>{queue.isActive ? 'Attiva' : 'Disattivata'}</td><td><button className="secondary compact" disabled={busy||!queue.isActive} onClick={() => void run(async () => { const data=await api<{version:number;members:QueueMember[]}>(`/admin/support-queues/${queue.id}/members`);setQueueMemberIds(data.members.filter(m=>!m.isDisabled).map(m=>m.id));setSelectedQueueVersion(data.version);setSelectedQueueId(queue.id); })}>Gestisci membri</button> <button className="secondary compact" disabled={busy} onClick={() => void run(async () => { await api(`/admin/support-queues/${queue.id}`, 'PUT', { name: queue.name, expectedName: queue.name, expectedVersion:queue.version, isActive: !queue.isActive }); await load(); setMessage(queue.isActive ? 'Coda disattivata' : 'Coda riattivata'); })}>{queue.isActive ? 'Disattiva' : 'Riattiva'}</button></td></tr>)}</tbody></table></div>
       {selectedQueueId&&<form className="settings" onSubmit={e=>{e.preventDefault();const queue=supportQueues.find(x=>x.id===selectedQueueId);if(!queue)return;void run(async()=>{await api(`/admin/support-queues/${queue.id}/members`,'PUT',{expectedVersion:selectedQueueVersion,userIds:queueMemberIds});await load();setSelectedQueueId('');setQueueMemberIds([]);setMessage('Membri della coda aggiornati');});}}><h3>Membri della coda {supportQueues.find(x=>x.id===selectedQueueId)?.name}</h3><p>L’appartenenza organizza il lavoro e limita gli assegnatari proposti; non concede accesso ai ticket o ai dispositivi.</p>{accounts.filter(a=>!a.isDisabled).map(a=><label key={a.id}><input type="checkbox" style={{width:'auto'}} disabled={busy} checked={queueMemberIds.includes(a.id)} onChange={e=>setQueueMemberIds(ids=>e.target.checked?[...ids,a.id]:ids.filter(id=>id!==a.id))}/>{a.email}</label>)}<button disabled={busy}>Salva membri</button><button className="secondary" type="button" disabled={busy} onClick={()=>{setSelectedQueueId('');setQueueMemberIds([]);}}>Annulla</button></form>}
+    </section>
+    <section className="panel"><h2>Routing automatico ticket</h2><p>Le nuove richieste ricevono una coda in base alla categoria. La regola specifica per sede prevale su quella globale; il routing non assegna operatori e non modifica i permessi.</p>
+      <form className="settings" onSubmit={e=>{e.preventDefault();const form=e.currentTarget;const values=new FormData(form);void run(async()=>{await api('/admin/support-routing','POST',{siteId:values.get('site')||null,category:values.get('category'),queueId:values.get('queue')});form.reset();await load();setMessage('Regola di routing creata');});}}>
+        <label>Sede<select name="site" defaultValue=""><option value="">Tutte le sedi (regola globale)</option>{sites.filter(s=>!s.isArchived).map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
+        <label>Categoria<select name="category">{ticketCategories.map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>
+        <label>Coda<select name="queue" required>{supportQueues.filter(q=>q.isActive).map(q=><option key={q.id} value={q.id}>{q.name}</option>)}</select></label>
+        <button disabled={busy||!supportQueues.some(q=>q.isActive)}>Aggiungi regola</button>
+      </form>
+      <div className="table-wrap"><table><thead><tr><th>Sede</th><th>Categoria</th><th>Coda di destinazione</th><th></th></tr></thead><tbody>{routingRules.map(rule=><tr key={rule.id}><td>{rule.siteName||'Tutte le sedi'}</td><td>{ticketCategories.find(([value])=>value===rule.category)?.[1]||rule.category}</td><td>{rule.queueName||'Coda rimossa'}</td><td><button className="secondary compact" disabled={busy} onClick={()=>void run(async()=>{await api(`/admin/support-routing/${rule.id}`,'DELETE',{expectedVersion:rule.version});await load();setMessage('Regola rimossa');})}>Rimuovi</button></td></tr>)}</tbody></table></div>
     </section>
     <form className="panel settings" onSubmit={e => {
       e.preventDefault(); const form = e.currentTarget; const values = new FormData(form);

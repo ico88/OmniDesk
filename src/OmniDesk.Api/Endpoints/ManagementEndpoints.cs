@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using OmniDesk.Api.Data;
 using OmniDesk.Api.Security;
@@ -14,6 +15,9 @@ public sealed record SiteEditRequest(string Name, string ExpectedName, bool IsAr
 public sealed record SupportQueueRequest(string Name);
 public sealed record SupportQueueEditRequest(string Name, string ExpectedName, long ExpectedVersion, bool IsActive);
 public sealed record SupportQueueMembersRequest(long ExpectedVersion, string[] UserIds);
+public sealed record SupportQueueRoutingRequest(Guid? SiteId, string Category, Guid QueueId);
+public sealed record SupportQueueRoutingEditRequest(long ExpectedVersion, Guid? SiteId, string Category, Guid QueueId);
+public sealed record SupportQueueRoutingDeleteRequest(long ExpectedVersion);
 public static class ManagementEndpoints
 {
     public static void MapManagementEndpoints(this WebApplication app)
@@ -92,6 +96,40 @@ public static class ManagementEndpoints
             CoreOutbox.Add(db, "support.queue.members.updated", "support-queue", id,
                 new { queueId = id, memberCount = r.UserIds.Length, version = r.ExpectedVersion + 1 }, c.TraceIdentifier);
             await db.SaveChangesAsync(); await tx.CommitAsync(); return Results.NoContent();
+        });
+        admin.MapGet("/support-routing", async (AppDbContext db) => Results.Ok(await db.SupportQueueRoutingRules.AsNoTracking().OrderBy(x => x.SiteId).ThenBy(x => x.Category)
+            .Select(x => new { x.Id, x.SiteId, siteName = x.SiteId == null ? null : db.Sites.Where(s => s.Id == x.SiteId).Select(s => s.Name).FirstOrDefault(), x.Category, x.QueueId, queueName = db.SupportQueues.Where(q => q.Id == x.QueueId).Select(q => q.Name).FirstOrDefault(), x.Version }).ToArrayAsync()));
+        admin.MapPost("/support-routing", async (SupportQueueRoutingRequest r, HttpContext c, AppDbContext db) => {
+            if (!SupportEndpoints.ValidCategory(r.Category) || !await db.SupportQueues.AnyAsync(q => q.Id == r.QueueId && q.IsActive) ||
+                (r.SiteId is not null && !await db.Sites.AnyAsync(s => s.Id == r.SiteId && !s.IsArchived))) return Results.BadRequest();
+            var rule = new SupportQueueRoutingRule { SiteId = r.SiteId, Category = r.Category, QueueId = r.QueueId };
+            db.SupportQueueRoutingRules.Add(rule);
+            db.AuditEvents.Add(Event(c, "support.routing.create", rule.Id.ToString()));
+            CoreOutbox.Add(db, "support.routing.created", "support-routing-rule", rule.Id, new { rule.Id, rule.SiteId, rule.Category, rule.QueueId }, c.TraceIdentifier);
+            try { await db.SaveChangesAsync(); } catch (DbUpdateException e) when (e.InnerException is Npgsql.PostgresException { SqlState: "23505" }) { return Results.Conflict(new { error = "Esiste già una regola per questa categoria e sede." }); }
+            return Results.Created($"/api/admin/support-routing/{rule.Id}", new { rule.Id, rule.SiteId, rule.Category, rule.QueueId, rule.Version });
+        });
+        admin.MapPut("/support-routing/{id:guid}", async (Guid id, SupportQueueRoutingEditRequest r, HttpContext c, AppDbContext db) => {
+            if (!SupportEndpoints.ValidCategory(r.Category) || !await db.SupportQueues.AnyAsync(q => q.Id == r.QueueId && q.IsActive) ||
+                (r.SiteId is not null && !await db.Sites.AnyAsync(s => s.Id == r.SiteId && !s.IsArchived))) return Results.BadRequest();
+            var rule = await db.SupportQueueRoutingRules.SingleOrDefaultAsync(x => x.Id == id);
+            if (rule is null) return Results.NotFound();
+            if (rule.Version != r.ExpectedVersion) return Results.Conflict();
+            rule.SiteId = r.SiteId; rule.Category = r.Category; rule.QueueId = r.QueueId; rule.Version++;
+            db.AuditEvents.Add(Event(c, "support.routing.update", id.ToString()));
+            CoreOutbox.Add(db, "support.routing.updated", "support-routing-rule", id, new { rule.Id, rule.SiteId, rule.Category, rule.QueueId, rule.Version }, c.TraceIdentifier);
+            try { await db.SaveChangesAsync(); } catch (DbUpdateException e) when (e.InnerException is Npgsql.PostgresException { SqlState: "23505" }) { return Results.Conflict(new { error = "Esiste già una regola per questa categoria e sede." }); }
+            catch (DbUpdateConcurrencyException) { return Results.Conflict(); }
+            return Results.NoContent();
+        });
+        admin.MapDelete("/support-routing/{id:guid}", async (Guid id, [FromBody] SupportQueueRoutingDeleteRequest r, HttpContext c, AppDbContext db) => {
+            var rule = await db.SupportQueueRoutingRules.SingleOrDefaultAsync(x => x.Id == id);
+            if (rule is null) return Results.NotFound();
+            if (rule.Version != r.ExpectedVersion) return Results.Conflict();
+            db.SupportQueueRoutingRules.Remove(rule); db.AuditEvents.Add(Event(c, "support.routing.delete", id.ToString()));
+            CoreOutbox.Add(db, "support.routing.deleted", "support-routing-rule", id, new { rule.Id, rule.SiteId, rule.Category, rule.QueueId }, c.TraceIdentifier);
+            try { await db.SaveChangesAsync(); } catch (DbUpdateConcurrencyException) { return Results.Conflict(); }
+            return Results.NoContent();
         });
         admin.MapPost("/sites", async (SiteRequest r, HttpContext c, AppDbContext db) => {
             var name = r.Name?.Trim();

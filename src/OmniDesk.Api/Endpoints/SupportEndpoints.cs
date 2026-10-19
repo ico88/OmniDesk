@@ -17,6 +17,7 @@ public static class SupportEndpoints
 {
     private static readonly string[] Priorities = ["low", "normal", "high", "urgent"];
     private static readonly string[] Categories = ["general", "hardware", "software", "network", "account", "other"];
+    public static bool ValidCategory(string? category) => category is not null && Categories.Contains(category);
     private static bool ValidKey(string? key) => key is { Length: 64 } && key.All(Uri.IsHexDigit);
     private static SupportTicketView View(SupportTicket t) => new(t.Id, t.Number, t.DeviceId, t.Subject, t.Description, t.State,
         t.Resolution, t.Version, t.CreatedAt, t.UpdatedAt, t.Screenshot != null, t.Category);
@@ -60,11 +61,15 @@ public static class SupportEndpoints
             var cutoff = DateTimeOffset.UtcNow.AddMinutes(-5);
             if (await db.SupportTickets.CountAsync(t => t.DeviceId == id && t.CreatedAt > cutoff) >= 10)
                 return Results.StatusCode(429);
+            var queueId = await db.SupportQueueRoutingRules.AsNoTracking()
+                .Where(rule => rule.Category == r.Ticket.Category && (rule.SiteId == siteId || rule.SiteId == null) &&
+                    db.SupportQueues.Any(queue => queue.Id == rule.QueueId && queue.IsActive))
+                .OrderByDescending(rule => rule.SiteId != null).Select(rule => (Guid?)rule.QueueId).FirstOrDefaultAsync();
             var ticket = new SupportTicket { DeviceId = id, SiteId = siteId, RequesterKey = r.RequesterKey, RequestId = r.Ticket.RequestId,
-                Subject = r.Ticket.Subject.Trim(), Description = r.Ticket.Description.Trim(), Category = r.Ticket.Category, Screenshot = screenshot };
+                Subject = r.Ticket.Subject.Trim(), Description = r.Ticket.Description.Trim(), Category = r.Ticket.Category, QueueId = queueId, Screenshot = screenshot };
             db.SupportTickets.Add(ticket);
             CoreOutbox.Add(db, "ticket.created", "ticket", ticket.Id,
-                new { ticketId = ticket.Id, deviceId = ticket.DeviceId, siteId = ticket.SiteId, state = ticket.State, category = ticket.Category }, c.TraceIdentifier);
+                new { ticketId = ticket.Id, deviceId = ticket.DeviceId, siteId = ticket.SiteId, state = ticket.State, category = ticket.Category, queueId = ticket.QueueId }, c.TraceIdentifier);
             db.AuditEvents.Add(new AuditEvent { Action = "ticket.create", Target = ticket.Id.ToString() });
             if (screenshot != null) db.AuditEvents.Add(new AuditEvent { Action = "ticket.screenshot.consent", Target = ticket.Id.ToString() });
             await db.SaveChangesAsync(); await tx.CommitAsync();

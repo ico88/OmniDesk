@@ -18,6 +18,16 @@ public sealed class SupportQueueMember
     public string? AddedBy { get; set; }
 }
 
+public sealed class SupportQueueRoutingRule
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid? SiteId { get; set; }
+    public string Category { get; set; } = "general";
+    public Guid QueueId { get; set; }
+    public long Version { get; set; } = 1;
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
 public sealed class SupportTicket
 {
     public Guid Id { get; set; } = Guid.NewGuid();
