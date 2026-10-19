@@ -142,6 +142,7 @@ try {
  await page.getByRole('row').filter({has:page.getByRole('cell',{name:renamed,exact:true})}).getByRole('button',{name:'Apri',exact:true}).click();
  await page.setViewportSize({width:1440,height:1000});
  await page.getByRole('heading',{name:renamed,exact:true}).waitFor();
+ for (const tab of ['Panoramica','Desktop remoto','Terminale e PowerShell','Trasferimento file','Processi','Servizi Windows','Software installato','Aggiornamenti','Eventi e log','Ticket e interventi']) await page.getByRole('tab',{name:tab,exact:true}).waitFor();
  await page.waitForFunction(()=>document.querySelector('main.content')?.getAttribute('aria-busy')==='false');
  await page.screenshot({path:'/previews/devices-admin-desktop.png',fullPage:true});
  await page.locator('summary').filter({hasText:'Gestione dispositivo'}).click();
@@ -150,8 +151,9 @@ try {
  await page.getByRole('button',{name:'Revoca identità dispositivo',exact:true}).click();
  await page.getByText('Identità dispositivo revocata',{exact:true}).waitFor();
  assert.equal(await page.getByRole('button',{name:'Identità già revocata',exact:true}).isDisabled(),true);
- assert.equal(await page.getByRole('button',{name:'Controllo remoto',exact:true}).isDisabled(),true);
- await page.locator('summary').filter({hasText:'Windows Update'}).click();
+ await page.getByRole('tab',{name:'Desktop remoto',exact:true}).click();
+ assert.equal(await page.getByRole('button',{name:'Avvia sessione',exact:true}).isDisabled(),true);
+ await page.getByRole('tab',{name:'Aggiornamenti',exact:true}).click();
  assert.equal(await page.getByRole('button',{name:'Avvia scansione',exact:true}).isDisabled(),true);
  await page.getByRole('button',{name:'Esci',exact:true}).click();
  await page.getByRole('button',{name:'Accedi',exact:true}).waitFor();
