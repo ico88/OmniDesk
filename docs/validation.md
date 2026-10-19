@@ -527,3 +527,23 @@ Backup predeploy .backups/20261019T081123Z.4mKM55; nessuna migrazione nuova. API
 dashboard avviate con la modifica, readiness HTTPS/CA, pagina/asset e rifiuto
 anonimo passati. Contratti IPC e Agent invariati, nessun aggiornamento Windows
 richiesto. Non dichiarati eseguiti nuovi collaudi screenshot/Update/remoto sul PC.
+
+## Conversazione ticket — 19 ottobre 2026
+
+Implementazione: endpoint staff messaggi con controllo tickets.view per dispositivo,
+paginazione a cursore (100), risposte e cambi di stato nella stessa transazione
+con controllo versione e lock dispositivo; scrittura con tickets.manage.
+Screenshot inline sul medesimo endpoint autorizzato/auditato, no-store e nosniff;
+il download preesistente rimane compatibile. Nessun nuovo endpoint anonimo.
+400 esplicito per risposta mancante/stato/lunghezza; compositore web valida prima
+dell'invio. Migrazione SupportConversation conserva l'ultima risposta legacy
+senza inventare autore/data originale. Contratto Tray invariato: ultima risposta.
+Esiti build/test/browser e avvio LAN registrati dopo esecuzione.
+
+Verifiche riuscite: ./scripts/test.sh (43 xUnit, 4 Vitest), docker compose build
+api dashboard, ./scripts/smoke.sh --browser. Chromium su ambiente isolato ha
+verificato risposta obbligatoria prima della risoluzione, PNG inline decodificato,
+ingrandimento/chiusura dialog, risposta persistente dopo ricaricamento thread e
+stato Risolto, oltre ai controlli permessi/download/account esistenti.
+Screenshot artifacts/ui-preview/support-conversation.png ispezionato: fixture
+isolata, nessun dato del pilota. Log /tmp/omnidesk-ticket-chat-{tests,browser,docker-build}.log.

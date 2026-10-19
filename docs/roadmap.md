@@ -115,3 +115,14 @@ filtro e navigazione contestuale verificati con PostgreSQL/Vitest/Chromium;
 aggiornamento automatico elenco autorizzato dopo nuovi enrollment. Non completa
 le fasi SD0/SD1 estese. Restano separati i collaudi client Update/non presidiato,
 la revisione Microsoft del motore e i gate produzione gia elencati.
+
+Incremento conversazione ticket: cronologia persistente delle nuove risposte IT
+ e dei cambi di stato, screenshot nel messaggio iniziale con ingrandimento,
+validazione esplicita della risposta per risolvere/chiudere. Migrazione
+SupportConversation importa solo l'ultima risposta preesistente, indicata come
+precedente e datata con l'ultima modifica disponibile. Nessuna cronologia fittizia.
+La Tray esistente mostra stato e ultima risposta con «Aggiorna ticket» in
+«Richiedi assistenza / I miei ticket»; thread completo, risposte dell'utente e
+notifiche in tempo reale restano sviluppo successivo. Nessun nuovo MSI richiesto.
+Conversazione compilata e verificata con 43 xUnit, 4 Vitest e Chromium isolato;
+collaudo su ticket reale a cura dell'operatore dopo pubblicazione LAN.
