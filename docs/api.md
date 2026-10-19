@@ -54,7 +54,8 @@ Contratti ticket/screenshot, identità locale del richiedente, permessi `tickets
 e `assigneeEmail`; accetta filtri `priority=low|normal|high|urgent`, `category=general|hardware|software|network|account|other`, `queue={id|unassigned}` e `assignee=email`
 oltre a stato, ricerca, device e sede. `GET /api/support/{id}/assignees` richiede `tickets.manage`
 sull’ambito storico del ticket e restituisce fino a 200 account attivi con entrambi
-i permessi `tickets.view` e `tickets.manage` nello stesso ambito. `PUT
+i permessi `tickets.view` e `tickets.manage` nello stesso ambito; quando è indicata
+una coda, include solo i membri di quella coda. `PUT
 /api/support/{id}` mantiene il contratto di stato/risposta e accetta inoltre
 `priority` con `updatePriority` e `assigneeId` nullable con `updateAssignment`;
 `queueId` nullable con `updateQueue` assegna o rimuove la coda;
@@ -64,4 +65,7 @@ in sola creazione. `PUT /api/support/bulk-queue` assegna/rimuove la stessa coda
 per 1–50 ticket, con versione attesa per ciascuno; l'operazione è atomica e
 richiede `tickets.manage` su ogni ticket. `GET /api/support/queues` richiede almeno `tickets.view` o
 `tickets.manage`; creazione e disattivazione code richiedono amministrazione in
-`/api/admin/support-queues`. Vedere [modello Service Desk](service-desk-data-model.md).
+`/api/admin/support-queues`. L'amministrazione gestisce la membership con
+`GET/PUT /api/admin/support-queues/{id}/members` usando la versione attesa della
+coda; membership non concede visibilità sui ticket o permessi sui dispositivi.
+Vedere [modello Service Desk](service-desk-data-model.md).

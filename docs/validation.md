@@ -829,6 +829,12 @@ CI completa su questa revisione ancora da attendere.
 
 `SupportQueues` introduce code globali con nome normalizzato univoco, audit/outbox per creazione e disattivazione morbida. La gestione richiede `administration`; elenco code richiede almeno una capability ticket. Assegnazione/rimozione nel ticket richiede `tickets.manage`, coda attiva e versione attesa. Il filtro `queue=id|unassigned` si applica alla query già limitata dai normali grant `tickets.view`; nessuna coda espande la visibilità per sede/dispositivo. La UI amministrativa crea/disattiva le code, la console ticket assegna, filtra e seleziona ticket gestibili. `PUT /api/support/bulk-queue` applica una coda comune a massimo 50 ticket con versione attesa e controllo grant per ciascuno; lock ordinati per dispositivo e transazione rendono l'aggiornamento atomico. `./scripts/test.sh`: 63 xUnit/PostgreSQL e 4 Vitest passati, incluse migrazioni, default deny, conflitto di versione e assegnazione bulk; `docker compose config -q` e `git diff --check` passati. Nessun deploy LAN.
 
+### Membership operatori nelle code — 2026-10-19
+
+Migrazione `SupportQueueMembership` aggiunge `SupportQueueMembers` con chiave composta, FK Identity e versione ottimistica delle code. API amministrative sostituiscono fino a 500 membri account attivi per richiesta, con versione attesa, audit e outbox. Le opzioni assegnatario rispettano sia `tickets.view` sia `tickets.manage` sull'ambito del ticket e la membership della coda; assegnazioni singole e massive respingono assegnatari che non ne fanno parte. La membership non modifica i grant e non concede visibilità su ticket o dispositivi. Le code non attive non accettano modifiche di membership o nuove assegnazioni.
+
+`./scripts/test.sh` passato dopo le modifiche: 63 test xUnit/PostgreSQL e 4 Vitest; migrazioni applicate al database temporaneo e dashboard TypeScript compilata. Verificati utente inesistente, sostituzione membership, conflitto versione obsoleta, filtro assegnatari e rifiuto di assegnatario non membro. `docker compose config -q`, configurazione Compose test e `git diff --check` passati. CI sul commit precedente `da96021`: build-and-test [39250303866](https://github.com/ico88/OmniDesk/actions/runs/39250303866) e Windows package [39250303878](https://github.com/ico88/OmniDesk/actions/runs/39250303878) riusciti; tali run non includono questa modifica. Nessun deploy LAN, upgrade del database live o test Windows interattivo effettuato.
+
 
 ## Terminazione processi RMM — 19 ottobre 2026
 

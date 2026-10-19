@@ -260,9 +260,9 @@ senza allargare l’insieme dei ticket restituiti oltre gli ambiti `tickets.view
 Test API verificano filtri e rifiuto di priorità/categorie non valide. Le categorie
 core sono general, hardware, software, network, account e other; la Tray le
 propone in apertura e la console le filtra. La tranche successiva implementa code
-globali amministrabili, assegnazione per ticket e in massa, filtro per coda, con
-permessi e migrazioni verificate; membership, routing automatico, code
-site-scoped e contatori/SLA restano da sviluppare.
+globali amministrabili, membership operatori versionata, assegnazione per ticket
+e in massa, filtro per coda, con permessi e migrazioni verificate; routing
+automatico, code site-scoped e contatori/SLA restano da sviluppare.
 
 Il numero ticket è ora generato da Identity PostgreSQL e condiviso dalla Tray e
 dalla console nel formato `OD-000123`; non deriva dall’UUID e non promette una
