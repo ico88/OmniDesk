@@ -575,3 +575,9 @@ Aggiunta barra per desktop (73 presidiato, 65 non presidiato), terminale/file
 invariati. ./scripts/test.sh riuscito (47 xUnit, 4 Vitest), build API Docker
 riuscita. Log /tmp/omnidesk-remote-notification-{tests,build}.log.
 La presenza visiva del toast/barra sul PC rimane un collaudo interattivo separato.
+
+API con barra remota pubblicata: backup .backups/20261019T083607Z.6pEV7X
+(Mesh a caldo, nessuna prova restore), Compose config valido, API ricreata.
+Prima verifica immediata HTTP502 durante avvio; ripetuta dopo startup con
+successo HTTPS/CA/readiness, asset dashboard e rifiuto anonimo. Nessun popup o
+controllo remoto reale sul pilota eseguito dall'agente. Link preesistenti invariati.
