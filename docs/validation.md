@@ -1221,8 +1221,9 @@ Pacchetto sincronizzato a 0.8.9. `./scripts/test.sh` passato con 64/64 xUnit e
 Chromium. Cross-build `dotnet build OmniDesk.sln -c Release
 -p:EnableWindowsTargeting=true` riuscito: Tray incluso, 0 errori; il progetto
 Setup Windows separato compila con 0 warning/errori. La soluzione segnala tre
-warning nullable già presenti nei test API. CI Windows 39288092279 ha passato
-il pacchetto precedente 0.8.8, incluse installazione, recovery e upgrade; la
-verifica del nuovo MSI 0.8.9 e dell'icona estratta dal binario deve seguire il
-push di questo incremento. `docker compose config --quiet` e `git diff --check`
+warning nullable già presenti nei test API. CI Linux 39290031242 ha passato
+suite, configurazione/backup Compose, build immagini e smoke Chromium. CI
+Windows 39290031180 ha compilato l'MSI 0.8.9, estratto l'icona dal binario
+installato e superato installazione, recovery, disinstallazione e
+upgrade/repair/rollback. `docker compose config --quiet` e `git diff --check`
 passati. Nessun deployment o aggiornamento sulla LAN.
