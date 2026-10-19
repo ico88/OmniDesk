@@ -6,6 +6,7 @@ using System.Net.Http.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using OmniDesk.Api.Data;
+using OmniDesk.Api.Endpoints;
 using OmniDesk.Contracts;
 using Xunit;
 
@@ -266,5 +267,25 @@ public static class SupportScenario
             var evt = await db.CoreOutboxEvents.SingleAsync(x => x.EventType == "ticket.internal_note.created" && x.AggregateId == ticket.Id);
             Assert.DoesNotContain("Nota interna solo per assistenza", evt.Payload);
         }
+        var manual = new ManualSupportCreate(Guid.NewGuid(), device, "Intervento telefonico", "Segnalazione raccolta dall'operatore", "network", "high");
+        Assert.Equal(HttpStatusCode.Forbidden, (await scoped.PostAsJsonAsync("/api/support/manual", manual with { DeviceId = Guid.NewGuid() })).StatusCode);
+        var scopedManual = await scoped.PostAsJsonAsync("/api/support/manual", manual with { RequestId = Guid.NewGuid() });
+        Assert.Equal(HttpStatusCode.Created, scopedManual.StatusCode);
+        Assert.Equal("operator", (await scopedManual.Content.ReadFromJsonAsync<SupportTicketView>())!.Origin);
+        var manualResponse = await admin.PostAsJsonAsync("/api/support/manual", manual);
+        Assert.Equal(HttpStatusCode.Created, manualResponse.StatusCode);
+        var manualTicket = (await manualResponse.Content.ReadFromJsonAsync<SupportTicketView>())!;
+        Assert.Equal("operator", manualTicket.Origin);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var saved = await db.SupportTickets.SingleAsync(x => x.Id == manualTicket.Id);
+            Assert.Equal(siteId, saved.SiteId);
+            Assert.Equal("high", saved.Priority);
+        }
+        Assert.Equal(HttpStatusCode.OK, (await admin.PostAsJsonAsync("/api/support/manual", manual)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await admin.PostAsJsonAsync("/api/support/manual", manual with { Subject = "Richiesta diversa" })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await admin.PostAsJsonAsync("/api/support/manual", manual with { Priority = "emergency" })).StatusCode);
+        Assert.Contains((await admin.GetFromJsonAsync<System.Text.Json.JsonElement[]>($"/api/support?deviceId={device}"))!, row => row.GetProperty("id").GetGuid() == manualTicket.Id && row.GetProperty("origin").GetString() == "operator");
     }
 }
