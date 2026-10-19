@@ -79,6 +79,15 @@ public sealed class AttachmentScanWorker(IServiceScopeFactory scopes, Attachment
                 saved.ScannedAt = now;
                 saved.LastScanErrorType = null;
                 db.AuditEvents.Add(new AuditEvent { Action = verdict == AttachmentScanVerdict.Clean ? "ticket.attachment.scan.clean" : "ticket.attachment.scan.infected", Target = saved.Id.ToString() });
+                if (verdict == AttachmentScanVerdict.Clean)
+                {
+                    var ticket = await db.SupportTickets.AsNoTracking().SingleOrDefaultAsync(x => x.Id == saved.TicketId, ct);
+                    if (ticket is not null)
+                        CoreOutbox.Add(db, "ticket.attachment.ready", "ticket", ticket.Id,
+                            new { ticketId = ticket.Id, deviceId = ticket.DeviceId, siteId = ticket.SiteId,
+                                queueId = ticket.QueueId, assigneeId = ticket.AssigneeId, actorId = saved.UploaderId,
+                                attachmentId = saved.Id, visibility = saved.Visibility }, $"attachment:{saved.Id:N}");
+                }
             }
             else
             {

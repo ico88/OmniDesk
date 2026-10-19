@@ -118,6 +118,12 @@ public sealed class TicketNotificationWorker(IServiceScopeFactory scopes, ILogge
             kind = "ticket.participant.added";
             recipients.Add(participant);
         }
+        else if (evt.EventType == "ticket.attachment.ready")
+        {
+            kind = "ticket.attachment";
+            await AddAssigneeOrQueue(db, root, recipients, ct);
+            await AddTicketParticipants(db, ticket.Id, evt.OccurredAt, recipients, ct);
+        }
         if (kind is null) return;
 
         TryString(root, "actorId", out var actorId);
@@ -125,6 +131,8 @@ public sealed class TicketNotificationWorker(IServiceScopeFactory scopes, ILogge
         {
             if (userId == actorId || !await db.Users.AnyAsync(x => x.Id == userId && !x.IsDisabled, ct) ||
                 !await permissions.Allows(userId, "tickets.view", ticket.DeviceId, siteId: ticket.SiteId)) continue;
+            if (evt.EventType == "ticket.attachment.ready" && TryString(root, "visibility", out var attachmentVisibility) &&
+                attachmentVisibility == "internal" && !await permissions.Allows(userId, "tickets.note.internal", ticket.DeviceId, siteId: ticket.SiteId)) continue;
             db.UserNotifications.Add(new UserNotification
             {
                 EventId = evt.Id, UserId = userId, TicketId = ticket.Id, Kind = kind, CreatedAt = now
