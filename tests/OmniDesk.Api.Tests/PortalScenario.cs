@@ -40,9 +40,12 @@ public static class PortalScenario
         Assert.Equal(device, Assert.Single(devices!).GetProperty("deviceId").GetGuid());
         Assert.Empty(await outsider.GetFromJsonAsync<JsonElement[]>("/api/portal/devices") ?? []);
 
-        var request = new { requestId = Guid.NewGuid(), deviceId = device, subject = "Stampante non disponibile", description = "La stampante del reparto non risponde.", category = "hardware" };
+        var png = SupportScenario.Screenshot();
+        var request = new { requestId = Guid.NewGuid(), deviceId = device, subject = "Stampante non disponibile", description = "La stampante del reparto non risponde.", category = "hardware", screenshotBase64 = Convert.ToBase64String(png), screenshotConsent = true };
         portal.DefaultRequestHeaders.Remove("X-CSRF-TOKEN");
         Assert.Equal(HttpStatusCode.BadRequest, (await portal.PostAsJsonAsync("/api/portal/tickets", request)).StatusCode);
+        await Csrf(portal);
+        Assert.Equal(HttpStatusCode.BadRequest, (await portal.PostAsJsonAsync("/api/portal/tickets", new { requestId = request.requestId, deviceId = request.deviceId, subject = request.subject, description = request.description, category = request.category, screenshotBase64 = request.screenshotBase64, screenshotConsent = false })).StatusCode);
         await Csrf(portal);
         var response = await portal.PostAsJsonAsync("/api/portal/tickets", request);
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
@@ -50,6 +53,11 @@ public static class PortalScenario
         var ticketId = ticket.GetProperty("id").GetGuid();
         Assert.Equal("portal-user@example.test", (await portal.GetFromJsonAsync<JsonElement>("/api/auth/me")).GetProperty("email").GetString());
         Assert.Equal(HttpStatusCode.OK, (await portal.PostAsJsonAsync("/api/portal/tickets", request)).StatusCode);
+        var image = await portal.GetAsync($"/api/portal/tickets/{ticketId}/screenshot");
+        Assert.Equal(HttpStatusCode.OK, image.StatusCode);
+        Assert.Equal("no-store", image.Headers.CacheControl?.ToString());
+        Assert.Equal(png, await image.Content.ReadAsByteArrayAsync());
+        Assert.Equal(HttpStatusCode.NotFound, (await outsider.GetAsync($"/api/portal/tickets/{ticketId}/screenshot")).StatusCode);
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<OmniDesk.Api.Data.AppDbContext>();
@@ -72,6 +80,7 @@ public static class PortalScenario
 
         Assert.Equal(HttpStatusCode.NoContent, (await admin.DeleteAsync($"/api/admin/portal-device-access/{userId}/{device}")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await portal.GetAsync($"/api/portal/tickets/{ticketId}")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await portal.GetAsync($"/api/portal/tickets/{ticketId}/screenshot")).StatusCode);
         await Csrf(portal);
         Assert.Equal(HttpStatusCode.NotFound, (await portal.PostAsJsonAsync($"/api/portal/tickets/{ticketId}/messages", new { expectedVersion = 4L, body = "Non autorizzato dopo revoca" })).StatusCode);
     }
