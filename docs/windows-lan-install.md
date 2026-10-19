@@ -132,3 +132,17 @@ il prodotto resta installato. I kit precedenti eliminavano anche il pacchetto e
 potevano causare errore 1706 in repair: usare la copia originale del medesimo MSI
 con recache/repair, senza rimuovere l'identita dispositivo. La conservazione della
 sorgente non sostituisce il backup delle chiavi o una firma di produzione.
+
+### Agent 0.7.2 e Windows Update
+
+La 0.7.2 conserva la sorgente MSI privata e avvia il worker PowerShell locale con
+RemoteSigned limitato al processo (senza prevalere sulle Group Policy). Gli
+errori futuri includono exit code/categoria invece del solo process failed.
+Scaricare il kit 0.7.2 quando pubblicato, chiudere la Tray e avviare il launcher
+amministrativo nella nuova cartella estratta; identita e token esistenti restano
+validi sullo stesso server. Riavviare se MSI restituisce 3010. Poi provare una
+nuova scansione dalla sezione Windows Update; la vecchia scansione fallita resta
+nello storico e non viene rieseguita automaticamente. Nessun install/reboot
+viene autorizzato da una sola scansione. Il collaudo reale va registrato a parte.
+L'accesso non presidiato dipende dalla policy server e non richiede questa
+versione per essere selezionato sulla console.

@@ -82,8 +82,8 @@ Non include credenziali, token o chiavi private.
 .\\Installa-OmniDesk.ps1
 
    Quando richiesto, incolla il token e premi Invio. L'inserimento e mascherato.
-   Il token non viene passato nella riga di comando. Lo staging privato viene
-   eliminato al termine. Se gli script sono bloccati, per questa sola finestra:
+   Il token non viene passato nella riga di comando. Il token temporaneo viene
+   eliminato al termine; la copia MSI privata resta disponibile per riparazioni. Se gli script sono bloccati, per questa sola finestra:
 
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned
 Unblock-File -LiteralPath .\\Installa-OmniDesk.ps1
