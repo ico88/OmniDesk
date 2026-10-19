@@ -897,3 +897,7 @@ end-to-end verifica la validazione del profilo e che il provider Mesh riceva il
 nome configurato invece dell’ID account. `./scripts/test.sh` passato: 63 test
 API/PostgreSQL, 4 test Vitest, TypeScript e build dashboard. Nessun deploy LAN
 effettuato durante la sessione remota attiva; la prova visiva sul PC resta pendente.
+
+La durata del link MeshCentral è stata estesa a 30 minuti (prima 5); il countdown
+UI continua a riflettere `ExpiresAt` fornito dal server. L’aggiornamento live è
+rinviato finché risultano sessioni attive.

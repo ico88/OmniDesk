@@ -293,3 +293,10 @@ modificabile dall’utente; nome passato alla creazione della sessione e fallbac
 all’email. La migrazione `OperatorDisplayName` aggiunge un campo nullable, quindi
 non richiede modifiche ai profili esistenti. Il comportamento resta soggetto ai
 permessi e alla creazione sessione già applicati dal server.
+
+### Durata sessioni remote — 2026-10-19
+
+Durata predefinita del link temporaneo MeshCentral estesa da 5 a 30 minuti per
+ridurre le riaperture durante interventi ordinari. Restano conto alla rovescia,
+scadenza server-side e revoca esplicita; il server continua a controllare permessi
+e policy tramite il guard di sessione.
