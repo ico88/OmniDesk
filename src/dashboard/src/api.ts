@@ -12,7 +12,7 @@ export async function api<T>(path: string, method = 'GET', body?: unknown): Prom
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (!response.ok) {
-    if (response.status === 409) {
+    if (response.status === 400 || response.status === 409) {
       const detail = await response.json().catch(() => null) as { error?: unknown } | null;
       if (typeof detail?.error === 'string' && detail.error.length <= 300) throw new Error(detail.error);
     }

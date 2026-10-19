@@ -8,6 +8,7 @@ using OmniDesk.Contracts;
 
 namespace OmniDesk.Api.Endpoints;
 
+public sealed record SupportStaffEdit(long ExpectedVersion,string State,string? Resolution,bool AddReply=false);
 public static class SupportEndpoints
 {
     private static bool ValidKey(string? key) => key is { Length: 64 } && key.All(Uri.IsHexDigit);
@@ -73,30 +74,56 @@ public static class SupportEndpoints
             return Results.Ok(await query.OrderByDescending(t => t.CreatedAt).Take(100)
                 .Select(t => new {t.Id,t.DeviceId,deviceName=db.Devices.Where(d=>d.Id==t.DeviceId).Select(d=>d.Name).FirstOrDefault(),t.Subject,t.Description,t.State,t.Resolution,t.Version,t.CreatedAt,t.UpdatedAt,hasScreenshot=t.Screenshot != null}).ToArrayAsync());
         });
-        staff.MapPut("/{id:guid}", async (Guid id, SupportEdit r, HttpContext c, AppDbContext db, PermissionService p) => {
+        staff.MapPut("/{id:guid}", async (Guid id, SupportStaffEdit r, HttpContext c, AppDbContext db, PermissionService p) => {
             var ticket = await db.SupportTickets.AsNoTracking().SingleOrDefaultAsync(t => t.Id == id);
             if (ticket is null) return Results.NotFound();
             if (!await p.Allows(c.User.UserId(), "tickets.manage", ticket.DeviceId)) return Results.Forbid();
-            if (r.State is not ("open" or "in_progress" or "resolved" or "closed") || r.Resolution?.Length > 8000 ||
-                (r.State is "resolved" or "closed" && string.IsNullOrWhiteSpace(r.Resolution))) return Results.BadRequest();
+            if (r.State is not ("open" or "in_progress" or "resolved" or "closed")) return Results.BadRequest(new {error="Seleziona uno stato del ticket valido."});
+            if(r.Resolution?.Length>8000)return Results.BadRequest(new {error="La risposta puo contenere al massimo 8000 caratteri."});
+            if((r.AddReply||r.State is "resolved" or "closed")&&string.IsNullOrWhiteSpace(r.Resolution))
+                return Results.BadRequest(new {error="Scrivi una risposta all'utente prima di risolvere o chiudere il ticket."});
             await using var tx = await db.Database.BeginTransactionAsync();
             await DeviceOperationLock.Acquire(db, ticket.DeviceId);
             if (!await p.Allows(c.User.UserId(), "tickets.manage", ticket.DeviceId)) return Results.Forbid();
+            ticket=await db.SupportTickets.AsNoTracking().SingleAsync(t=>t.Id==id);
+            if(ticket.Version!=r.ExpectedVersion)return Results.Conflict(new {error="Il ticket e stato aggiornato. Ricarica la conversazione prima di salvare."});
+            var body=r.Resolution?.Trim();
             var updated = await db.SupportTickets.Where(t => t.Id == id && t.Version == r.ExpectedVersion)
-                .ExecuteUpdateAsync(s => s.SetProperty(t => t.State, r.State).SetProperty(t => t.Resolution, r.Resolution)
+                .ExecuteUpdateAsync(s => s.SetProperty(t => t.State, r.State).SetProperty(t => t.Resolution, body)
                     .SetProperty(t => t.UpdatedAt, DateTimeOffset.UtcNow).SetProperty(t => t.Version, t => t.Version + 1));
-            if (updated == 0) return Results.Conflict();
+            if (updated == 0) return Results.Conflict(new {error="Il ticket e stato aggiornato. Ricarica la conversazione prima di salvare."});
+            if(!string.IsNullOrEmpty(body)&&(r.AddReply||body!=ticket.Resolution)) {
+                db.SupportMessages.Add(new SupportMessage {TicketId=id,ActorId=c.User.UserId(),Body=body});
+                db.AuditEvents.Add(new AuditEvent {ActorId=c.User.UserId(),Action="ticket.reply",Target=id.ToString()});
+            }
+            if(ticket.State!=r.State)db.SupportMessages.Add(new SupportMessage {TicketId=id,ActorId=c.User.UserId(),Kind="state_change",FromState=ticket.State,ToState=r.State});
             db.AuditEvents.Add(new AuditEvent { ActorId = c.User.UserId(), Action = "ticket.update", Target = id.ToString() });
             await db.SaveChangesAsync(); await tx.CommitAsync(); return Results.NoContent();
         });
-        staff.MapGet("/{id:guid}/screenshot", async (Guid id, HttpContext c, AppDbContext db, PermissionService p) => {
+        staff.MapGet("/{id:guid}/messages",async(Guid id,long? before,HttpContext c,AppDbContext db,PermissionService p)=>{
+            if(before is <=0)return Results.BadRequest();
+            var ticket=await db.SupportTickets.AsNoTracking().SingleOrDefaultAsync(t=>t.Id==id);
+            if(ticket is null)return Results.NotFound();
+            if(!await p.Allows(c.User.UserId(),"tickets.view",ticket.DeviceId))return Results.Forbid();
+            var query=db.SupportMessages.AsNoTracking().Where(m=>m.TicketId==id);
+            if(before.HasValue)query=query.Where(m=>m.Id<before.Value);
+            var rows=await query.OrderByDescending(m=>m.Id).Take(100)
+                .Select(m=>new {m.Id,m.Kind,m.Body,m.FromState,m.ToState,m.CreatedAt,m.IsImported}).ToArrayAsync();
+            c.Response.Headers.CacheControl="no-store";
+            var oldest=rows.Length>0?rows[^1].Id:(long?)null;
+            var hasMore=oldest.HasValue&&await query.AnyAsync(m=>m.Id<oldest.Value);
+            return Results.Ok(new {ticket.Version,ticket.State,ticket.Resolution,canReply=await p.Allows(c.User.UserId(),"tickets.manage",ticket.DeviceId),hasMore,oldestId=oldest,messages=rows.Reverse()});
+        });
+        staff.MapGet("/{id:guid}/screenshot", async (Guid id, bool? inline, HttpContext c, AppDbContext db, PermissionService p) => {
             var ticket = await db.SupportTickets.AsNoTracking().SingleOrDefaultAsync(t => t.Id == id);
             if (ticket is null) return Results.NotFound();
             if (!await p.Allows(c.User.UserId(), "tickets.view", ticket.DeviceId)) return Results.Forbid();
             if (ticket.Screenshot is null) return Results.NotFound();
-            db.AuditEvents.Add(new AuditEvent { ActorId = c.User.UserId(), Action = "ticket.screenshot.download", Target = id.ToString() });
+            db.AuditEvents.Add(new AuditEvent { ActorId = c.User.UserId(), Action = inline is true ? "ticket.screenshot.view" : "ticket.screenshot.download", Target = id.ToString() });
             await db.SaveChangesAsync();
-            return Results.File(ticket.Screenshot, "image/png", $"screenshot-{id}.png");
+            c.Response.Headers.CacheControl="no-store";
+            c.Response.Headers["X-Content-Type-Options"]="nosniff";
+            return Results.File(ticket.Screenshot, "image/png", inline is true ? null : $"screenshot-{id}.png");
         });
     }
 

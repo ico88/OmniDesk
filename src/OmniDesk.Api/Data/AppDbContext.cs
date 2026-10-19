@@ -35,6 +35,7 @@ public sealed class AuditEvent
 }
 public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbContext<AppUser>(options)
 {
+    public DbSet<SupportMessage> SupportMessages => Set<SupportMessage>();
     public DbSet<SupportTicket> SupportTickets => Set<SupportTicket>();
     public DbSet<DeviceGroup> DeviceGroups => Set<DeviceGroup>();
     public DbSet<Device> Devices => Set<Device>();
@@ -57,6 +58,12 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
         base.OnModelCreating(b);
         b.Entity<RemoteProvisioning>().HasKey(x => x.DeviceId);
         b.Entity<RemoteProvisioning>().HasOne<Device>().WithOne().HasForeignKey<RemoteProvisioning>(x => x.DeviceId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<SupportMessage>().HasOne<SupportTicket>().WithMany().HasForeignKey(x=>x.TicketId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<SupportMessage>().HasIndex(x=>new {x.TicketId,x.Id});
+        b.Entity<SupportMessage>().Property(x=>x.Body).HasMaxLength(8000);
+        b.Entity<SupportMessage>().Property(x=>x.Kind).HasMaxLength(20);
+        b.Entity<SupportMessage>().Property(x=>x.FromState).HasMaxLength(20);
+        b.Entity<SupportMessage>().Property(x=>x.ToState).HasMaxLength(20);
         b.Entity<SupportTicket>().HasOne<Device>().WithMany().HasForeignKey(x => x.DeviceId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<SupportTicket>().HasIndex(x => new { x.DeviceId, x.RequesterKey, x.RequestId }).IsUnique();
         b.Entity<SupportTicket>().HasIndex(x => new { x.DeviceId, x.CreatedAt });

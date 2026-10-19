@@ -15,3 +15,16 @@ public sealed class SupportTicket
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
     public byte[]? Screenshot { get; set; }
 }
+
+public sealed class SupportMessage
+{
+    public long Id { get; set; }
+    public Guid TicketId { get; set; }
+    public string? ActorId { get; set; }
+    public string Kind { get; set; } = "reply";
+    public string Body { get; set; } = "";
+    public string? FromState { get; set; }
+    public string? ToState { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public bool IsImported { get; set; }
+}
