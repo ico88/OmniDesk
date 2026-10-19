@@ -203,6 +203,10 @@ try {
  await portalPage.getByRole('button',{name:'Carica in quarantena',exact:true}).click();
  await portalPage.getByText('manual.txt',{exact:true}).waitFor();
  await portalPage.getByRole('link',{name:'Scarica',exact:true}).waitFor({timeout:30000});
+ const attachmentDownloadHref=await portalPage.getByRole('link',{name:'Scarica',exact:true}).getAttribute('href');
+ const attachmentDownload=await portalContext.request.get(new URL(attachmentDownloadHref,'https://omnidesk.test').toString());
+ assert.equal(attachmentDownload.status(),200,'Clean portal attachment remains downloadable');
+ assert.equal((await attachmentDownload.body()).toString(),'portal attachment clean fixture','Downloaded portal attachment bytes match the uploaded fixture');
  const portalTickets=await portalContext.request.get('https://omnidesk.test/api/portal/tickets');
  assert.equal(portalTickets.status(),200); const portalTicketId=(await portalTickets.json()).find(ticket=>ticket.subject===portalSubject).id;
  const portalStaffCsrf=(await (await context.request.get('https://omnidesk.test/api/auth/csrf')).json()).token;
@@ -217,6 +221,13 @@ try {
  const revokeCsrf=(await (await context.request.get('https://omnidesk.test/api/auth/csrf')).json()).token;
  assert.equal((await context.request.delete(`https://omnidesk.test/api/admin/portal-device-access/${portalUserId}/${fixtureDevice}`,{headers:{'X-CSRF-TOKEN':revokeCsrf}})).status(),204);
  assert.equal((await portalContext.request.get(`https://omnidesk.test/api/portal/tickets/${portalTicketId}/screenshot`)).status(),404,'Portal screenshot access closes immediately after revocation');
+ const retainedAttachments=await context.request.get(`https://omnidesk.test/api/support/${portalTicketId}/attachments`);
+ assert.equal(retainedAttachments.status(),200,'Staff retain ticket attachment access after portal revocation');
+ const retainedAttachment=(await retainedAttachments.json()).find(item=>item.fileName==='manual.txt');
+ assert.ok(retainedAttachment,'Staff attachment metadata remains after portal revocation');
+ const retainedDownload=await context.request.get(`https://omnidesk.test/api/support/${portalTicketId}/attachments/${retainedAttachment.id}`);
+ assert.equal(retainedDownload.status(),200,'Portal access revocation does not remove staff attachment content');
+ assert.equal((await retainedDownload.body()).toString(),'portal attachment clean fixture');
  await portalContext.close();
  const ticketSubject='Browser support '+randomBytes(6).toString('hex');
  const intake=await context.request.post('https://omnidesk.test/api/agent/support',{headers:{Authorization:'Bearer '+agentAssertion()},data:{requesterKey:'A'.repeat(64),ticket:{requestId:crypto.randomUUID(),subject:ticketSubject,description:'Isolated fixture, no live user data',screenshotBase64:screenshot,screenshotConsent:true}}});

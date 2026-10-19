@@ -34,4 +34,28 @@ docker compose -f compose.smoke.yaml --profile verification run --rm clamav-prob
 
 if [[ "${1:-}" == --browser ]]; then
   docker compose -f compose.smoke.yaml run --rm browser
+
+  # Build a secret-bearing archive from this disposable stack, including the
+  # portal attachment created by Chromium, then exercise the real restore path.
+  restore_fixture="$SMOKE_SECRETS/restore-fixture"
+  mkdir -m 700 "$restore_fixture"
+  docker compose -f compose.smoke.yaml exec -T db pg_dump -U omnidesk -d omnidesk --format=custom > "$restore_fixture/database.dump"
+  api_container=$(docker compose -f compose.smoke.yaml ps -q api)
+  caddy_container=$(docker compose -f compose.smoke.yaml ps -q caddy)
+  attachment_files=$(docker exec "$api_container" sh -ec 'find /attachments -maxdepth 1 -type f | wc -l')
+  [[ "$attachment_files" -gt 0 ]] || { echo 'Smoke database has attachments but API blob storage is empty.' >&2; exit 1; }
+  mkdir "$restore_fixture/identity_keys" "$restore_fixture/attachments" "$restore_fixture/caddy_data"
+  docker exec --user 1654 "$api_container" tar -C /keys -cf - . | tar -C "$restore_fixture/identity_keys" -xf -
+  docker exec --user 1654 "$api_container" tar -C /attachments -cf - . | tar -C "$restore_fixture/attachments" -xf -
+  docker exec --user 0 "$caddy_container" tar -C /data -cf - . | tar -C "$restore_fixture/caddy_data" -xf -
+  cp -- "$SMOKE_SECRETS/db_password" "$restore_fixture/db_password"
+  chmod -R go-rwx "$restore_fixture"
+  (
+    cd "$restore_fixture"
+    sha256sum database.dump > database.sha256
+    find attachments -type f -print0 | sort -z | xargs -0 -r sha256sum > attachments.sha256
+    find . -type f ! -name files.sha256 ! -name READY -print0 | sort -z | xargs -0 -r sha256sum > files.sha256
+  )
+  touch "$restore_fixture/READY"
+  bash scripts/verify-backup.sh "$restore_fixture"
 fi

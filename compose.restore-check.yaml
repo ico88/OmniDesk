@@ -29,6 +29,8 @@ services:
       - |
         test -d /source/identity_keys
         test -d /source/caddy_data
+        find /source/identity_keys -type f -print -quit | grep -q .
+        test -s /source/caddy_data/caddy/pki/authorities/local/root.crt
         cp -a /source/identity_keys/. /keys/
         if [ -d /source/attachments ]; then cp -a /source/attachments/. /attachments/; fi
         cp -a /source/caddy_data/. /caddy-data/

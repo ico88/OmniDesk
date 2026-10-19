@@ -12,7 +12,11 @@ else
 fi
 (cd "$backup_path" && sha256sum --check database.sha256)
 if [[ -d "$backup_path/attachments" && -f "$backup_path/attachments.sha256" ]]; then
-  (cd "$backup_path" && sha256sum --check attachments.sha256)
+  if [[ -s "$backup_path/attachments.sha256" ]]; then
+    (cd "$backup_path" && sha256sum --check attachments.sha256)
+  else
+    echo 'Attachment checksum manifest is empty; database references will still be checked.'
+  fi
 elif [[ -d "$backup_path/attachments" || -f "$backup_path/attachments.sha256" ]]; then
   echo 'Incomplete attachment backup or checksum manifest' >&2
   exit 1
