@@ -124,8 +124,8 @@ export function RemoteConsole({ deviceId, deviceName, capability, allowed, ready
       const result = await api<{ state: string } | undefined>(`/devices/${deviceId}/remote-sessions/${session.id}`, 'DELETE');
       const pending = result?.state === 'revocation_pending';
       onMessage(pending
-        ? 'Revoca richiesta; il server continuerà a riprovare. La disconnessione completa attende la conferma del motore remoto.'
-        : 'Collegamento revocato. Per riconnettersi servirà una nuova sessione autorizzata.');
+        ? 'Chiusura e revoca in attesa; il server riproverà entrambe le operazioni prima di consentire nuove sessioni.'
+        : 'Link revocato e comando di chiusura inviato. Per riconnettersi servirà una nuova sessione autorizzata.');
       if (pending) setViewState('revocation-pending');
       else { setSession(null); setViewState('idle'); }
     } catch (cause) {

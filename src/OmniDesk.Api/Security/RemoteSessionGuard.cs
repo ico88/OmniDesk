@@ -45,6 +45,7 @@ public sealed class RemoteSessionGuard(IServiceScopeFactory scopes, ILogger<Remo
                 if (!mesh.Configured || string.IsNullOrEmpty(session.NodeId) || session.PublicId is null) continue;
                 using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
                 timeout.CancelAfter(TimeSpan.FromSeconds(10));
+                if (session.Capability == "remote.control") await mesh.Disconnect(session.NodeId, session.PublicId, timeout.Token);
                 await mesh.Revoke(session.NodeId, session.PublicId, timeout.Token);
                 await using var tx = await db.Database.BeginTransactionAsync(ct);
                 var updated = await db.RemoteSessions.Where(x => x.Id == session.Id && x.State == "revocation_pending").ExecuteUpdateAsync(s => s.SetProperty(x => x.State, "revoked"), ct);

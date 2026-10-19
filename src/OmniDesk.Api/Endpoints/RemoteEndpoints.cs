@@ -122,7 +122,11 @@ public static class RemoteEndpoints
             if (session.State is "revoked" or "failed") return Results.NoContent();
             if (string.IsNullOrEmpty(session.NodeId) || session.PublicId is null)
                 return Results.Accepted(value: new { session.Id, state = "revocation_pending" });
-            try { await mesh.Revoke(session.NodeId, session.PublicId, c.RequestAborted); }
+            try
+            {
+                if (session.Capability == "remote.control") await mesh.Disconnect(session.NodeId, session.PublicId, c.RequestAborted);
+                await mesh.Revoke(session.NodeId, session.PublicId, c.RequestAborted);
+            }
             catch
             {
                 return Results.Accepted(value: new { session.Id, state = "revocation_pending" });
