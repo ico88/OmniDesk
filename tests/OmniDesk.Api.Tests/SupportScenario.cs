@@ -222,5 +222,26 @@ public static class SupportScenario
         Auth(); Assert.Equal(HttpStatusCode.TooManyRequests,(await agent.PostAsJsonAsync("/api/agent/support",new SupportIntake(owner,create with { RequestId=Guid.NewGuid() }))).StatusCode);
         Auth(); Assert.Equal(HttpStatusCode.OK,(await agent.PostAsJsonAsync("/api/agent/support",new SupportIntake(owner,create))).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized,(await admin.GetAsync($"/api/agent/support/{owner}")).StatusCode);
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await scoped.PostAsJsonAsync($"/api/support/{ticket.Id}/internal-notes", new { expectedVersion = 3L, body = "nota riservata" })).StatusCode);
+        var beforeNote = await admin.GetFromJsonAsync<System.Text.Json.JsonElement>($"/api/support/{ticket.Id}/messages");
+        var noteVersion = beforeNote.GetProperty("version").GetInt64();
+        Assert.True(beforeNote.GetProperty("canNote").GetBoolean());
+        Assert.Equal(HttpStatusCode.BadRequest, (await admin.PostAsJsonAsync($"/api/support/{ticket.Id}/internal-notes", new { expectedVersion = noteVersion, body = "  " })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await admin.PostAsJsonAsync($"/api/support/{ticket.Id}/internal-notes", new { expectedVersion = noteVersion, body = "Nota interna solo per assistenza" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await admin.PostAsJsonAsync($"/api/support/{ticket.Id}/internal-notes", new { expectedVersion = noteVersion, body = "versione obsoleta" })).StatusCode);
+        var staffThread = await admin.GetFromJsonAsync<System.Text.Json.JsonElement>($"/api/support/{ticket.Id}/messages");
+        Assert.Contains(staffThread.GetProperty("messages").EnumerateArray(), m => m.GetProperty("visibility").GetString() == "internal" && m.GetProperty("body").GetString() == "Nota interna solo per assistenza");
+        var scopedThread = await scoped.GetFromJsonAsync<System.Text.Json.JsonElement>($"/api/support/{ticket.Id}/messages");
+        Assert.False(scopedThread.GetProperty("canNote").GetBoolean());
+        Assert.DoesNotContain(scopedThread.GetProperty("messages").EnumerateArray(), m => m.GetProperty("body").GetString() == "Nota interna solo per assistenza");
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var audit = await db.AuditEvents.SingleAsync(x => x.Action == "ticket.note.internal.created" && x.Target == ticket.Id.ToString());
+            Assert.Equal(adminUser, audit.ActorId);
+            var evt = await db.CoreOutboxEvents.SingleAsync(x => x.EventType == "ticket.internal_note.created" && x.AggregateId == ticket.Id);
+            Assert.DoesNotContain("Nota interna solo per assistenza", evt.Payload);
+        }
     }
 }

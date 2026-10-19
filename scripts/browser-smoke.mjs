@@ -85,16 +85,13 @@ try {
  const enrollment=await context.request.post('https://omnidesk.test/api/agent/enroll',{data:{token:enrollmentToken,name:fixtureName,publicKeyPem}});
  assert.equal(enrollment.status(),201,'Fixture enrollment in isolated environment');
  const fixtureDevice=(await enrollment.json()).deviceId;
- const now=Math.floor(Date.now()/1000);
  const header=Buffer.from(JSON.stringify({alg:'RS256',typ:'JWT'})).toString('base64url');
- const claims=Buffer.from(JSON.stringify({iss:fixtureDevice,sub:fixtureDevice,aud:'omnidesk-agent',iat:now,nbf:now-5,exp:now+60,jti:randomBytes(16).toString('hex')})).toString('base64url');
- const unsigned=header+'.'+claims;
- const assertion=unsigned+'.'+sign('RSA-SHA256',Buffer.from(unsigned),fixtureKeys.privateKey).toString('base64url');
+ const agentAssertion=()=>{const now=Math.floor(Date.now()/1000);const claims=Buffer.from(JSON.stringify({iss:fixtureDevice,sub:fixtureDevice,aud:'omnidesk-agent',iat:now,nbf:now-5,exp:now+60,jti:randomBytes(16).toString('hex')})).toString('base64url');const unsigned=header+'.'+claims;return unsigned+'.'+sign('RSA-SHA256',Buffer.from(unsigned),fixtureKeys.privateKey).toString('base64url');};
  const chunk=(type,data)=>{const payload=Buffer.concat([Buffer.from(type),data]);let crc=0xffffffff;for(const b of payload){crc^=b;for(let i=0;i<8;i++)crc=(crc>>>1)^((crc&1)?0xedb88320:0);}const size=Buffer.alloc(4),sum=Buffer.alloc(4);size.writeUInt32BE(data.length);sum.writeUInt32BE((~crc)>>>0);return Buffer.concat([size,payload,sum]);};
  const pngHeader=Buffer.alloc(13);pngHeader.writeUInt32BE(1);pngHeader.writeUInt32BE(1,4);pngHeader[8]=8;pngHeader[9]=6;
  const screenshot=Buffer.concat([Buffer.from([137,80,78,71,13,10,26,10]),chunk('IHDR',pngHeader),chunk('IDAT',deflateSync(Buffer.from([0,128,128,128,255]))),chunk('IEND',Buffer.alloc(0))]).toString('base64');
  const ticketSubject='Browser support '+randomBytes(6).toString('hex');
- const intake=await context.request.post('https://omnidesk.test/api/agent/support',{headers:{Authorization:'Bearer '+assertion},data:{requesterKey:'A'.repeat(64),ticket:{requestId:crypto.randomUUID(),subject:ticketSubject,description:'Isolated fixture, no live user data',screenshotBase64:screenshot,screenshotConsent:true}}});
+ const intake=await context.request.post('https://omnidesk.test/api/agent/support',{headers:{Authorization:'Bearer '+agentAssertion()},data:{requesterKey:'A'.repeat(64),ticket:{requestId:crypto.randomUUID(),subject:ticketSubject,description:'Isolated fixture, no live user data',screenshotBase64:screenshot,screenshotConsent:true}}});
  assert.equal(intake.status(),201,'Authenticated isolated ticket intake');
  await page.getByRole('button',{name:'Assistenza',exact:true}).click();
  await page.getByRole('button',{name:fixtureName,exact:true}).waitFor();
@@ -116,6 +113,13 @@ try {
  await page.getByRole('log').getByText('Risolto nel test isolato',{exact:true}).waitFor();
  await page.getByRole('button',{name:'Aggiorna messaggi',exact:true}).click();
  await page.getByRole('log').getByText('Risolto nel test isolato',{exact:true}).waitFor();
+ const internalNote='Nota interna non visibile al richiedente';
+ await page.locator('#ticket-internal-note').fill(internalNote);
+ await page.getByRole('button',{name:'Aggiungi nota',exact:true}).click();
+ await page.getByRole('log').getByText(internalNote,{exact:true}).waitFor();
+ const requesterTickets=await context.request.get('https://omnidesk.test/api/agent/support/'+('A'.repeat(64)),{headers:{Authorization:'Bearer '+agentAssertion()}});
+ assert.equal(requesterTickets.status(),200);
+ assert.equal((await requesterTickets.text()).includes(internalNote),false,'Internal note is absent from the requester-facing device feed');
  await page.screenshot({path:'/previews/support-conversation.png',fullPage:true});
  await page.getByRole('button',{name:'Dispositivi',exact:true}).click();
 
@@ -177,5 +181,5 @@ try {
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true,'No horizontal page overflow on mobile');
  await page.screenshot({path:'/previews/devices-mobile.png',fullPage:true});
  assert.deepEqual(errors,[],'No browser JavaScript exceptions');
- console.log('PASS: Chromium accounts/grants, isolated device enrollment, rename/group persistence/revocation, ticket resolution, protected Windows download and viewer UI permissions');
+ console.log('PASS: Chromium accounts/grants, isolated device enrollment, ticket resolution/internal note visibility, device management, protected Windows download and viewer UI permissions');
 } finally {await browser.close();}
