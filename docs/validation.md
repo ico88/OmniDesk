@@ -1419,3 +1419,21 @@ completato publish Console Windows, build Agent/Tray/MSI, installazione,
 recovery, disinstallazione e verifica upgrade/repair/rollback contro la
 baseline storica. L'MSI è stato collaudato sul runner isolato, non sul PC LAN.
 Nessun deploy, riavvio o mutazione del server LAN.
+
+### SD1 — tempi verificabili nella cronologia degli interventi RMM
+
+Lo snapshot immutabile dell'associazione ticket-job ora conserva `occurredAt`
+(inizio) e `completedAt` quando il job lo ha registrato; l'API candidature
+espone gli stessi campi. La console visualizza stato localizzato, orario di
+avvio, completamento e durata derivata esclusivamente quando entrambi i tempi
+esistono e sono coerenti. I record delle sessioni remote continuano a non
+mostrare un orario di fine: il modello Mesh non registra la chiusura effettiva,
+quindi l'interfaccia non la deduce da `ExpiresAt` o dallo stato.
+
+`./scripts/test.sh` passato: 64/64 test xUnit/PostgreSQL e 5/5 Vitest, compresi
+assertions sui timestamp persistiti e sull'assenza del risultato diagnostico.
+`docker compose build api dashboard` passato. `./scripts/smoke.sh --browser`
+passato su stack temporaneo isolato; Chromium verifica che l'intervento
+collegato mostri l'orario di avvio. `docker compose config -q`, Compose test
+config e `git diff --check` passati. Nessuna migrazione, deploy o modifica al
+server LAN.
