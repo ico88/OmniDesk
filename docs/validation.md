@@ -1450,3 +1450,22 @@ riusciti. Il runner Windows ha superato publish Console, build Agent/Tray/MSI,
 installazione, recovery, disinstallazione e upgrade/repair/rollback. Il collaudo
 resta CI isolata: nessuna installazione sul PC Windows LAN e nessun deploy del
 server.
+
+### SD1 — transizioni di stato del workflow predefinito — 2026-10-19
+
+`TicketWorkflowPolicy` definisce le transizioni consentite e il dettaglio
+ticket (`GET /api/support/{id}/messages`) restituisce gli stati selezionabili.
+La UI usa tale elenco e l'API rifiuta transizioni non ammesse dopo il controllo
+versione, con risposta 409 che include stato corrente e transizioni permesse.
+Per risolvere serve una risposta pubblica; chiudere un ticket già risolto non
+richiede un duplicato. Riaprire cancella il campo di risoluzione attuale, mentre
+la risposta storica resta nella conversazione. Non è stata aggiunta una
+migrazione; i workflow personalizzabili e versionati restano da sviluppare.
+
+`./scripts/test.sh` passato: 77/77 test API/PostgreSQL e 5/5 Vitest. I test
+verificano la matrice di transizione, API default-deny per transizioni vietate,
+risoluzione, riapertura, chiusura terminale e risposta pubblica preservata.
+`docker compose build api dashboard`, configurazione Compose standard/test,
+`git diff --check` e `./scripts/smoke.sh --browser` passati; Chromium verifica
+che la UI mostri solo le transizioni autorizzate dal server. Stack smoke
+temporaneo rimosso; nessuna migrazione, deploy o modifica all'istanza LAN.
