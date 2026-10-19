@@ -22,7 +22,7 @@ public sealed partial class MeshCentralClient(MeshCentralOptions options) : IMes
         var consent = SessionConsent(capability, consentRequired);
         var expires = DateTimeOffset.UtcNow.AddMinutes(5);
         var reply = await Command(new Dictionary<string, object> {
-            ["action"] = "createDeviceShareLink", ["nodeid"] = nodeId, ["guestname"] = "OmniDesk " + actor[..Math.Min(actor.Length, 80)],
+            ["action"] = "createDeviceShareLink", ["nodeid"] = nodeId, ["guestname"] = actor[..Math.Min(actor.Length, 80)],
             ["p"] = protocol, ["consent"] = consent, ["start"] = DateTimeOffset.UtcNow.ToUnixTimeSeconds(), ["end"] = expires.ToUnixTimeSeconds(), ["viewOnly"] = false
         }, cancellationToken);
         if (!reply.TryGetProperty("result", out var result) || result.GetString() != "OK") throw new InvalidOperationException("MeshCentral refused session creation");

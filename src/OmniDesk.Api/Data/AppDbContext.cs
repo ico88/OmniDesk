@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace OmniDesk.Api.Data;
 
-public sealed class AppUser : IdentityUser { public bool IsDisabled { get; set; } }
+public sealed class AppUser : IdentityUser { public bool IsDisabled { get; set; } public string? DisplayName { get; set; } }
 public sealed class DeviceGroup { public Guid Id { get; set; } public string Name { get; set; } = ""; }
 public sealed class Site { public Guid Id { get; set; } = Guid.NewGuid(); public string Name { get; set; } = ""; public bool IsArchived { get; set; } public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow; }
 public sealed class Device { public Guid Id { get; set; } public string Name { get; set; } = ""; public Guid? GroupId { get; set; } public Guid SiteId { get; set; } }
@@ -63,6 +63,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
     protected override void OnModelCreating(ModelBuilder b)
     {
         base.OnModelCreating(b);
+        b.Entity<AppUser>().Property(x => x.DisplayName).HasMaxLength(80);
         b.Entity<RemoteProvisioning>().HasKey(x => x.DeviceId);
         b.Entity<RemoteProvisioning>().HasOne<Device>().WithOne().HasForeignKey<RemoteProvisioning>(x => x.DeviceId).OnDelete(DeleteBehavior.Cascade);
         b.Entity<SupportMessage>().HasOne<SupportTicket>().WithMany().HasForeignKey(x=>x.TicketId).OnDelete(DeleteBehavior.Cascade);

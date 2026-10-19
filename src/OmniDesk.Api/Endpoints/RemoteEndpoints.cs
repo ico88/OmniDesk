@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using OmniDesk.Api.Data;
 using OmniDesk.Api.Security;
@@ -35,7 +36,7 @@ public static class RemoteEndpoints
             return Results.Ok(await db.RemoteSessions.AsNoTracking().Where(x => x.DeviceId == id).OrderByDescending(x => x.CreatedAt).Take(100)
                 .Select(x => new { x.Id, x.ActorId, x.Capability, x.State, x.CreatedAt, x.ExpiresAt, x.ConsentRequired }).ToListAsync());
         });
-        devices.MapPost("", async (Guid id, RemoteRequest r, HttpContext c, AppDbContext db, PermissionService p, IMeshCentralClient mesh, ILoggerFactory logs) => {
+        devices.MapPost("", async (Guid id, RemoteRequest r, HttpContext c, AppDbContext db, UserManager<AppUser> users, PermissionService p, IMeshCentralClient mesh, ILoggerFactory logs) => {
             if (!Capabilities.Contains(r.Capability)) return Results.BadRequest();
             if (!await p.Allows(c.User.UserId(), r.Capability, id)) return Results.Forbid();
             if (!await db.Devices.AnyAsync(x => x.Id == id)) return Results.NotFound();
@@ -49,7 +50,11 @@ public static class RemoteEndpoints
             MeshSession? created = null;
             try
             {
-                created = await mesh.Create(mapping.NodeId, r.Capability, c.User.UserId(), session.ConsentRequired, c.RequestAborted);
+                var operatorUser = await users.FindByIdAsync(c.User.UserId());
+                var operatorName = operatorUser?.DisplayName;
+                if (string.IsNullOrWhiteSpace(operatorName)) operatorName = operatorUser?.Email;
+                if (string.IsNullOrWhiteSpace(operatorName)) operatorName = "Operatore OmniDesk";
+                created = await mesh.Create(mapping.NodeId, r.Capability, operatorName, session.ConsentRequired, c.RequestAborted);
                 session.PublicId = created.PublicId; session.ExpiresAt = created.ExpiresAt; session.State = "active";
                 db.AuditEvents.Add(Event(c, "remote.create", session.Id)); await db.SaveChangesAsync();
                 if (!await p.Allows(c.User.UserId(), r.Capability, id) || await db.DeviceCredentials.AnyAsync(x => x.DeviceId == id && x.RevokedAt != null) || await db.RemoteProvisionings.AnyAsync(x => x.DeviceId == id && (!x.Enabled || x.AccessPolicyVersion != session.AccessPolicyVersion)) || (!session.ConsentRequired && !await db.RemoteProvisionings.AnyAsync(x=>x.DeviceId==id&&x.Enabled&&x.UnattendedAllowed)))

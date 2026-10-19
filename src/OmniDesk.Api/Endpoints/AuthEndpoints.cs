@@ -5,6 +5,7 @@ using OmniDesk.Api.Security;
 
 namespace OmniDesk.Api.Endpoints;
 public sealed record LoginRequest(string Email, string Password, string? Code = null, string? RecoveryCode = null);
+public sealed record ProfileRequest(string? DisplayName);
 public static class AuthEndpoints
 {
     public static void MapAuthEndpoints(this WebApplication app)
@@ -43,7 +44,16 @@ public static class AuthEndpoints
         }).RequireAuthorization();
         app.MapGet("/api/auth/me", async (HttpContext c, UserManager<AppUser> users, PermissionService permissions) => {
             var user = await users.GetUserAsync(c.User);
-            return user is null ? Results.Unauthorized() : Results.Ok(new { user.Id, user.Email, globalPermissions = await permissions.Global(user.Id), twoFactorAvailable = app.Configuration.GetValue<bool>("Security:TotpEnabled"), twoFactorEnabled = user.TwoFactorEnabled });
+            return user is null ? Results.Unauthorized() : Results.Ok(new { user.Id, user.Email, user.DisplayName, globalPermissions = await permissions.Global(user.Id), twoFactorAvailable = app.Configuration.GetValue<bool>("Security:TotpEnabled"), twoFactorEnabled = user.TwoFactorEnabled });
+        }).RequireAuthorization();
+        app.MapPut("/api/auth/profile", async (ProfileRequest request, HttpContext c, UserManager<AppUser> users) => {
+            var value = request.DisplayName?.Trim();
+            if (value is { Length: > 80 } || value is not null && value.Any(char.IsControl)) return Results.BadRequest();
+            var user = await users.GetUserAsync(c.User);
+            if (user is null) return Results.Unauthorized();
+            user.DisplayName = string.IsNullOrWhiteSpace(value) ? null : value;
+            var result = await users.UpdateAsync(user);
+            return result.Succeeded ? Results.Ok(new { user.DisplayName }) : Results.Problem("Profile update failed", statusCode: 500);
         }).RequireAuthorization();
     }
 }
