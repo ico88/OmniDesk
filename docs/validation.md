@@ -296,3 +296,12 @@ pubblicazione; readiness HTTPS e asset passati. Nessun collaudo interattivo sul
 PC Windows dichiarato. Il run esteso 39209623222 resta in esecuzione al momento
 della pubblicazione dello script; l'MSI distribuito resta quello del run verde
 39207328177.
+
+### Primo enrollment LAN reale Windows 10
+
+L'operatore ha eseguito il launcher interattivo e incollato il token: output
+conferma TLS readiness, enrollment e verifica locale ACL/DPAPI. Verifica diretta
+read-only PostgreSQL alle 2026-10-19 06:37:07 UTC: dispositivo DESKTOP-EK7AD7M,
+ID bca1f63f-afde-4445-93ac-87829f422351, heartbeat ricevuto alle 06:36:53 UTC e
+inventario alle 06:36:53 UTC. Questo conferma la comunicazione Agent/server LAN;
+non dimostra ancora Tray, screenshot, consenso o sessione desktop remota.
