@@ -1599,6 +1599,9 @@ config -q`, `git diff --check` e `./scripts/smoke.sh --browser` passati; Chromiu
 ha verificato aggiunta/rimozione in UI nel compose effimero, insieme alle
 regressioni preesistenti. Un primo smoke aveva usato immagini dashboard obsolete;
 è stato ripetuto dopo build e con l'utente read-only predisposto prima di aprire
-il ticket. Nessun deploy, migrazione o test sull'istanza LAN; CI sul commit
-contenente questo incremento ancora da eseguire. Allegati generici in quarantena,
-notifiche esterne, email, allarmi, SLA e automazioni restano da sviluppare.
+il ticket. CI Linux `39326865633` passata sul commit `dc07520`, inclusi test,
+build delle immagini, configurazione Compose e smoke browser. Nessun deploy,
+migrazione o test sull'istanza LAN. CI Windows MSI `39326865702` in coda e il run
+precedente `39324222524` ancora attivo; non interrotti. Allegati generici in
+quarantena, notifiche esterne, email, allarmi, SLA e automazioni restano da
+sviluppare.

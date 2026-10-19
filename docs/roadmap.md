@@ -465,6 +465,7 @@ versione attesa, lock dispositivo, audit e outbox. La partecipazione non concede
 permessi; lettura e notifiche rivalidano account e `tickets.view`, e il worker
 esclude eventi anteriori all'aggiunta. La dashboard include l'elenco e i controlli
 di gestione. Migrazione, suite PostgreSQL, build API/dashboard e smoke Chromium
-sono passati e registrati in [validation.md](validation.md). Non distribuito
-sull'istanza LAN; la CI per il commit di questa modifica è ancora da verificare.
+sono passati e registrati in [validation.md](validation.md); CI Linux
+`39326865633` passata. Non distribuito sull'istanza LAN; workflow Windows MSI
+`39326865702` in coda e run precedente `39324222524` ancora attivo.
 Allegati generici/quarantena, email, allarmi, SLA e automazioni restano aperti.
