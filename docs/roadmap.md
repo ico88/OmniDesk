@@ -377,6 +377,7 @@ L’elenco Dispositivi mostra lo stato effettivo dell’Agent dal heartbeat: onl
 se ricevuto negli ultimi tre minuti, offline in caso contrario, e Revocato per
 identità revocate. Il criterio coincide con la scheda dispositivo; tooltip e
 `lastSeen` identificano l’ultimo contatto. L’elenco si aggiorna automaticamente
-ogni 30 secondi mentre la sezione è aperta. Build e test API/dashboard in corso;
-nessun collaudo autenticato nel browser né deploy LAN registrato finché non
-vengono effettuati esplicitamente.
+ogni 30 secondi mentre la sezione è aperta. Test PostgreSQL 64/64, Vitest 5/5,
+build Docker e configurazione Compose passati. Pubblicato sull'istanza LAN dopo
+backup e verifica di zero sessioni/job; readiness, CA, bundle e rifiuto anonimo
+verificati. Resta il controllo visivo con login nel browser.

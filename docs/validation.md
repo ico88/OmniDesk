@@ -1130,4 +1130,11 @@ mentre la scheda Dispositivi è aperta. `AgentScenario` verifica heartbeat recen
 ultimo contatto e revoca. `./scripts/test.sh` passato con 64/64 xUnit/PostgreSQL,
 build TypeScript/Vite e 5/5 Vitest. `docker compose build api dashboard` e
 `docker compose config --quiet` passati. Nessun login autenticato nel browser;
-il deploy LAN viene registrato solo dopo il controllo runtime successivo.
+backup completo `.backups/20261019T153639Z.mzZpdG` effettuato dopo verifica DB
+con 0 sessioni remote e 0 job attivi. Deploy con `docker compose up -d --no-deps
+api dashboard`; API, dashboard, Caddy, DB e MeshCentral risultano running. `python3
+scripts/verify-lan.py --server https://192.168.1.233:8085 --ca
+omnidesk-local-ca.crt` passa readiness HTTPS/CA, dashboard e rifiuto anonimo.
+Asset bundle `index-BL35s1G4.js` verificato con le etichette badge. Conteggio
+successivo: 0 sessioni remote e 0 job. Non eseguiti login o verifica visiva
+autenticata nel browser; workflow GitHub Linux e Windows sono ancora in coda.
