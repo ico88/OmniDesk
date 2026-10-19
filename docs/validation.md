@@ -1371,3 +1371,17 @@ Push del commit `cff9e0b842e054c028dd0a4a33f1da048e997852` sul branch
 riusciti. Il runner Windows ha compilato Agent/Tray/MSI e superato installazione,
 recovery, disinstallazione e upgrade/repair/rollback; l'installer nativo è
 saltato come configurato. Nessun deploy sul server LAN.
+
+### Branding Tray e favicon — 2026-10-19
+
+La Tray usa `assets/omnidesk.ico` per l'icona dell'eseguibile e per
+`NotifyIcon`; il test Windows del pacchetto verifica l'icona incorporata. La
+favicon è stata riallineata alle stesse proporzioni e allo stesso simbolo
+monitor, mantenendo il blu OmniDesk. La favicon è un asset SVG servito
+direttamente dalla dashboard.
+
+`favicon.svg` supera il parsing XML e `git diff --check`. In questo ambiente
+non sono disponibili `npm` né `dotnet`, quindi le build dashboard/Windows non
+sono state eseguite localmente. Restano da verificare nella GitHub Actions
+Linux la build Vite e nella Windows la compilazione Tray/MSI; nessun servizio
+LAN è stato riavviato.
