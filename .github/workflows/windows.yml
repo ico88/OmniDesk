@@ -1,7 +1,13 @@
 name: windows-agent-package
 on:
   push:
+    paths-ignore:
+      - 'docs/**'
+      - '*.md'
   pull_request:
+    paths-ignore:
+      - 'docs/**'
+      - '*.md'
   workflow_dispatch:
     inputs:
       native_installer_only:
@@ -10,6 +16,9 @@ on:
         default: false
 permissions:
   contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 jobs:
   agent-msi:
     if: ${{ inputs.native_installer_only != true }}
