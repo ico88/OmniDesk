@@ -77,6 +77,10 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
         b.Entity<SupportTicket>().Property(x => x.Description).HasMaxLength(8000);
         b.Entity<SupportTicket>().Property(x => x.Resolution).HasMaxLength(8000);
         b.Entity<SupportTicket>().Property(x => x.State).HasMaxLength(20);
+        b.Entity<SupportTicket>().Property(x => x.Priority).HasMaxLength(20).HasDefaultValue("normal");
+        b.Entity<SupportTicket>().HasOne<AppUser>().WithMany().HasForeignKey(x => x.AssigneeId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<SupportTicket>().HasIndex(x => new { x.SiteId, x.State, x.Priority, x.CreatedAt });
+        b.Entity<SupportTicket>().HasIndex(x => x.AssigneeId);
 
         b.Entity<DashboardLayout>().HasKey(x => x.UserId);
         b.Entity<DashboardLayout>().HasOne<AppUser>().WithOne().HasForeignKey<DashboardLayout>(x => x.UserId).OnDelete(DeleteBehavior.Cascade);

@@ -8,9 +8,11 @@ using OmniDesk.Contracts;
 
 namespace OmniDesk.Api.Endpoints;
 
-public sealed record SupportStaffEdit(long ExpectedVersion,string State,string? Resolution,bool AddReply=false);
+public sealed record SupportStaffEdit(long ExpectedVersion,string State,string? Resolution,bool AddReply=false,
+    string? Priority=null,bool UpdatePriority=false,string? AssigneeId=null,bool UpdateAssignment=false);
 public static class SupportEndpoints
 {
+    private static readonly string[] Priorities = ["low", "normal", "high", "urgent"];
     private static bool ValidKey(string? key) => key is { Length: 64 } && key.All(Uri.IsHexDigit);
     private static SupportTicketView View(SupportTicket t) => new(t.Id, t.DeviceId, t.Subject, t.Description, t.State,
         t.Resolution, t.Version, t.CreatedAt, t.UpdatedAt, t.Screenshot != null);
@@ -80,13 +82,39 @@ public static class SupportEndpoints
             if(!string.IsNullOrEmpty(state))query=query.Where(t=>t.State==state);
             if(!string.IsNullOrEmpty(term))query=query.Where(t=>t.Subject.ToLower().Contains(term)||db.Devices.Any(d=>d.Id==t.DeviceId&&d.Name.ToLower().Contains(term)));
             return Results.Ok(await query.OrderByDescending(t => t.CreatedAt).Take(100)
-                .Select(t => new {t.Id,t.DeviceId,t.SiteId,deviceName=db.Devices.Where(d=>d.Id==t.DeviceId).Select(d=>d.Name).FirstOrDefault(),siteName=db.Sites.Where(s=>s.Id==t.SiteId).Select(s=>s.Name).FirstOrDefault(),t.Subject,t.Description,t.State,t.Resolution,t.Version,t.CreatedAt,t.UpdatedAt,hasScreenshot=t.Screenshot != null}).ToArrayAsync());
+                .Select(t => new {t.Id,t.DeviceId,t.SiteId,deviceName=db.Devices.Where(d=>d.Id==t.DeviceId).Select(d=>d.Name).FirstOrDefault(),siteName=db.Sites.Where(s=>s.Id==t.SiteId).Select(s=>s.Name).FirstOrDefault(),t.Subject,t.Description,t.State,t.Priority,t.AssigneeId,assigneeEmail=t.AssigneeId==null?null:db.Users.Where(u=>u.Id==t.AssigneeId).Select(u=>u.Email).FirstOrDefault(),t.Resolution,t.Version,t.CreatedAt,t.UpdatedAt,hasScreenshot=t.Screenshot != null}).ToArrayAsync());
+        });
+        staff.MapGet("/{id:guid}/assignees", async (Guid id, HttpContext c, AppDbContext db, PermissionService p) => {
+            var ticket = await db.SupportTickets.AsNoTracking().SingleOrDefaultAsync(t => t.Id == id);
+            if (ticket is null) return Results.NotFound();
+            if (!await p.Allows(c.User.UserId(), "tickets.manage", ticket.DeviceId, siteId: ticket.SiteId)) return Results.Forbid();
+            var deviceGroupId = await db.Devices.Where(d => d.Id == ticket.DeviceId).Select(d => d.GroupId).SingleOrDefaultAsync();
+            IQueryable<string> WithPermission(string permission)
+            {
+                var global = from ur in db.UserRoles
+                             join rp in db.RolePermissions on ur.RoleId equals rp.RoleId
+                             where rp.Permission == permission
+                             select ur.UserId;
+                var scoped = from grant in db.ScopeGrants
+                             join rp in db.RolePermissions on grant.RoleId equals rp.RoleId
+                             where rp.Permission == permission &&
+                                 (grant.DeviceId == ticket.DeviceId || (deviceGroupId != null && grant.GroupId == deviceGroupId) || grant.SiteId == ticket.SiteId)
+                             select grant.UserId;
+                return global.Union(scoped);
+            }
+            var visible = WithPermission("tickets.view");
+            var manageable = WithPermission("tickets.manage");
+            var candidates = db.Users.AsNoTracking().Where(u => !u.IsDisabled && visible.Contains(u.Id) && manageable.Contains(u.Id))
+                .OrderBy(u => u.Email).Take(200).Select(u => new { id = u.Id, email = u.Email });
+            return Results.Ok(await candidates.ToListAsync());
         });
         staff.MapPut("/{id:guid}", async (Guid id, SupportStaffEdit r, HttpContext c, AppDbContext db, PermissionService p) => {
             var ticket = await db.SupportTickets.AsNoTracking().SingleOrDefaultAsync(t => t.Id == id);
             if (ticket is null) return Results.NotFound();
             if (!await p.Allows(c.User.UserId(), "tickets.manage", ticket.DeviceId, siteId: ticket.SiteId)) return Results.Forbid();
             if (r.State is not ("open" or "in_progress" or "resolved" or "closed")) return Results.BadRequest(new {error="Seleziona uno stato del ticket valido."});
+            if (r.UpdatePriority && !Priorities.Contains(r.Priority)) return Results.BadRequest(new { error = "Seleziona una priorità valida." });
+            if (r.UpdateAssignment && r.AssigneeId?.Length > 450) return Results.BadRequest();
             if(r.Resolution?.Length>8000)return Results.BadRequest(new {error="La risposta puo contenere al massimo 8000 caratteri."});
             if((r.AddReply||r.State is "resolved" or "closed")&&string.IsNullOrWhiteSpace(r.Resolution))
                 return Results.BadRequest(new {error="Scrivi una risposta all'utente prima di risolvere o chiudere il ticket."});
@@ -95,9 +123,19 @@ public static class SupportEndpoints
             if (!await p.Allows(c.User.UserId(), "tickets.manage", ticket.DeviceId, siteId: ticket.SiteId)) return Results.Forbid();
             ticket=await db.SupportTickets.AsNoTracking().SingleAsync(t=>t.Id==id);
             if(ticket.Version!=r.ExpectedVersion)return Results.Conflict(new {error="Il ticket e stato aggiornato. Ricarica la conversazione prima di salvare."});
+            if (r.UpdateAssignment && r.AssigneeId is not null)
+            {
+                if (!await db.Users.AnyAsync(u => u.Id == r.AssigneeId && !u.IsDisabled)) return Results.BadRequest(new { error = "L’assegnatario selezionato non è disponibile." });
+                if (!await p.Allows(r.AssigneeId, "tickets.view", ticket.DeviceId, siteId: ticket.SiteId) ||
+                    !await p.Allows(r.AssigneeId, "tickets.manage", ticket.DeviceId, siteId: ticket.SiteId))
+                    return Results.BadRequest(new { error = "L’assegnatario non dispone dei permessi per questa richiesta." });
+            }
             var body=r.Resolution?.Trim();
+            var priority = r.UpdatePriority ? r.Priority! : ticket.Priority;
+            var assigneeId = r.UpdateAssignment ? r.AssigneeId : ticket.AssigneeId;
             var updated = await db.SupportTickets.Where(t => t.Id == id && t.Version == r.ExpectedVersion)
                 .ExecuteUpdateAsync(s => s.SetProperty(t => t.State, r.State).SetProperty(t => t.Resolution, body)
+                    .SetProperty(t => t.Priority, priority).SetProperty(t => t.AssigneeId, assigneeId)
                     .SetProperty(t => t.UpdatedAt, DateTimeOffset.UtcNow).SetProperty(t => t.Version, t => t.Version + 1));
             if (updated == 0) return Results.Conflict(new {error="Il ticket e stato aggiornato. Ricarica la conversazione prima di salvare."});
             if(!string.IsNullOrEmpty(body)&&(r.AddReply||body!=ticket.Resolution)) {
@@ -105,9 +143,11 @@ public static class SupportEndpoints
                 db.AuditEvents.Add(new AuditEvent {ActorId=c.User.UserId(),Action="ticket.reply",Target=id.ToString()});
             }
             if(ticket.State!=r.State)db.SupportMessages.Add(new SupportMessage {TicketId=id,ActorId=c.User.UserId(),Kind="state_change",FromState=ticket.State,ToState=r.State});
+            if (ticket.Priority != priority) db.AuditEvents.Add(new AuditEvent { ActorId = c.User.UserId(), Action = "ticket.priority.update", Target = id.ToString() });
+            if (ticket.AssigneeId != assigneeId) db.AuditEvents.Add(new AuditEvent { ActorId = c.User.UserId(), Action = "ticket.assignee.update", Target = id.ToString() });
             db.AuditEvents.Add(new AuditEvent { ActorId = c.User.UserId(), Action = "ticket.update", Target = id.ToString() });
             CoreOutbox.Add(db, "ticket.updated", "ticket", id,
-                new { ticketId = id, deviceId = ticket.DeviceId, siteId = ticket.SiteId, oldState = ticket.State, state = r.State, version = r.ExpectedVersion + 1 }, c.TraceIdentifier);
+                new { ticketId = id, deviceId = ticket.DeviceId, siteId = ticket.SiteId, oldState = ticket.State, state = r.State, oldPriority = ticket.Priority, priority, oldAssigneeId = ticket.AssigneeId, assigneeId, version = r.ExpectedVersion + 1 }, c.TraceIdentifier);
             await db.SaveChangesAsync(); await tx.CommitAsync(); return Results.NoContent();
         });
         staff.MapGet("/{id:guid}/messages",async(Guid id,long? before,HttpContext c,AppDbContext db,PermissionService p)=>{

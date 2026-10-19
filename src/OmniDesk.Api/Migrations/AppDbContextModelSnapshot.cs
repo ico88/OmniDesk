@@ -873,6 +873,9 @@ namespace OmniDesk.Api.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("AssigneeId")
+                        .HasColumnType("text");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -883,6 +886,13 @@ namespace OmniDesk.Api.Migrations
 
                     b.Property<Guid>("DeviceId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("Priority")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("normal");
 
                     b.Property<Guid>("RequestId")
                         .HasColumnType("uuid");
@@ -920,12 +930,14 @@ namespace OmniDesk.Api.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("SiteId");
+                    b.HasIndex("AssigneeId");
 
                     b.HasIndex("DeviceId", "CreatedAt");
 
                     b.HasIndex("DeviceId", "RequesterKey", "RequestId")
                         .IsUnique();
+
+                    b.HasIndex("SiteId", "State", "Priority", "CreatedAt");
 
                     b.ToTable("SupportTickets");
                 });
@@ -1177,6 +1189,11 @@ namespace OmniDesk.Api.Migrations
 
             modelBuilder.Entity("OmniDesk.Api.Data.SupportTicket", b =>
                 {
+                    b.HasOne("OmniDesk.Api.Data.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("AssigneeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("OmniDesk.Api.Data.Device", null)
                         .WithMany()
                         .HasForeignKey("DeviceId")

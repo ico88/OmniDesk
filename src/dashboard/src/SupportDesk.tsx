@@ -2,10 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from './api';
 import { Icon } from './Icon';
 
-type Ticket = { id:string; deviceId:string; siteId:string; deviceName:string|null; siteName:string|null; subject:string; description:string; state:string; resolution:string|null; version:number; createdAt:string; hasScreenshot:boolean };
+type Ticket = { id:string; deviceId:string; siteId:string; deviceName:string|null; siteName:string|null; subject:string; description:string; state:string; priority:string; assigneeId:string|null; assigneeEmail:string|null; resolution:string|null; version:number; createdAt:string; hasScreenshot:boolean };
+type Assignee = { id:string; email:string };
 type Message = {id:number;kind:string;body:string;fromState:string|null;toState:string|null;createdAt:string;isImported:boolean};
 type Thread = {version:number;state:string;resolution:string|null;canReply:boolean;hasMore:boolean;oldestId:number|null;messages:Message[]};
 const labels: Record<string,string> = {open:'Aperto',in_progress:'In lavorazione',resolved:'Risolto',closed:'Chiuso'};
+const priorities: Record<string,string> = {low:'Bassa',normal:'Normale',high:'Alta',urgent:'Urgente'};
 const date=(value:string)=>new Date(value).toLocaleString('it-IT');
 export function SupportDesk({visibleDeviceIds,onOpenDevice,deviceId,sites=[]}:{visibleDeviceIds:string[];onOpenDevice:(id:string)=>Promise<void>;deviceId?:string;sites?:{id:string;name:string;isArchived?:boolean}[]}) {
   const [tickets,setTickets] = useState<Ticket[]>([]);
@@ -18,16 +20,20 @@ export function SupportDesk({visibleDeviceIds,onOpenDevice,deviceId,sites=[]}:{v
   const [siteFilter,setSiteFilter]=useState('');
   const [state,setState] = useState('open');
   const [resolution,setResolution] = useState('');
+  const [priority,setPriority]=useState('normal');
+  const [assigneeId,setAssigneeId]=useState('');
+  const [assignees,setAssignees]=useState<Assignee[]>([]);
   const panel=useRef<HTMLElement>(null);
   const reply=useRef<HTMLTextAreaElement>(null);
   const preview=useRef<HTMLDialogElement>(null);
   const needsReply=(state==='resolved'||state==='closed')&&!selected?.resolution;
-  async function load() { const query=new URLSearchParams();if(filterState)query.set('state',filterState);if(search.trim())query.set('search',search.trim());if(deviceId)query.set('deviceId',deviceId);if(siteFilter)query.set('siteId',siteFilter);setTickets(await api<Ticket[]>('/support?'+query.toString())); }
+  async function load() { const query=new URLSearchParams();if(filterState)query.set('state',filterState);if(search.trim())query.set('search',search.trim());if(deviceId)query.set('deviceId',deviceId);if(siteFilter)query.set('siteId',siteFilter);const rows=await api<Ticket[]>('/support?'+query.toString());setTickets(rows);setSelected(old=>old?rows.find(t=>t.id===old.id)??old:old); }
   async function loadThread(ticket:Ticket,before?:number) {
     const data=await api<Thread>(`/support/${ticket.id}/messages${before?'?before='+before:''}`);
     if(before){setThread(old=>old?{...old,hasMore:data.hasMore,oldestId:data.oldestId,messages:[...data.messages,...old.messages]}:data);return;}
     setThread(data);setSelected(old=>old?.id===ticket.id?{...old,version:data.version,state:data.state,resolution:data.resolution}:old);setState(data.state);
   }
+  async function loadAssignees(ticket:Ticket) { setAssignees(await api<Assignee[]>(`/support/${ticket.id}/assignees`)); }
   async function work(action:()=>Promise<void>) {
     setBusy(true); setError('');
     try { await action(); } catch(e) { setError(e instanceof Error ? e.message : 'Operazione non riuscita'); }
@@ -45,8 +51,8 @@ export function SupportDesk({visibleDeviceIds,onOpenDevice,deviceId,sites=[]}:{v
       <button disabled={busy}><Icon name="search"/>Filtra</button>
       <button className="secondary" type="button" disabled={busy} onClick={()=>void work(load)}><Icon name="refresh"/>Aggiorna richieste</button>
     </form>
-    <div className="table-wrap"><table><thead><tr><th>Data</th><th>Oggetto</th><th>Stato</th><th>Dispositivo</th><th>Sede</th><th>Dettagli</th></tr></thead>
-      <tbody>{tickets.map(t=><tr key={t.id}><td>{date(t.createdAt)}</td><td>{t.subject}</td><td><span className={`status-pill ${t.state==='resolved'||t.state==='closed'?'online':'offline'}`}>{labels[t.state]??t.state}</span></td><td>{visibleDeviceIds.includes(t.deviceId)?<button className="device-link" title="Apri scheda dispositivo" disabled={busy} onClick={()=>void work(()=>onOpenDevice(t.deviceId))}><Icon name="devices" size={17}/>{t.deviceName||'Dispositivo non disponibile'}<Icon name="arrow" size={14}/></button>:<span className="device-name"><Icon name="devices" size={17}/>{t.deviceName||'Dispositivo non disponibile'}</span>}</td><td>{t.siteName||'Sede non disponibile'}</td><td><button disabled={busy} onClick={()=>{setSelected(t);setThread(null);setState(t.state);setResolution('');void work(()=>loadThread(t));}}>Apri ticket</button></td></tr>)}</tbody></table></div>
+    <div className="table-wrap"><table><thead><tr><th>Data</th><th>Oggetto</th><th>Stato</th><th>Priorità</th><th>Assegnatario</th><th>Dispositivo</th><th>Sede</th><th>Dettagli</th></tr></thead>
+      <tbody>{tickets.map(t=><tr key={t.id}><td>{date(t.createdAt)}</td><td>{t.subject}</td><td><span className={`status-pill ${t.state==='resolved'||t.state==='closed'?'online':'offline'}`}>{labels[t.state]??t.state}</span></td><td><span className={`status-pill ${t.priority==='urgent'?'danger':t.priority==='high'?'offline':'online'}`}>{priorities[t.priority]??t.priority}</span></td><td>{t.assigneeEmail||'Non assegnato'}</td><td>{visibleDeviceIds.includes(t.deviceId)?<button className="device-link" title="Apri scheda dispositivo" disabled={busy} onClick={()=>void work(()=>onOpenDevice(t.deviceId))}><Icon name="devices" size={17}/>{t.deviceName||'Dispositivo non disponibile'}<Icon name="arrow" size={14}/></button>:<span className="device-name"><Icon name="devices" size={17}/>{t.deviceName||'Dispositivo non disponibile'}</span>}</td><td>{t.siteName||'Sede non disponibile'}</td><td><button disabled={busy} onClick={()=>{setSelected(t);setThread(null);setState(t.state);setResolution('');setPriority(t.priority);setAssigneeId(t.assigneeId??'');setAssignees([]);void work(async()=>{await Promise.all([loadThread(t),loadAssignees(t)]);});}}>Apri ticket</button></td></tr>)}</tbody></table></div>
     {!tickets.length&&<p>Nessuna richiesta corrisponde ai filtri o ai tuoi ambiti.</p>}
     {selected&&<section ref={panel} className="ticket-conversation" aria-label="Conversazione ticket">
       <div className="section-heading"><div><span className="eyebrow">CONVERSAZIONE</span><h3>{selected.subject}</h3><span className="device-name"><Icon name="devices" size={16}/>{selected.deviceName||'Dispositivo non disponibile'}</span></div><button className="secondary compact" type="button" disabled={busy} onClick={()=>{setSelected(null);setThread(null);setError('');}}><Icon name="close" size={15}/>Chiudi dettaglio</button></div>
@@ -63,12 +69,14 @@ export function SupportDesk({visibleDeviceIds,onOpenDevice,deviceId,sites=[]}:{v
       {thread?.canReply?<form className="chat-composer" onSubmit={e=>{
         e.preventDefault();const body=resolution.trim();
         if(needsReply&&!body){setError('Scrivi una risposta all’utente prima di risolvere o chiudere il ticket.');reply.current?.focus();return;}
-        if(!body&&state===selected.state)return;
-        void work(async()=>{await api(`/support/${selected.id}`,'PUT',{expectedVersion:selected.version,state,resolution:body||selected.resolution,addReply:!!body});setResolution('');await loadThread(selected);await load();});
+        if(!body&&state===selected.state&&priority===selected.priority&&assigneeId===(selected.assigneeId??''))return;
+        void work(async()=>{await api(`/support/${selected.id}`,'PUT',{expectedVersion:selected.version,state,resolution:body||selected.resolution,addReply:!!body,priority,updatePriority:priority!==selected.priority,assigneeId:assigneeId||null,updateAssignment:assigneeId!==(selected.assigneeId??'')});setResolution('');await loadThread(selected);await load();});
       }}>
         <label htmlFor="ticket-state">Stato</label><select id="ticket-state" value={state} disabled={busy} onChange={e=>setState(e.target.value)}>{Object.entries(labels).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select>
+        <label htmlFor="ticket-priority">Priorità</label><select id="ticket-priority" value={priority} disabled={busy} onChange={e=>setPriority(e.target.value)}>{Object.entries(priorities).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select>
+        <label htmlFor="ticket-assignee">Assegnatario</label><select id="ticket-assignee" value={assigneeId} disabled={busy} onChange={e=>setAssigneeId(e.target.value)}><option value="">Non assegnato</option>{selected.assigneeId&&!assignees.some(a=>a.id===selected.assigneeId)&&<option value={selected.assigneeId}>{selected.assigneeEmail||'Utente non disponibile'}</option>}{assignees.map(a=><option key={a.id} value={a.id}>{a.email}</option>)}</select>
         <label>Risposta visibile al richiedente<textarea ref={reply} maxLength={8000} required={needsReply} disabled={busy} value={resolution} placeholder="Scrivi una risposta all’utente…" aria-describedby="ticket-reply-help" onChange={e=>setResolution(e.target.value)}/></label>
-        <div className="composer-footer"><small id="ticket-reply-help">{needsReply?'Per risolvere o chiudere serve una risposta.':'Stato e ultima risposta sono visibili all’utente nella Tray, con Aggiorna ticket.'}</small><button disabled={busy||(!resolution.trim()&&state===selected.state)}><Icon name="arrow" size={16}/>{resolution.trim()?'Invia risposta':'Aggiorna stato'}</button></div>
+        <div className="composer-footer"><small id="ticket-reply-help">{needsReply?'Per risolvere o chiudere serve una risposta.':'Assegnatario e priorità sono riservati alla console IT; stato e risposta sono visibili all’utente.'}</small><button disabled={busy||(!resolution.trim()&&state===selected.state&&priority===selected.priority&&assigneeId===(selected.assigneeId??''))}><Icon name="arrow" size={16}/>{resolution.trim()?'Invia risposta':'Salva ticket'}</button></div>
       </form>:thread&&<p>Puoi leggere la conversazione. Per rispondere serve il permesso di gestione ticket.</p>}
       {selected.hasScreenshot&&<dialog ref={preview} className="screenshot-dialog"><div className="section-heading"><strong>Screenshot della richiesta</strong><button className="secondary" onClick={()=>preview.current?.close()}><Icon name="close"/>Chiudi immagine</button></div><img src={`/api/support/${selected.id}/screenshot?inline=true`} alt="Screenshot della richiesta ingrandito"/></dialog>}
     </section>}

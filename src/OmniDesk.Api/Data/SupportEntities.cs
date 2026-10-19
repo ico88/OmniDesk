@@ -10,6 +10,8 @@ public sealed class SupportTicket
     public string Subject { get; set; } = "";
     public string Description { get; set; } = "";
     public string State { get; set; } = "open";
+    public string Priority { get; set; } = "normal";
+    public string? AssigneeId { get; set; }
     public string? Resolution { get; set; }
     public long Version { get; set; } = 1;
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
