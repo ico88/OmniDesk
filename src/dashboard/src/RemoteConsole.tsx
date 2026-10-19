@@ -3,7 +3,7 @@ import { Expand, ExternalLink, LoaderCircle, MonitorPlay, RotateCcw, ShieldCheck
 import { api } from './api';
 
 type RemoteSession = { id: string; url: string; expiresAt: string };
-type ViewState = 'idle' | 'creating' | 'renewing' | 'disconnecting' | 'loading' | 'page-loaded' | 'disconnected' | 'error' | 'expired';
+type ViewState = 'idle' | 'creating' | 'renewing' | 'disconnecting' | 'loading' | 'page-loaded' | 'disconnect-requested' | 'error' | 'expired';
 
 function remaining(expiresAt: string, now: number) {
   const seconds = Math.max(0, Math.floor((new Date(expiresAt).getTime() - now) / 1000));
@@ -122,8 +122,8 @@ export function RemoteConsole({ deviceId, deviceName, capability, allowed, ready
     setViewState('disconnecting');
     try {
       await api(`/devices/${deviceId}/remote-sessions/${session.id}/disconnect`, 'POST');
-      setViewState('disconnected');
-      onMessage('Disconnessione richiesta. Il collegamento resta valido fino alla scadenza e può essere riutilizzato.');
+      setViewState('disconnect-requested');
+      onMessage('Comando di disconnessione inviato. MeshCentral non restituisce una conferma dello stato dello stream.');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Non è stato possibile disconnettere l’operatore.');
       setViewState('page-loaded');
@@ -172,7 +172,7 @@ export function RemoteConsole({ deviceId, deviceName, capability, allowed, ready
     {revoked && <p className="remote-empty-state"><ShieldCheck size={20}/>Dispositivo revocato: l’apertura di sessioni remote è disabilitata.</p>}
     {!revoked && !allowed && <p className="remote-empty-state"><ShieldCheck size={20}/>Il tuo account non ha il permesso necessario per questa sessione.</p>}
     {!revoked && allowed && !ready && <p className="remote-empty-state"><ShieldCheck size={20}/>Motore remoto disattivato o non ancora associato. In Desktop remoto un amministratore può verificare la configurazione.</p>}
-    {active && session && viewState !== 'disconnected' ? <div className="remote-frame-shell">
+    {active && session && viewState !== 'disconnect-requested' ? <div className="remote-frame-shell">
       {viewState === 'loading' && <div className="frame-loading"><LoaderCircle className="spin" size={20}/>Apertura della sessione autorizzata…</div>}
       <iframe
         key={frameKey}
@@ -185,9 +185,9 @@ export function RemoteConsole({ deviceId, deviceName, capability, allowed, ready
         onLoad={() => { setError(''); setViewState(current => current === 'loading' || current === 'error' ? 'page-loaded' : current); }}
       />
       <div className="remote-frame-footnote">La pagina MeshCentral è incorporata in modo isolato. Lo stato di caricamento non conferma da solo che il flusso video sia attivo.</div>
-    </div> : active && viewState === 'disconnected' ? <div className="remote-empty-state">
-      <UserRoundX size={28}/><strong>Operatore disconnesso</strong>
-      <span>Il link resta utilizzabile fino alle {new Date(session!.expiresAt).toLocaleTimeString('it-IT')}. Puoi ricollegarti oppure terminare la sessione per impedirne il riuso.</span>
+    </div> : active && viewState === 'disconnect-requested' ? <div className="remote-empty-state">
+      <UserRoundX size={28}/><strong>Disconnessione richiesta</strong>
+      <span>MeshCentral non conferma l’esito. Se lo stream è stato chiuso, il link resta riutilizzabile fino alle {new Date(session!.expiresAt).toLocaleTimeString('it-IT')}.</span>
       <button type="button" className="secondary compact" onClick={reconnect}><RotateCcw size={15}/>Ricollega</button>
     </div> : !revoked && allowed && ready && <div className="remote-empty-state">
       <MonitorPlay size={28}/>
