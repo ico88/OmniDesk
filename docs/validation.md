@@ -901,3 +901,8 @@ effettuato durante la sessione remota attiva; la prova visiva sul PC resta pende
 La durata del link MeshCentral è stata estesa a 30 minuti (prima 5); il countdown
 UI continua a riflettere `ExpiresAt` fornito dal server. L’aggiornamento live è
 rinviato finché risultano sessioni attive.
+
+Verifica finale dopo la durata di 30 minuti: `./scripts/test.sh` passato con 64
+test xUnit/PostgreSQL, 4 test Vitest, TypeScript e build dashboard. Test dedicato
+vincola la durata a 30 minuti; `docker compose build api dashboard` passato. CI
+per il commit `9355c75` in esecuzione al momento della verifica.
