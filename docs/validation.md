@@ -581,3 +581,12 @@ API con barra remota pubblicata: backup .backups/20261019T083607Z.6pEV7X
 Prima verifica immediata HTTP502 durante avvio; ripetuta dopo startup con
 successo HTTPS/CA/readiness, asset dashboard e rifiuto anonimo. Nessun popup o
 controllo remoto reale sul pilota eseguito dall'agente. Link preesistenti invariati.
+
+Windows 0.7.3: GitHub Actions 39223715334 completata con successo, compresi
+installazione/recovery/uninstall e upgrade/repair/rollback dalle baseline 0.6.0
+e 0.7.0. Artifact scaricato e checksum verificati dal packager. Kit LAN pubblicato
+artifacts/windows-lan/OmniDesk.Windows.LAN-0.7.3.zip, SHA256
+8ff6a2b1389b7d5b27da224427a68df069e3d0def2fc3fae3a20cf327647d957.
+Manifest 0.7.3 e ZIP leggibili dall'UID API 1654; HTTPS/readiness/asset e rifiuto
+anonimo passati. Log CI /tmp/omnidesk-windows-073-ci.log. Nessuna installazione
+sul pilota o prova della lettura ticket/notifica remota interattiva dichiarata.

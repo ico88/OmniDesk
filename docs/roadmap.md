@@ -139,3 +139,6 @@ verificare visivamente sul pilota, separatamente dalla richiesta di consenso.
 Avviso remoto: aggiunta richiesta barra desktop persistente (flag64) alle nuove
 sessioni, indipendente dal consenso. Toast iniziale gia richiesto. Verifica
 interattiva di apparizione/rimozione sul PC pilota ancora necessaria.
+Kit 0.7.3 compilato/testato su Windows (run39223715334 riuscita) e pubblicato nel
+download autenticato della console. Restano prove client: consultazione ticket
+ripetuta durante polling e avviso/barra durante nuova sessione remota.
