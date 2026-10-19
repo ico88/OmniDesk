@@ -1115,4 +1115,8 @@ alla stessa sede e rifiutare link cross-site; dopo i lock dispositivo il server
 rilegge sede/nome, ricontrolla il permesso e produce lo snapshot aggiornato.
 Test PostgreSQL: cross-site rifiutato, target same-site senza grant negato,
 link same-site amministrativo consentito. `./scripts/test.sh` passa con 64/64
-xUnit e 5/5 Vitest. Deploy LAN non ancora effettuato per questo incremento.
+xUnit e 5/5 Vitest. Il deploy LAN dell'API è stato completato sul commit
+`beb53cb` dopo backup `.backups/20261019T153003Z.bqc6Hr` e controllo DB a zero
+sessioni remote / zero job update. Nessuna migrazione necessaria. La sonda
+`verify-lan.py` passa readiness/CA, dashboard e rifiuto anonimo; cinque servizi
+running. Nessun login o test ticket autenticato è stato eseguito.

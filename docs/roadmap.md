@@ -353,8 +353,9 @@ lock, versione, audit/outbox e migrazione backfill del primario. Questa correzio
 applica la specifica: il dispositivo candidato deve condividere la sede del
 ticket e la UI non propone sedi diverse. Il server ricontrolla la sede dopo il
 lock dispositivo per evitare link durante uno spostamento concorrente. Test API/
-PostgreSQL 64/64, build dashboard e Vitest 5/5 passati. La correzione è ancora
-da distribuire su LAN; la versione precedente è attualmente pubblicata.
+PostgreSQL 64/64, build dashboard, Docker API/dashboard e Vitest 5/5 passati.
+API aggiornata su LAN dopo backup e verifica zero sessioni/job; readiness HTTPS/
+CA e rifiuto anonimo passano. Test browser autenticato ticket ancora da fare.
 
 
 ### SD1 — creazione manuale ticket dalla console — sorgenti e test verificati
