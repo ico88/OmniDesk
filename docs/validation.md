@@ -693,3 +693,14 @@ installare manualmente il kit 0.8.1 dalla UI come bootstrap; un aggiornamento a
 una release successiva sarà poi necessario per collaudare end-to-end job,
 download autenticato, installazione silenziosa e ricevuta dopo il riavvio
 dell'Agent. Il pacchetto resta unsigned: checksum e TLS non attestano l'editore.
+
+## Build di validazione Agent 0.8.2 — 19 ottobre 2026
+
+Versione Agent/Tray/Setup e WiX incrementata a 0.8.2 senza modifiche
+funzionali, per fornire una release successiva con cui collaudare l'updater
+remoto dopo bootstrap manuale dell'Agent 0.8.1. `./scripts/test.sh` passato:
+47 xUnit PostgreSQL isolati e 4 Vitest, build dashboard inclusa. Cross-build
+Agent Windows riuscito con 0 warning e 0 errori. Compose config e `git diff
+--check` passati. Build MSI, installazione/upgrade su runner Windows,
+confezionamento e pubblicazione della release 0.8.2 sono ancora in attesa del
+workflow CI; non è stato accodato alcun aggiornamento al dispositivo pilota.

@@ -184,14 +184,15 @@ warning/errore; i job di test sono stati saltati. Il kit LAN 0.8.0 è confeziona
 revoca è stata pubblicata sul server. Nessuna installazione, enrollment o rimozione
 reale è stata eseguita; il flusso MSI di revoca resta da verificare sul PC pilota.
 
-### Aggiornamento remoto Agent 0.8.1
+### Aggiornamento remoto Agent
 
 Il sorgente aggiunge l’aggiornamento remoto dalla scheda dispositivo, riservato
 agli amministratori globali. L’Agent 0.8.0 già installato non include il codice
 updater e deve essere portato una volta all’MSI 0.8.1 tramite Setup/Windows
 Installer. Solo da 0.8.1 in poi può ricevere una release successiva, se pubblicata
-con metadati MSI SHA-256 e se il dispositivo è online. Il job installa l’MSI con
-`/norestart`; Windows non viene riavviato automaticamente. Prima dell’uso sul PC
-pilota attendere esito dei test upgrade/repair del runner Windows e pubblicazione
-del nuovo kit unsigned. Hash e TLS verificano integrità e trasporto; non sono una
-firma dell’editore né sostituiscono Authenticode.
+con metadati MSI SHA-256 e se il dispositivo è online. La 0.8.2 è in preparazione
+come build di validazione dell’updater; attendere test Windows e pubblicazione
+autenticata nella UI prima di accodare un aggiornamento. Il job installa l’MSI
+con `/norestart`; Windows non viene riavviato automaticamente. Hash e TLS
+verificano integrità e trasporto; non sono una firma dell’editore né sostituiscono
+Authenticode.
