@@ -34,6 +34,46 @@ public static class SupportEndpoints
                 .Select(t => new SupportTicketView(t.Id,t.Number,t.DeviceId,t.Subject,"",t.State,t.Resolution,t.Version,t.CreatedAt,t.UpdatedAt,t.Screenshot != null,t.Category)).ToArrayAsync();
             return Results.Ok(rows);
         });
+        machine.MapGet("/{requesterKey}/{ticketId:guid}/messages", async (string requesterKey, Guid ticketId, HttpContext c, AppDbContext db) => {
+            if (!ValidKey(requesterKey)) return Results.BadRequest();
+            var deviceId = Guid.Parse(c.User.UserId());
+            var ticket = await db.SupportTickets.AsNoTracking().SingleOrDefaultAsync(t => t.Id == ticketId && t.DeviceId == deviceId && t.RequesterKey == requesterKey);
+            if (ticket is null) return Results.NotFound();
+            if (!await db.DeviceCredentials.AnyAsync(x => x.DeviceId == deviceId && x.RevokedAt == null)) return Results.Unauthorized();
+            var replies = await db.SupportMessages.AsNoTracking().Where(m => m.TicketId == ticketId && m.Visibility == "public")
+                .OrderBy(m => m.Id).Select(m => new SupportRequesterMessageView(m.Id, m.Kind, m.Body, m.FromState, m.ToState, m.CreatedAt)).ToArrayAsync();
+            var messages = new[] { new SupportRequesterMessageView(0, "request", ticket.Description, null, null, ticket.CreatedAt) }
+                .Concat(replies).ToArray();
+            c.Response.Headers.CacheControl = "no-store";
+            return Results.Ok(new SupportRequesterConversation(ticket.Id, ticket.Version, ticket.State, messages));
+        });
+        machine.MapPost("/{requesterKey}/{ticketId:guid}/messages", async (string requesterKey, Guid ticketId, SupportRequesterReply r, HttpContext c, AppDbContext db) => {
+            if (!ValidKey(requesterKey) || r.RequesterKey != requesterKey || r.ExpectedVersion < 1 ||
+                string.IsNullOrWhiteSpace(r.Body) || r.Body.Trim().Length > 8000) return Results.BadRequest();
+            var deviceId = Guid.Parse(c.User.UserId());
+            await using var tx = await db.Database.BeginTransactionAsync();
+            await DeviceOperationLock.Acquire(db, deviceId);
+            if (!await db.DeviceCredentials.AnyAsync(x => x.DeviceId == deviceId && x.RevokedAt == null)) return Results.Unauthorized();
+            var ticket = await db.SupportTickets.AsNoTracking().SingleOrDefaultAsync(t => t.Id == ticketId && t.DeviceId == deviceId && t.RequesterKey == requesterKey);
+            if (ticket is null) return Results.NotFound();
+            if (ticket.Version != r.ExpectedVersion) return Results.Conflict(new { error = "Il ticket è stato aggiornato. Ricarica la conversazione." });
+            if (ticket.State is "resolved" or "closed") return Results.Conflict(new { error = "Il ticket è chiuso. Apri una nuova richiesta per ricevere assistenza." });
+            var cutoff = DateTimeOffset.UtcNow.AddMinutes(-5);
+            if (await db.SupportMessages.CountAsync(m => m.TicketId == ticketId && m.Kind == "requester_reply" && m.CreatedAt > cutoff) >= 10)
+                return Results.StatusCode(429);
+            var now = DateTimeOffset.UtcNow;
+            var changed = await db.SupportTickets.Where(t => t.Id == ticketId && t.DeviceId == deviceId && t.RequesterKey == requesterKey &&
+                    t.Version == r.ExpectedVersion && t.State != "resolved" && t.State != "closed")
+                .ExecuteUpdateAsync(s => s.SetProperty(t => t.UpdatedAt, now).SetProperty(t => t.Version, t => t.Version + 1));
+            if (changed == 0) return Results.Conflict(new { error = "Il ticket è stato aggiornato. Ricarica la conversazione." });
+            db.SupportMessages.Add(new SupportMessage { TicketId = ticketId, Kind = "requester_reply", Body = r.Body.Trim(), CreatedAt = now });
+            db.AuditEvents.Add(new AuditEvent { Action = "ticket.requester.reply", Target = ticketId.ToString() });
+            CoreOutbox.Add(db, "ticket.updated", "ticket", ticketId,
+                new { ticketId, deviceId, siteId = ticket.SiteId, state = ticket.State, version = r.ExpectedVersion + 1 }, c.TraceIdentifier);
+            await db.SaveChangesAsync();
+            await tx.CommitAsync();
+            return Results.NoContent();
+        });
         machine.MapPost("", async (SupportIntake r, HttpContext c, AppDbContext db) => {
             if (!ValidKey(r.RequesterKey) || r.Ticket is null || r.Ticket.RequestId == Guid.Empty ||
                 string.IsNullOrWhiteSpace(r.Ticket.Subject) || r.Ticket.Subject.Length > 200 ||

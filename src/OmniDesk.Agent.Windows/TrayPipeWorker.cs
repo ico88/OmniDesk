@@ -55,13 +55,24 @@ public sealed class TrayPipeWorker(AgentRuntimeState state, ILogger<TrayPipeWork
             // Identity comes exclusively from the authenticated pipe logon, never a client payload.
             var key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(identity.DeviceId + ":" + logon.UserSid)));
             using var client = AgentConnection.CreateClient();
-            using var message = new HttpRequestMessage(request.Method == TrayProtocol.CreateTicketMethod ? HttpMethod.Post : HttpMethod.Get,
-                new Uri(AgentIdentity.ValidateServer(identity.ServerUrl), "api/agent/support" + (request.Method == TrayProtocol.ListTicketsMethod ? "/" + key : "")));
+            var basePath = "api/agent/support/" + key;
+            var ticketPath = request.TicketId is null ? "" : "/" + request.TicketId.Value.ToString("D") + "/messages";
+            var isPost = request.Method is TrayProtocol.CreateTicketMethod or TrayProtocol.ReplyToTicketMethod;
+            var path = request.Method == TrayProtocol.CreateTicketMethod ? "api/agent/support" :
+                request.Method == TrayProtocol.ListTicketsMethod ? basePath : basePath + ticketPath;
+            using var message = new HttpRequestMessage(isPost ? HttpMethod.Post : HttpMethod.Get,
+                new Uri(AgentIdentity.ValidateServer(identity.ServerUrl), path));
             message.Headers.Authorization = new AuthenticationHeaderValue("Bearer", identity.Assertion());
             if (request.Method == TrayProtocol.CreateTicketMethod) message.Content = JsonContent.Create(new SupportIntake(key, request.Ticket!));
+            else if (request.Method == TrayProtocol.ReplyToTicketMethod)
+                message.Content = JsonContent.Create(new SupportRequesterReply(key, request.ExpectedVersion!.Value, request.Body!));
             using var response = await client.SendAsync(message, ct);
             if (!response.IsSuccessStatusCode)
                 return new(TrayProtocol.Version, request.RequestId, $"Richiesta non accettata (HTTP {(int)response.StatusCode}).", []);
+            if (request.Method == TrayProtocol.TicketConversationMethod)
+                return new(TrayProtocol.Version, request.RequestId, null, [], await response.Content.ReadFromJsonAsync<SupportRequesterConversation>(ct));
+            if (request.Method == TrayProtocol.ReplyToTicketMethod)
+                return new(TrayProtocol.Version, request.RequestId, null, []);
             var tickets = request.Method == TrayProtocol.CreateTicketMethod
                 ? new[] { (await response.Content.ReadFromJsonAsync<SupportTicketView>(ct))! }
                 : (await response.Content.ReadFromJsonAsync<SupportTicketView[]>(ct))!;

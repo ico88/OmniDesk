@@ -4,7 +4,8 @@ using System.Text.Json.Serialization;
 
 namespace OmniDesk.Contracts;
 
-public sealed record TrayRequest(int Version, Guid RequestId, string Method, SupportCreate? Ticket = null);
+public sealed record TrayRequest(int Version, Guid RequestId, string Method, SupportCreate? Ticket = null,
+    Guid? TicketId = null, long? ExpectedVersion = null, string? Body = null);
 public sealed record TrayStatus(int Version, Guid RequestId, string State, DateTimeOffset? LastHeartbeat, bool Enrolled);
 
 public static class TrayProtocol
@@ -14,11 +15,16 @@ public static class TrayProtocol
     public const int MaxSupportPayload = 750000;
     public const string CreateTicketMethod = "CreateTicket";
     public const string ListTicketsMethod = "ListTickets";
+    public const string TicketConversationMethod = "TicketConversation";
+    public const string ReplyToTicketMethod = "ReplyToTicket";
     public const string StatusMethod = "GetConnectionStatus";
     public static string PipeName(int sessionId) => sessionId > 0 ? $"OmniDesk.Tray.v1.{sessionId}" : throw new ArgumentOutOfRangeException(nameof(sessionId));
     private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web) { UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow, MaxDepth = 8 };
-    public static bool Valid(TrayRequest request) => request.Version == Version && request.RequestId != Guid.Empty && ((request.Method is StatusMethod or ListTicketsMethod && request.Ticket is null) ||
-        (request.Method == CreateTicketMethod && request.Ticket is not null));
+    public static bool Valid(TrayRequest request) => request.Version == Version && request.RequestId != Guid.Empty &&
+        (request.Method is StatusMethod or ListTicketsMethod && request.Ticket is null && request.TicketId is null && request.ExpectedVersion is null && request.Body is null ||
+         request.Method == CreateTicketMethod && request.Ticket is not null && request.TicketId is null && request.ExpectedVersion is null && request.Body is null ||
+         request.Method == TicketConversationMethod && request.Ticket is null && request.TicketId is not null && request.TicketId != Guid.Empty && request.ExpectedVersion is null && request.Body is null ||
+         request.Method == ReplyToTicketMethod && request.Ticket is null && request.TicketId is not null && request.TicketId != Guid.Empty && request.ExpectedVersion is > 0 && request.Body is { Length: > 0 and <= 8000 } && !string.IsNullOrWhiteSpace(request.Body));
     public static bool Valid(TrayStatus status, Guid requestId) => status.Version == Version && status.RequestId == requestId &&
         status.State is "starting" or "not_enrolled" or "connecting" or "online" or "offline" or "degraded" or "auth_rejected";
 

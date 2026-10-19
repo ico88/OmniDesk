@@ -13,12 +13,17 @@ internal sealed class SupportForm : Form
     private readonly TextBox description = new() { MaxLength = 8000, Multiline = true, Height = 130, Dock = DockStyle.Top, PlaceholderText = "Descrivi il problema" };
     private readonly CheckBox consent = new() { Text = "Acconsento ad allegare l'immagine mostrata al team IT", AutoSize = true, Dock = DockStyle.Top };
     private readonly PictureBox preview = new() { Height = 170, Dock = DockStyle.Top, SizeMode = PictureBoxSizeMode.Zoom };
-    private readonly TextBox tickets = new() { ReadOnly = true, Multiline = true, ScrollBars = ScrollBars.Vertical, Dock = DockStyle.Fill };
+    private readonly ComboBox ticketPicker = new() { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly TextBox conversation = new() { ReadOnly = true, Multiline = true, ScrollBars = ScrollBars.Vertical, Dock = DockStyle.Fill };
+    private readonly TextBox replyText = new() { MaxLength = 8000, Multiline = true, Dock = DockStyle.Fill, PlaceholderText = "Scrivi un aggiornamento per il team IT" };
     private readonly Label result = new() { Dock = DockStyle.Bottom, Height = 45 };
     private readonly Button send = new() { Text = "Invia richiesta", AutoSize = true };
     private readonly Button capture = new() { Text = "Acquisisci schermata", AutoSize = true };
     private readonly Button remove = new() { Text = "Rimuovi schermata", AutoSize = true };
     private readonly Button refresh = new() { Text = "Aggiorna ticket", AutoSize = true };
+    private readonly Button reply = new() { Text = "Invia risposta", AutoSize = true };
+    private SupportTicketView? selectedTicket;
+    private bool conversationCanReply;
     private byte[]? screenshot;
     private SupportCreate? pending;
     private bool busy;
@@ -28,11 +33,16 @@ internal sealed class SupportForm : Form
     {
         Text = "OmniDesk — Richiedi assistenza"; Width = 660; Height = 750; StartPosition = FormStartPosition.CenterScreen;
         var buttons = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 65 };
-        buttons.Controls.AddRange([capture, remove, send, refresh]);
+        buttons.Controls.AddRange([capture, remove, send, refresh, reply]);
+        var thread = new TableLayoutPanel { Dock = DockStyle.Bottom, Height = 245, ColumnCount = 1, RowCount = 4, Padding = new Padding(8) };
+        thread.RowStyles.Add(new RowStyle(SizeType.Absolute, 29)); thread.RowStyles.Add(new RowStyle(SizeType.Percent, 58));
+        thread.RowStyles.Add(new RowStyle(SizeType.Percent, 42)); thread.RowStyles.Add(new RowStyle(SizeType.Absolute, 1));
+        thread.Controls.Add(ticketPicker, 0, 0); thread.Controls.Add(conversation, 0, 1); thread.Controls.Add(replyText, 0, 2);
         category.Items.AddRange(["Generale", "Hardware", "Software", "Rete", "Account", "Altro"]); category.SelectedIndex = 0;
-        Controls.Add(tickets); Controls.Add(buttons); Controls.Add(consent); Controls.Add(preview); Controls.Add(description); Controls.Add(category); Controls.Add(subject); Controls.Add(result);
+        Controls.Add(buttons); Controls.Add(thread); Controls.Add(consent); Controls.Add(preview); Controls.Add(description); Controls.Add(category); Controls.Add(subject); Controls.Add(result);
         capture.Click += (_, _) => CaptureScreen(); remove.Click += (_, _) => ClearImage();
         send.Click += async (_, _) => await Send(); refresh.Click += async (_, _) => await List();
+        reply.Click += async (_, _) => await Reply(); ticketPicker.SelectedIndexChanged += TicketPickerChanged;
         Shown += async (_, _) => await List();
     }
     private void ClearImage() { screenshot = null; preview.Image?.Dispose(); preview.Image = null; consent.Checked = false; pending = null; }
@@ -88,7 +98,7 @@ internal sealed class SupportForm : Form
     private async Task Work(Func<Task> action)
     {
         if (busy) return; busy = true;
-        send.Enabled = refresh.Enabled = capture.Enabled = remove.Enabled = subject.Enabled = description.Enabled = category.Enabled = consent.Enabled = false;
+        send.Enabled = refresh.Enabled = capture.Enabled = remove.Enabled = subject.Enabled = description.Enabled = category.Enabled = consent.Enabled = reply.Enabled = ticketPicker.Enabled = false;
         try { await action(); }
         catch (Exception e) when (!stop.IsCancellationRequested)
         {
@@ -106,14 +116,49 @@ internal sealed class SupportForm : Form
         finally
         {
             busy = false;
-            if (!IsDisposed) send.Enabled = refresh.Enabled = capture.Enabled = remove.Enabled = subject.Enabled = description.Enabled = category.Enabled = consent.Enabled = true;
+            if (!IsDisposed) { send.Enabled = refresh.Enabled = capture.Enabled = remove.Enabled = subject.Enabled = description.Enabled = category.Enabled = consent.Enabled = ticketPicker.Enabled = true; reply.Enabled = conversationCanReply; }
         }
     }
     private Task List() => Work(async () => {
         var response = await Call(new(TrayProtocol.Version,Guid.NewGuid(),TrayProtocol.ListTicketsMethod));
         if (stop.IsCancellationRequested) return;
         result.Text = response.Error ?? "Ticket aggiornati";
-        if (response.Error is null) tickets.Text = string.Join(Environment.NewLine + Environment.NewLine,response.Tickets.Select(t => $"OD-{t.Number:000000} · {t.CreatedAt:g} — {t.Subject}\r\nCategoria: {t.Category} · Stato: {t.State}\r\n{t.Resolution}"));
+        if (response.Error is null)
+        {
+            var previousId = selectedTicket?.Id;
+            ticketPicker.SelectedIndexChanged -= TicketPickerChanged;
+            ticketPicker.Items.Clear();
+            foreach (var item in response.Tickets) ticketPicker.Items.Add(item);
+            selectedTicket = response.Tickets.FirstOrDefault(t => t.Id == previousId) ?? response.Tickets.FirstOrDefault();
+            if (selectedTicket is not null) ticketPicker.SelectedItem = selectedTicket;
+            ticketPicker.SelectedIndexChanged += TicketPickerChanged;
+            await LoadConversationCore();
+        }
+    });
+    private async void TicketPickerChanged(object? sender, EventArgs e) => await LoadConversation();
+    private Task LoadConversation() => Work(LoadConversationCore);
+    private async Task LoadConversationCore()
+    {
+        selectedTicket = ticketPicker.SelectedItem as SupportTicketView;
+        if (selectedTicket is null) { conversation.Clear(); conversationCanReply = false; return; }
+        var response = await Call(new(TrayProtocol.Version,Guid.NewGuid(),TrayProtocol.TicketConversationMethod,TicketId:selectedTicket.Id));
+        if (response.Error is not null) { result.Text = response.Error; return; }
+        var thread = response.Conversation;
+        if (thread is null) { result.Text = "Conversazione non disponibile."; return; }
+        selectedTicket = selectedTicket with { Version = thread.Version, State = thread.State };
+        conversationCanReply = thread.State is "open" or "in_progress";
+        conversation.Text = string.Join(Environment.NewLine + Environment.NewLine, thread.Messages.Select(m =>
+            $"{(m.Kind == "request" ? "Richiesta" : m.Kind == "requester_reply" ? "Tu" : m.Kind == "state_change" ? "Stato" : "Team IT")} · {m.CreatedAt.ToLocalTime():g}\r\n" +
+            (m.Kind == "state_change" ? $"{m.FromState} → {m.ToState}" : m.Body)));
+        if (thread.State is "resolved" or "closed") result.Text = "Ticket chiuso: apri una nuova richiesta per continuare.";
+    }
+    private Task Reply() => Work(async () => {
+        if (selectedTicket is null || string.IsNullOrWhiteSpace(replyText.Text)) { result.Text = "Seleziona un ticket aperto e scrivi una risposta."; return; }
+        var response = await Call(new(TrayProtocol.Version,Guid.NewGuid(),TrayProtocol.ReplyToTicketMethod,
+            TicketId:selectedTicket.Id, ExpectedVersion:selectedTicket.Version, Body:replyText.Text));
+        if (response.Error is not null) { result.Text = response.Error; return; }
+        replyText.Clear(); result.Text = "Risposta inviata al team IT.";
+        await LoadConversationCore();
     });
     private Task Send() => Work(async () => {
         if (string.IsNullOrWhiteSpace(subject.Text) || string.IsNullOrWhiteSpace(description.Text)) { result.Text = "Compila oggetto e descrizione."; return; }
