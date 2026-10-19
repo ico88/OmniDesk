@@ -8,6 +8,7 @@ public interface IMeshCentralClient
 {
     bool Configured { get; }
     Task<MeshSession> Create(string nodeId, string capability, string actor, bool consentRequired, CancellationToken cancellationToken);
+    Task Disconnect(string nodeId, string publicId, CancellationToken cancellationToken);
     Task Revoke(string nodeId, string publicId, CancellationToken cancellationToken);
 }
 public sealed partial class MeshCentralClient(MeshCentralOptions options) : IMeshCentralClient
@@ -43,7 +44,26 @@ public sealed partial class MeshCentralClient(MeshCentralOptions options) : IMes
         if ((!reply.TryGetProperty("result", out var result) || result.GetString() != "OK") && !reply.TryGetProperty("removed", out _))
             throw new InvalidOperationException("MeshCentral refused session revocation");
     }
-    private async Task<JsonElement> Command(Dictionary<string, object> command, CancellationToken cancellationToken, Action<JsonElement>? serverInfo = null)
+    public async Task Disconnect(string nodeId, string publicId, CancellationToken cancellationToken)
+    {
+        // MeshCentral's desktop endsession command targets a share by its owner and guest name.
+        // Resolve both from the server-side share record; neither value comes from the browser.
+        var reply = await Command(new Dictionary<string, object> { ["action"] = "deviceShares", ["nodeid"] = nodeId }, cancellationToken);
+        if (!reply.TryGetProperty("deviceShares", out var shares) || shares.ValueKind != JsonValueKind.Array)
+            throw new InvalidOperationException("MeshCentral did not return device shares");
+        var share = shares.EnumerateArray().SingleOrDefault(x =>
+            x.TryGetProperty("publicid", out var id) && id.GetString() == publicId);
+        if (share.ValueKind != JsonValueKind.Object ||
+            !share.TryGetProperty("userid", out var userId) || string.IsNullOrWhiteSpace(userId.GetString()) ||
+            !share.TryGetProperty("guestName", out var guestName) || string.IsNullOrWhiteSpace(guestName.GetString()))
+            throw new InvalidOperationException("MeshCentral share identity is unavailable");
+
+        await Command(new Dictionary<string, object> {
+            ["action"] = "endDesktopMultiplex", ["nodeid"] = nodeId,
+            ["xuserid"] = userId.GetString()!, ["guestname"] = guestName.GetString()!
+        }, cancellationToken, waitForResponse: false);
+    }
+    private async Task<JsonElement> Command(Dictionary<string, object> command, CancellationToken cancellationToken, Action<JsonElement>? serverInfo = null, bool waitForResponse = true)
     {
         if (!Configured) throw new InvalidOperationException("MeshCentral is not configured");
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken); timeout.CancelAfter(TimeSpan.FromSeconds(15));
@@ -54,6 +74,7 @@ public sealed partial class MeshCentralClient(MeshCentralOptions options) : IMes
         await socket.ConnectAsync(origin.Uri, timeout.Token); // Platform certificate validation stays enabled.
         var responseId = Guid.NewGuid().ToString(); command["responseid"] = responseId; command["tag"] = responseId;
         await socket.SendAsync(JsonSerializer.SerializeToUtf8Bytes(command), WebSocketMessageType.Text, true, timeout.Token);
+        if (!waitForResponse) { using var empty = JsonDocument.Parse("{}"); return empty.RootElement.Clone(); }
         var buffer = new byte[8192];
         while (true)
         {
@@ -68,6 +89,9 @@ public sealed partial class MeshCentralClient(MeshCentralOptions options) : IMes
             if (json.RootElement.TryGetProperty("action",out var action) && action.GetString() == "serverinfo" && json.RootElement.TryGetProperty("serverinfo",out var info)) serverInfo?.Invoke(info.Clone());
             if (command["action"].ToString() == "meshes" && json.RootElement.TryGetProperty("action",out var kind) && kind.GetString() == "meshes" &&
                 json.RootElement.TryGetProperty("tag",out var tag) && tag.GetString() == responseId) return json.RootElement.Clone();
+            if (command["action"].ToString() == "deviceShares" && json.RootElement.TryGetProperty("action", out var sharesAction) &&
+                sharesAction.GetString() == "deviceShares" && json.RootElement.TryGetProperty("nodeid", out var sharesNode) &&
+                sharesNode.GetString() == command["nodeid"].ToString()) return json.RootElement.Clone();
             if (json.RootElement.TryGetProperty("responseid", out var id) && id.GetString() == responseId) return json.RootElement.Clone();
         }
     }

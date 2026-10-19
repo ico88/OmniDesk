@@ -1026,6 +1026,13 @@ namespace OmniDesk.Api.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Number"));
 
+                    b.Property<string>("Origin")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("device");
+
                     b.Property<string>("Priority")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -1043,14 +1050,6 @@ namespace OmniDesk.Api.Migrations
                         .IsRequired()
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
-
-                    b.Property<string>("Origin")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasDefaultValue("device");
-
 
                     b.Property<string>("Resolution")
                         .HasMaxLength(8000)
@@ -1097,6 +1096,42 @@ namespace OmniDesk.Api.Migrations
                     b.HasIndex("SiteId", "State", "Priority", "CreatedAt");
 
                     b.ToTable("SupportTickets");
+                });
+
+            modelBuilder.Entity("OmniDesk.Api.Data.SupportTicketDevice", b =>
+                {
+                    b.Property<Guid>("TicketId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("DeviceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("DeviceNameSnapshot")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTimeOffset>("LinkedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("LinkedBy")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("SiteIdSnapshot")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("SiteNameSnapshot")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.HasKey("TicketId", "DeviceId");
+
+                    b.HasIndex("LinkedBy");
+
+                    b.HasIndex("DeviceId", "TicketId");
+
+                    b.ToTable("SupportTicketDevices");
                 });
 
             modelBuilder.Entity("OmniDesk.Api.Data.UpdateJob", b =>
@@ -1399,6 +1434,26 @@ namespace OmniDesk.Api.Migrations
                         .WithMany()
                         .HasForeignKey("SiteId")
                         .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("OmniDesk.Api.Data.SupportTicketDevice", b =>
+                {
+                    b.HasOne("OmniDesk.Api.Data.Device", null)
+                        .WithMany()
+                        .HasForeignKey("DeviceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OmniDesk.Api.Data.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("LinkedBy")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("OmniDesk.Api.Data.SupportTicket", null)
+                        .WithMany()
+                        .HasForeignKey("TicketId")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 

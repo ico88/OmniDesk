@@ -9,6 +9,7 @@ public sealed class FakeMesh : IMeshCentralClient, IMeshProvisioningClient
     public bool Configured => true;
     public List<string> Calls { get; } = [];
     public List<string> RevokedNodes { get; } = [];
+    public List<string> DisconnectedShares { get; } = [];
     public int GroupsRemoved { get; private set; }
     public List<bool> ConsentRequests {get;}=[];
     public List<string> OperatorNames { get; } = [];
@@ -26,6 +27,7 @@ public sealed class FakeMesh : IMeshCentralClient, IMeshProvisioningClient
     public async Task<MeshSession> Create(string node, string capability, string actor, bool consentRequired, CancellationToken ct)
     { ConsentRequests.Add(consentRequired); OperatorNames.Add(actor); Calls.Add(capability); var callback=DuringCreate;DuringCreate=null;if(callback is not null)await callback();return new MeshSession(Guid.NewGuid().ToString(), "https://mesh.example.test/sharing?c=fixture", DateTimeOffset.UtcNow.AddMinutes(5)); }
     public Task Revoke(string node, string publicId, CancellationToken ct) { if (FailRevocation) throw new InvalidOperationException("Fixture revocation failure"); Calls.Add("revoke"); RevokedNodes.Add(node); return Task.CompletedTask; }
+    public Task Disconnect(string node, string publicId, CancellationToken ct) { Calls.Add("disconnect"); DisconnectedShares.Add(publicId); return Task.CompletedTask; }
 }
 public static class RemoteScenario
 {
@@ -47,6 +49,15 @@ public static class RemoteScenario
         Assert.All(mesh.OperatorNames, name => Assert.Equal("Federico Operatore", name));
         Assert.All(mesh.RevokedNodes, node => Assert.Equal("node//abcdefghijk", node));
         Assert.Equal(3, mesh.Calls.Count(x => x == "revoke"));
+        var disconnectResponse = await scoped.PostAsJsonAsync($"/api/devices/{device}/remote-sessions", new { capability = "remote.control" });
+        Assert.Equal(HttpStatusCode.Created, disconnectResponse.StatusCode);
+        var disconnectSession = (await disconnectResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+        Assert.Equal(HttpStatusCode.Forbidden, (await viewer.PostAsync($"/api/devices/{device}/remote-sessions/{disconnectSession}/disconnect", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.Accepted, (await scoped.PostAsync($"/api/devices/{device}/remote-sessions/{disconnectSession}/disconnect", null)).StatusCode);
+        Assert.Single(mesh.DisconnectedShares);
+        var stillActive = await scoped.GetFromJsonAsync<JsonElement>($"/api/devices/{device}/remote-sessions");
+        Assert.Equal("active", stillActive.EnumerateArray().Single(x => x.GetProperty("id").GetGuid() == disconnectSession).GetProperty("state").GetString());
+        Assert.Equal(HttpStatusCode.NoContent, (await scoped.DeleteAsync($"/api/devices/{device}/remote-sessions/{disconnectSession}")).StatusCode);
         var pendingResponse = await scoped.PostAsJsonAsync($"/api/devices/{device}/remote-sessions", new { capability = "remote.control" });
         Assert.Equal(HttpStatusCode.Created, pendingResponse.StatusCode);
         var pending = (await pendingResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();

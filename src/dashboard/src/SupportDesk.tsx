@@ -6,6 +6,8 @@ type Ticket = { id:string; number:number; deviceId:string; siteId:string; device
 type TicketSummary = { total:number; open:number; inProgress:number; urgent:number };
 type Assignee = { id:string; email:string };
 type Queue = { id:string; name:string; siteId?:string|null };
+type TicketDevice = {deviceId:string;name:string;siteId:string;siteName:string;isPrimary:boolean};
+type LinkableDevice = {deviceId:string;name:string;siteId:string;siteName:string|null};
 type Message = {id:number;kind:string;visibility:'public'|'internal';body:string;fromState:string|null;toState:string|null;createdAt:string;isImported:boolean};
 type Thread = {version:number;state:string;resolution:string|null;canReply:boolean;canNote:boolean;hasMore:boolean;oldestId:number|null;messages:Message[]};
 const labels: Record<string,string> = {open:'Aperto',in_progress:'In lavorazione',resolved:'Risolto',closed:'Chiuso'};
@@ -37,6 +39,9 @@ export function SupportDesk({visibleDeviceIds,onOpenDevice,deviceId,sites=[],dev
   const [queueId,setQueueId]=useState('');
   const [assigneeId,setAssigneeId]=useState('');
   const [assignees,setAssignees]=useState<Assignee[]>([]);
+  const [ticketDevices,setTicketDevices]=useState<TicketDevice[]>([]);
+  const [linkableDevices,setLinkableDevices]=useState<LinkableDevice[]>([]);
+  const [linkDeviceId,setLinkDeviceId]=useState('');
   const [manualOpen,setManualOpen]=useState(false);
   const [manualRequestId,setManualRequestId]=useState('');
   const [manualDevice,setManualDevice]=useState(deviceId??'');
@@ -65,6 +70,21 @@ export function SupportDesk({visibleDeviceIds,onOpenDevice,deviceId,sites=[],dev
     setThread(data);setSelected(old=>old?.id===ticket.id?{...old,version:data.version,state:data.state,resolution:data.resolution}:old);setState(data.state);
   }
   async function loadAssignees(ticket:Ticket,queue?:string) { const query=queue===undefined?'':`?queue=${queue||'none'}`;setAssignees(await api<Assignee[]>(`/support/${ticket.id}/assignees${query}`)); }
+  async function loadTicketDevices(ticket:Ticket) {
+    const links=await api<TicketDevice[]>(`/support/${ticket.id}/devices`);
+    const candidates=ticket.canManage?await api<LinkableDevice[]>(`/support/${ticket.id}/linkable-devices`):[];
+    setTicketDevices(links);setLinkableDevices(candidates);setLinkDeviceId(candidates[0]?.deviceId??'');
+  }
+  async function linkDevice() {
+    if(!selected||!linkDeviceId)return;
+    await api(`/support/${selected.id}/devices`,'POST',{expectedVersion:selected.version,deviceId:linkDeviceId});
+    await load();await loadTicketDevices({...selected,version:selected.version+1});
+  }
+  async function unlinkDevice(device:TicketDevice) {
+    if(!selected||device.isPrimary)return;
+    await api(`/support/${selected.id}/devices/${device.deviceId}?expectedVersion=${selected.version}`,'DELETE');
+    await load();await loadTicketDevices({...selected,version:selected.version+1});
+  }
   async function assignQueueToSelected(queue:string) {
     const selectedTickets=tickets.filter(t=>selectedTicketIds.includes(t.id)&&t.canManage);
     if(!selectedTickets.length)return;
@@ -103,10 +123,21 @@ export function SupportDesk({visibleDeviceIds,onOpenDevice,deviceId,sites=[],dev
     </form>
     {tickets.some(t=>t.canManage)&&<div className="conversation-toolbar"><span>{selectedTicketIds.length} ticket selezionati</span><label className="filter-field">Assegna coda<select aria-label="Coda assegnazione massiva" value={bulkQueueId} disabled={busy} onChange={e=>setBulkQueueId(e.target.value)}><option value="">Senza coda</option>{queues.map(q=><option key={q.id} value={q.id}>{q.name}</option>)}</select></label><button disabled={busy||!selectedTicketIds.length} onClick={()=>void work(()=>assignQueueToSelected(bulkQueueId))}>Applica coda ai selezionati</button></div>}
     <div className="table-wrap"><table><thead><tr><th><input aria-label="Seleziona tutti i ticket gestibili" type="checkbox" checked={tickets.some(t=>t.canManage)&&tickets.filter(t=>t.canManage).every(t=>selectedTicketIds.includes(t.id))} onChange={e=>setSelectedTicketIds(e.target.checked?tickets.filter(t=>t.canManage).map(t=>t.id):[])} disabled={!tickets.some(t=>t.canManage)||busy}/></th><th>Ticket</th><th>Data</th><th>Oggetto</th><th>Categoria</th><th>Coda</th><th>Stato</th><th>Priorità</th><th>Assegnatario</th><th>Dispositivo</th><th>Sede</th><th>Dettagli</th></tr></thead>
-    <tbody>{tickets.map(t=><tr key={t.id}><td><input aria-label={`Seleziona OD-${String(t.number).padStart(6,'0')}`} type="checkbox" checked={selectedTicketIds.includes(t.id)} disabled={!t.canManage||busy} onChange={e=>setSelectedTicketIds(ids=>e.target.checked?[...ids,t.id]:ids.filter(id=>id!==t.id))}/></td><td>OD-{String(t.number).padStart(6,'0')}</td><td>{date(t.createdAt)}</td><td>{t.subject}</td><td>{categories[t.category]??t.category}</td><td>{t.queueName||'Senza coda'}</td><td><span className={`status-pill ${t.state==='resolved'||t.state==='closed'?'online':'offline'}`}>{labels[t.state]??t.state}</span></td><td><span className={`status-pill ${t.priority==='urgent'?'danger':t.priority==='high'?'offline':'online'}`}>{priorities[t.priority]??t.priority}</span></td><td>{t.assigneeEmail||'Non assegnato'}</td><td>{visibleDeviceIds.includes(t.deviceId)?<button className="device-link" title="Apri scheda dispositivo" disabled={busy} onClick={()=>void work(()=>onOpenDevice(t.deviceId))}><Icon name="devices" size={17}/>{t.deviceName||'Dispositivo non disponibile'}<Icon name="arrow" size={14}/></button>:<span className="device-name"><Icon name="devices" size={17}/>{t.deviceName||'Dispositivo non disponibile'}</span>}</td><td>{t.siteName||'Sede non disponibile'}</td><td><button disabled={busy} onClick={()=>{setSelected(t);setThread(null);setState(t.state);setResolution('');setInternalNote('');setPriority(t.priority);setQueueId(t.queueId??'');setAssigneeId(t.assigneeId??'');setAssignees([]);void work(async()=>{const [ticketQueues]=await Promise.all([api<Queue[]>(`/support/${t.id}/queues`),loadThread(t),loadAssignees(t)]);setSelectedQueues(ticketQueues);});}}>Apri ticket</button></td></tr>)}</tbody></table></div>
+    <tbody>{tickets.map(t=><tr key={t.id}><td><input aria-label={`Seleziona OD-${String(t.number).padStart(6,'0')}`} type="checkbox" checked={selectedTicketIds.includes(t.id)} disabled={!t.canManage||busy} onChange={e=>setSelectedTicketIds(ids=>e.target.checked?[...ids,t.id]:ids.filter(id=>id!==t.id))}/></td><td>OD-{String(t.number).padStart(6,'0')}</td><td>{date(t.createdAt)}</td><td>{t.subject}</td><td>{categories[t.category]??t.category}</td><td>{t.queueName||'Senza coda'}</td><td><span className={`status-pill ${t.state==='resolved'||t.state==='closed'?'online':'offline'}`}>{labels[t.state]??t.state}</span></td><td><span className={`status-pill ${t.priority==='urgent'?'danger':t.priority==='high'?'offline':'online'}`}>{priorities[t.priority]??t.priority}</span></td><td>{t.assigneeEmail||'Non assegnato'}</td><td>{visibleDeviceIds.includes(t.deviceId)?<button className="device-link" title="Apri scheda dispositivo" disabled={busy} onClick={()=>void work(()=>onOpenDevice(t.deviceId))}><Icon name="devices" size={17}/>{t.deviceName||'Dispositivo non disponibile'}<Icon name="arrow" size={14}/></button>:<span className="device-name"><Icon name="devices" size={17}/>{t.deviceName||'Dispositivo non disponibile'}</span>}</td><td>{t.siteName||'Sede non disponibile'}</td><td><button disabled={busy} onClick={()=>{setSelected(t);setThread(null);setState(t.state);setResolution('');setInternalNote('');setPriority(t.priority);setQueueId(t.queueId??'');setAssigneeId(t.assigneeId??'');setAssignees([]);void work(async()=>{const [ticketQueues]=await Promise.all([api<Queue[]>(`/support/${t.id}/queues`),loadThread(t),loadAssignees(t),loadTicketDevices(t)]);setSelectedQueues(ticketQueues);});}}>Apri ticket</button></td></tr>)}</tbody></table></div>
     {!tickets.length&&<p>Nessuna richiesta corrisponde ai filtri o ai tuoi ambiti.</p>}
     {selected&&<section ref={panel} className="ticket-conversation" aria-label="Conversazione ticket">
       <div className="section-heading"><div><span className="eyebrow">CONVERSAZIONE · OD-{String(selected.number).padStart(6,'0')}</span><h3>{selected.subject}</h3><span className="device-name"><Icon name="devices" size={16}/>{selected.deviceName||'Dispositivo non disponibile'}</span></div><button className="secondary compact" type="button" disabled={busy} onClick={()=>{setSelected(null);setThread(null);setError('');}}><Icon name="close" size={15}/>Chiudi dettaglio</button></div>
+      <section className="ticket-linked-devices" aria-label="Dispositivi associati al ticket">
+        <div className="section-heading"><div><strong>Dispositivi coinvolti</strong><small>Collega altri dispositivi per raccogliere nello stesso ticket le attività di assistenza.</small></div></div>
+        <ul>{ticketDevices.map(item=><li key={item.deviceId}>
+          <span className="device-name"><Icon name="devices" size={16}/>{visibleDeviceIds.includes(item.deviceId)?<button className="device-link" disabled={busy} onClick={()=>void work(()=>onOpenDevice(item.deviceId))}>{item.name}</button>:item.name}<small>{item.siteName}{item.isPrimary?' · principale':''}</small></span>
+          {!item.isPrimary&&selected.canManage&&<button type="button" className="secondary compact" disabled={busy} aria-label={'Scollega '+item.name} onClick={()=>void work(()=>unlinkDevice(item))}>Scollega</button>}
+        </li>)}</ul>
+        {selected.canManage&&<form className="chat-composer ticket-device-link-form" onSubmit={e=>{e.preventDefault();void work(linkDevice);}}>
+          <label>Associa un dispositivo<select value={linkDeviceId} disabled={busy||!linkableDevices.length} onChange={e=>setLinkDeviceId(e.target.value)}><option value="">{linkableDevices.length?'Seleziona un dispositivo':'Nessun altro dispositivo autorizzato'}</option>{linkableDevices.map(item=><option key={item.deviceId} value={item.deviceId}>{item.name}{item.siteName?' · '+item.siteName:''}</option>)}</select></label>
+          <button type="submit" className="secondary compact" disabled={busy||!linkDeviceId}>Collega</button>
+        </form>}
+      </section>
       {error&&<p role="alert">{error}</p>}
       <div className="conversation-log" role="log" aria-label="Messaggi del ticket" aria-live="polite">
         <article className="chat-message requester"><div className="chat-meta"><strong>{selected.origin==='operator'?'Ticket inserito da assistenza':'Richiesta dell’utente'}</strong><time>{date(selected.createdAt)}</time></div><p>{selected.description}</p>

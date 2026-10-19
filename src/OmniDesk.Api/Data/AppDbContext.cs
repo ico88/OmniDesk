@@ -38,6 +38,7 @@ public sealed class AuditEvent
 public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbContext<AppUser>(options)
 {
     public DbSet<SupportMessage> SupportMessages => Set<SupportMessage>();
+    public DbSet<SupportTicketDevice> SupportTicketDevices => Set<SupportTicketDevice>();
     public DbSet<SupportTicket> SupportTickets => Set<SupportTicket>();
     public DbSet<SupportQueue> SupportQueues => Set<SupportQueue>();
     public DbSet<SupportQueueMember> SupportQueueMembers => Set<SupportQueueMember>();
@@ -73,6 +74,13 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
         b.Entity<SupportMessage>().Property(x=>x.Visibility).HasMaxLength(20).HasDefaultValue("public");
         b.Entity<SupportMessage>().Property(x=>x.FromState).HasMaxLength(20);
         b.Entity<SupportMessage>().Property(x=>x.ToState).HasMaxLength(20);
+        b.Entity<SupportTicketDevice>().HasKey(x => new { x.TicketId, x.DeviceId });
+        b.Entity<SupportTicketDevice>().Property(x => x.DeviceNameSnapshot).HasMaxLength(200);
+        b.Entity<SupportTicketDevice>().Property(x => x.SiteNameSnapshot).HasMaxLength(200);
+        b.Entity<SupportTicketDevice>().HasOne<SupportTicket>().WithMany().HasForeignKey(x => x.TicketId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<SupportTicketDevice>().HasOne<Device>().WithMany().HasForeignKey(x => x.DeviceId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<SupportTicketDevice>().HasOne<AppUser>().WithMany().HasForeignKey(x => x.LinkedBy).OnDelete(DeleteBehavior.SetNull);
+        b.Entity<SupportTicketDevice>().HasIndex(x => new { x.DeviceId, x.TicketId });
         b.Entity<SupportTicket>().HasOne<Device>().WithMany().HasForeignKey(x => x.DeviceId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<SupportTicket>().HasOne<Site>().WithMany().HasForeignKey(x => x.SiteId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<SupportTicket>().HasIndex(x => new { x.DeviceId, x.RequesterKey, x.RequestId }).IsUnique();

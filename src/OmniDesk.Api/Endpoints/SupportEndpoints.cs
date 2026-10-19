@@ -13,6 +13,8 @@ public sealed record SupportStaffEdit(long ExpectedVersion,string State,string? 
     Guid? QueueId=null,bool UpdateQueue=false);
 public sealed record SupportInternalNote(long ExpectedVersion, string Body);
 public sealed record ManualSupportCreate(Guid RequestId, Guid DeviceId, string Subject, string Description, string Category, string Priority);
+public sealed record SupportTicketDeviceChange(long ExpectedVersion, Guid DeviceId);
+public sealed record SupportTicketDeviceView(Guid DeviceId, string Name, Guid SiteId, string SiteName, bool IsPrimary);
 public sealed record SupportTicketVersion(Guid TicketId, long ExpectedVersion);
 public sealed record BulkQueueAssignment(SupportTicketVersion[] Tickets, Guid? QueueId);
 public static class SupportEndpoints
@@ -110,6 +112,10 @@ public static class SupportEndpoints
             var ticket = new SupportTicket { DeviceId = id, SiteId = siteId, RequesterKey = r.RequesterKey, RequestId = r.Ticket.RequestId,
                 Subject = r.Ticket.Subject.Trim(), Description = r.Ticket.Description.Trim(), Category = r.Ticket.Category, QueueId = queueId, Screenshot = screenshot };
             db.SupportTickets.Add(ticket);
+            var primaryDeviceName = await db.Devices.Where(x => x.Id == id).Select(x => x.Name).SingleAsync();
+            var primarySiteName = await db.Sites.Where(x => x.Id == siteId).Select(x => x.Name).SingleAsync();
+            db.SupportTicketDevices.Add(new SupportTicketDevice { TicketId = ticket.Id, DeviceId = id,
+                DeviceNameSnapshot = primaryDeviceName, SiteIdSnapshot = siteId, SiteNameSnapshot = primarySiteName });
             CoreOutbox.Add(db, "ticket.created", "ticket", ticket.Id,
                 new { ticketId = ticket.Id, deviceId = ticket.DeviceId, siteId = ticket.SiteId, state = ticket.State, category = ticket.Category, queueId = ticket.QueueId }, c.TraceIdentifier);
             db.AuditEvents.Add(new AuditEvent { Action = "ticket.create", Target = ticket.Id.ToString() });
@@ -139,11 +145,114 @@ public static class SupportEndpoints
             var ticket = new SupportTicket { DeviceId = device.Id, SiteId = device.SiteId, RequesterKey = requesterKey, RequestId = r.RequestId,
                 Origin = "operator", Subject = r.Subject.Trim(), Description = r.Description.Trim(), Category = r.Category, Priority = r.Priority, QueueId = queueId };
             db.SupportTickets.Add(ticket);
+            var deviceName = await db.Devices.Where(x => x.Id == device.Id).Select(x => x.Name).SingleAsync();
+            var siteName = await db.Sites.Where(x => x.Id == device.SiteId).Select(x => x.Name).SingleAsync();
+            db.SupportTicketDevices.Add(new SupportTicketDevice { TicketId = ticket.Id, DeviceId = device.Id,
+                DeviceNameSnapshot = deviceName, SiteIdSnapshot = device.SiteId, SiteNameSnapshot = siteName, LinkedBy = userId });
             db.AuditEvents.Add(new AuditEvent { ActorId = userId, Action = "ticket.manual.create", Target = ticket.Id.ToString() });
             CoreOutbox.Add(db, "ticket.created", "ticket", ticket.Id,
                 new { ticketId = ticket.Id, deviceId = ticket.DeviceId, siteId = ticket.SiteId, state = ticket.State, category = ticket.Category, queueId = ticket.QueueId, origin = ticket.Origin }, c.TraceIdentifier);
             await db.SaveChangesAsync(); await tx.CommitAsync();
             return Results.Created($"/api/support/{ticket.Id}", View(ticket));
+        });
+        staff.MapGet("/{id:guid}/devices", async (Guid id, HttpContext c, AppDbContext db, PermissionService p) => {
+            var userId = c.User.UserId();
+            var ticket = await db.SupportTickets.AsNoTracking().SingleOrDefaultAsync(t => t.Id == id);
+            if (ticket is null) return Results.NotFound();
+            if (!await p.Allows(userId, "tickets.view", ticket.DeviceId, siteId: ticket.SiteId)) return Results.Forbid();
+            var global = (await p.Global(userId)).Contains("tickets.view");
+            var grants = from g in db.ScopeGrants join permission in db.RolePermissions on g.RoleId equals permission.RoleId
+                where g.UserId == userId && permission.Permission == "tickets.view" select g;
+            var visible = await (from link in db.SupportTicketDevices.AsNoTracking()
+                join device in db.Devices.AsNoTracking() on link.DeviceId equals device.Id
+                join site in db.Sites.AsNoTracking() on device.SiteId equals site.Id
+                where link.TicketId == id && db.Users.Any(u => u.Id == userId && !u.IsDisabled) &&
+                    (global || grants.Any(g => g.DeviceId == device.Id || g.SiteId == device.SiteId ||
+                        (device.GroupId != null && g.GroupId == device.GroupId)))
+                orderby link.LinkedAt, device.Name
+                select new SupportTicketDeviceView(device.Id, link.DeviceNameSnapshot, link.SiteIdSnapshot,
+                    link.SiteNameSnapshot, device.Id == ticket.DeviceId)).ToArrayAsync();
+            c.Response.Headers.CacheControl = "no-store";
+            return Results.Ok(visible);
+        });
+        staff.MapGet("/{id:guid}/linkable-devices", async (Guid id, HttpContext c, AppDbContext db, PermissionService p) => {
+            var userId = c.User.UserId();
+            var ticket = await db.SupportTickets.AsNoTracking().SingleOrDefaultAsync(t => t.Id == id);
+            if (ticket is null) return Results.NotFound();
+            if (!await p.Allows(userId, "tickets.manage", ticket.DeviceId, siteId: ticket.SiteId)) return Results.Forbid();
+            var global = (await p.Global(userId)).Contains("tickets.manage");
+            var grants = from g in db.ScopeGrants join permission in db.RolePermissions on g.RoleId equals permission.RoleId
+                where g.UserId == userId && permission.Permission == "tickets.manage" select g;
+            var rows = await db.Devices.AsNoTracking().Where(d => db.Users.Any(u => u.Id == userId && !u.IsDisabled) &&
+                    (global || grants.Any(g => g.DeviceId == d.Id || g.SiteId == d.SiteId ||
+                        (d.GroupId != null && g.GroupId == d.GroupId))) &&
+                    !db.SupportTicketDevices.Any(link => link.TicketId == id && link.DeviceId == d.Id))
+                .OrderBy(d => d.Name).Take(200)
+                .Select(d => new { deviceId = d.Id, d.Name, d.SiteId, siteName = db.Sites.Where(s => s.Id == d.SiteId).Select(s => s.Name).FirstOrDefault() })
+                .ToArrayAsync();
+            c.Response.Headers.CacheControl = "no-store";
+            return Results.Ok(rows);
+        });
+        staff.MapPost("/{id:guid}/devices", async (Guid id, SupportTicketDeviceChange r, HttpContext c, AppDbContext db, PermissionService p) => {
+            if (r.ExpectedVersion < 1 || r.DeviceId == Guid.Empty) return Results.BadRequest();
+            var userId = c.User.UserId();
+            var ticket = await db.SupportTickets.AsNoTracking().SingleOrDefaultAsync(t => t.Id == id);
+            if (ticket is null) return Results.NotFound();
+            if (!await p.Allows(userId, "tickets.manage", ticket.DeviceId, siteId: ticket.SiteId)) return Results.Forbid();
+            if (r.DeviceId == ticket.DeviceId) return Results.BadRequest(new { error = "Il dispositivo principale è già collegato al ticket." });
+            var target = await (from d in db.Devices.AsNoTracking() join site in db.Sites.AsNoTracking() on d.SiteId equals site.Id
+                where d.Id == r.DeviceId select new { d.Id, d.Name, d.SiteId, SiteName = site.Name }).SingleOrDefaultAsync();
+            if (target is null) return Results.NotFound();
+            if (!await p.Allows(userId, "tickets.manage", target.Id)) return Results.Forbid();
+            await using var tx = await db.Database.BeginTransactionAsync();
+            foreach (var lockId in new[] { ticket.DeviceId, target.Id }.Distinct().Order())
+                await DeviceOperationLock.Acquire(db, lockId);
+            if (!await p.Allows(userId, "tickets.manage", ticket.DeviceId, siteId: ticket.SiteId) ||
+                !await p.Allows(userId, "tickets.manage", target.Id)) return Results.Forbid();
+            if (await db.SupportTicketDevices.AnyAsync(x => x.TicketId == id && x.DeviceId == target.Id))
+                return Results.NoContent();
+            if (await db.SupportTicketDevices.CountAsync(x => x.TicketId == id) >= 10)
+                return Results.Conflict(new { error = "Un ticket può essere collegato al massimo a 10 dispositivi." });
+            var now = DateTimeOffset.UtcNow;
+            var updated = await db.SupportTickets.Where(t => t.Id == id && t.Version == r.ExpectedVersion)
+                .ExecuteUpdateAsync(s => s.SetProperty(t => t.Version, t => t.Version + 1).SetProperty(t => t.UpdatedAt, now));
+            if (updated == 0) return Results.Conflict(new { error = "Il ticket è stato aggiornato. Ricarica i dettagli." });
+            db.SupportTicketDevices.Add(new SupportTicketDevice { TicketId = id, DeviceId = target.Id, LinkedAt = now,
+                LinkedBy = userId, DeviceNameSnapshot = target.Name, SiteIdSnapshot = target.SiteId, SiteNameSnapshot = target.SiteName });
+            db.AuditEvents.Add(new AuditEvent { ActorId = userId, Action = "ticket.device.link", Target = id.ToString() });
+            CoreOutbox.Add(db, "ticket.devices.updated", "ticket", id,
+                new { ticketId = id, deviceId = target.Id, siteId = target.SiteId, version = r.ExpectedVersion + 1 }, c.TraceIdentifier);
+            await db.SaveChangesAsync();
+            await tx.CommitAsync();
+            return Results.NoContent();
+        });
+        staff.MapDelete("/{id:guid}/devices/{deviceId:guid}", async (Guid id, Guid deviceId, long expectedVersion, HttpContext c, AppDbContext db, PermissionService p) => {
+            if (expectedVersion < 1 || deviceId == Guid.Empty) return Results.BadRequest();
+            var userId = c.User.UserId();
+            var ticket = await db.SupportTickets.AsNoTracking().SingleOrDefaultAsync(t => t.Id == id);
+            if (ticket is null) return Results.NotFound();
+            if (!await p.Allows(userId, "tickets.manage", ticket.DeviceId, siteId: ticket.SiteId)) return Results.Forbid();
+            if (deviceId == ticket.DeviceId) return Results.BadRequest(new { error = "Il dispositivo principale non può essere scollegato." });
+            if (!await db.Devices.AnyAsync(d => d.Id == deviceId)) return Results.NotFound();
+            if (!await p.Allows(userId, "tickets.manage", deviceId)) return Results.Forbid();
+            await using var tx = await db.Database.BeginTransactionAsync();
+            foreach (var lockId in new[] { ticket.DeviceId, deviceId }.Distinct().Order())
+                await DeviceOperationLock.Acquire(db, lockId);
+            if (!await p.Allows(userId, "tickets.manage", ticket.DeviceId, siteId: ticket.SiteId) ||
+                !await p.Allows(userId, "tickets.manage", deviceId)) return Results.Forbid();
+            if (!await db.SupportTicketDevices.AnyAsync(x => x.TicketId == id && x.DeviceId == deviceId))
+                return Results.NotFound();
+            var now = DateTimeOffset.UtcNow;
+            var updated = await db.SupportTickets.Where(t => t.Id == id && t.Version == expectedVersion)
+                .ExecuteUpdateAsync(s => s.SetProperty(t => t.Version, t => t.Version + 1).SetProperty(t => t.UpdatedAt, now));
+            if (updated == 0) return Results.Conflict(new { error = "Il ticket è stato aggiornato. Ricarica i dettagli." });
+            await db.SupportTicketDevices.Where(x => x.TicketId == id && x.DeviceId == deviceId).ExecuteDeleteAsync();
+            db.AuditEvents.Add(new AuditEvent { ActorId = userId, Action = "ticket.device.unlink", Target = id.ToString() });
+            CoreOutbox.Add(db, "ticket.devices.updated", "ticket", id,
+                new { ticketId = id, deviceId, version = expectedVersion + 1 }, c.TraceIdentifier);
+            await db.SaveChangesAsync();
+            await tx.CommitAsync();
+            return Results.NoContent();
         });
         staff.MapGet("/queues", async (Guid? siteId, HttpContext c, AppDbContext db, PermissionService p) => {
             var userId = c.User.UserId();

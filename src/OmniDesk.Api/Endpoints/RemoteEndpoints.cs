@@ -78,6 +78,22 @@ public static class RemoteEndpoints
                 return Results.Problem("Remote engine unavailable", statusCode:503);
             }
         });
+        devices.MapPost("/{sessionId:guid}/disconnect", async (Guid id, Guid sessionId, HttpContext c, AppDbContext db, PermissionService p, IMeshCentralClient mesh) => {
+            var session = await db.RemoteSessions.SingleOrDefaultAsync(x => x.Id == sessionId && x.DeviceId == id);
+            if (session is null) return Results.NotFound();
+            var userId = c.User.UserId();
+            if (!await p.Allows(userId, "administration") && session.ActorId != userId) return Results.Forbid();
+            if (session.Capability != "remote.control") return Results.BadRequest();
+            if (session.State != "active" || session.ExpiresAt is null || session.ExpiresAt <= DateTimeOffset.UtcNow || string.IsNullOrWhiteSpace(session.PublicId))
+                return Results.Conflict();
+            if (!await p.Allows(userId, "administration") && !await p.Allows(userId, "remote.control", id)) return Results.Forbid();
+            if (await db.DeviceCredentials.AnyAsync(x => x.DeviceId == id && x.RevokedAt != null) ||
+                await db.RemoteProvisionings.AnyAsync(x => x.DeviceId == id && !x.Enabled)) return Results.Forbid();
+            await mesh.Disconnect(session.NodeId, session.PublicId, c.RequestAborted);
+            db.AuditEvents.Add(Event(c, "remote.disconnect", session.Id));
+            await db.SaveChangesAsync();
+            return Results.Accepted(value: new { session.Id, state = "disconnect_requested", reconnectAllowedUntil = session.ExpiresAt });
+        });
         devices.MapDelete("/{sessionId:guid}", async (Guid id, Guid sessionId, HttpContext c, AppDbContext db, PermissionService p, IMeshCentralClient mesh) => {
             var session = await db.RemoteSessions.SingleOrDefaultAsync(x => x.Id == sessionId && x.DeviceId == id);
             if (session is null) return Results.NotFound();

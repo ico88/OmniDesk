@@ -65,3 +65,14 @@ public sealed class SupportMessage
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public bool IsImported { get; set; }
 }
+
+public sealed class SupportTicketDevice
+{
+    public Guid TicketId { get; set; }
+    public Guid DeviceId { get; set; }
+    public DateTimeOffset LinkedAt { get; set; } = DateTimeOffset.UtcNow;
+    public string? LinkedBy { get; set; }
+    public string DeviceNameSnapshot { get; set; } = "";
+    public Guid SiteIdSnapshot { get; set; }
+    public string SiteNameSnapshot { get; set; } = "";
+}
