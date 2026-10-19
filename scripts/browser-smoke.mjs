@@ -1,6 +1,6 @@
 import {chromium} from '/tmp/node_modules/playwright/index.mjs';
 import {readFileSync} from 'node:fs';
-import {randomBytes, generateKeyPairSync} from 'node:crypto';
+import {randomBytes, generateKeyPairSync, sign} from 'node:crypto';
 import assert from 'node:assert/strict';
 const browser=await chromium.launch({headless:true});
 try {
@@ -73,10 +73,28 @@ try {
  await page.getByLabel('Gruppo',{exact:true}).selectOption({label:group});
  await page.getByRole('button',{name:'Genera token monouso (30 minuti)',exact:true}).click();
  const enrollmentToken=await page.getByLabel('Token enrollment',{exact:true}).inputValue();
- const publicKeyPem=generateKeyPairSync('rsa',{modulusLength:2048}).publicKey.export({type:'spki',format:'pem'});
+ const fixtureKeys=generateKeyPairSync('rsa',{modulusLength:2048});
+ const publicKeyPem=fixtureKeys.publicKey.export({type:'spki',format:'pem'});
  const fixtureName='Browser device '+randomBytes(6).toString('hex');
  const enrollment=await context.request.post('https://omnidesk.test/api/agent/enroll',{data:{token:enrollmentToken,name:fixtureName,publicKeyPem}});
  assert.equal(enrollment.status(),201,'Fixture enrollment in isolated environment');
+ const fixtureDevice=(await enrollment.json()).deviceId;
+ const now=Math.floor(Date.now()/1000);
+ const header=Buffer.from(JSON.stringify({alg:'RS256',typ:'JWT'})).toString('base64url');
+ const claims=Buffer.from(JSON.stringify({iss:fixtureDevice,sub:fixtureDevice,aud:'omnidesk-agent',iat:now,nbf:now-5,exp:now+60,jti:randomBytes(16).toString('hex')})).toString('base64url');
+ const unsigned=header+'.'+claims;
+ const assertion=unsigned+'.'+sign('RSA-SHA256',Buffer.from(unsigned),fixtureKeys.privateKey).toString('base64url');
+ const ticketSubject='Browser support '+randomBytes(6).toString('hex');
+ const intake=await context.request.post('https://omnidesk.test/api/agent/support',{headers:{Authorization:'Bearer '+assertion},data:{requesterKey:'A'.repeat(64),ticket:{requestId:crypto.randomUUID(),subject:ticketSubject,description:'Isolated fixture, no live user data',screenshotBase64:null,screenshotConsent:false}}});
+ assert.equal(intake.status(),201,'Authenticated isolated ticket intake');
+ await page.getByRole('button',{name:'Assistenza',exact:true}).click();
+ await page.getByRole('row').filter({has:page.getByRole('cell',{name:ticketSubject,exact:true})}).getByRole('button',{name:'Apri ticket',exact:true}).click();
+ await page.getByLabel('Stato',{exact:true}).selectOption('resolved');
+ await page.getByLabel('Risposta visibile al richiedente',{exact:true}).fill('Risolto nel test isolato');
+ await page.getByRole('button',{name:'Salva ticket',exact:true}).click();
+ await page.getByRole('row').filter({has:page.getByRole('cell',{name:ticketSubject,exact:true})}).getByRole('cell',{name:'Risolto',exact:true}).waitFor();
+ await page.getByRole('button',{name:'Dispositivi',exact:true}).click();
+
  await page.getByRole('button',{name:'Aggiorna',exact:true}).click();
  await page.getByRole('row').filter({has:page.getByRole('cell',{name:fixtureName,exact:true})}).getByRole('button',{name:'Apri',exact:true}).click();
  const renamed=fixtureName+' renamed';
@@ -108,5 +126,5 @@ try {
  await page.getByRole('row').filter({has:page.getByRole('cell',{name:renamed,exact:true})}).getByRole('button',{name:'Apri',exact:true}).click();
  assert.equal(await page.getByRole('heading',{name:'Gestione dispositivo',exact:true}).count(),0);
  assert.deepEqual(errors,[],'No browser JavaScript exceptions');
- console.log('PASS: Chromium accounts/grants, isolated device enrollment, rename/group persistence/revocation and viewer UI permissions');
+ console.log('PASS: Chromium accounts/grants, isolated device enrollment, rename/group persistence/revocation, ticket resolution and viewer UI permissions');
 } finally {await browser.close();}

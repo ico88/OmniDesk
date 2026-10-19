@@ -39,6 +39,28 @@ public sealed class TrayProtocolTests
         else await Assert.ThrowsAsync<InvalidDataException>(() => TrayProtocol.Read<TrayRequest>(stream, CancellationToken.None));
     }
     [Fact]
+    public async Task Support_methods_require_their_payload_and_reject_status_payloads()
+    {
+        var ticket = new SupportCreate(Guid.NewGuid(), "Subject", "Description", new string('A',5000), true);
+        var request = new TrayRequest(TrayProtocol.Version,Guid.NewGuid(),TrayProtocol.CreateTicketMethod,ticket);
+        Assert.True(TrayProtocol.Valid(request));
+        Assert.False(TrayProtocol.Valid(request with { Ticket = null }));
+        Assert.False(TrayProtocol.Valid(request with { Method = TrayProtocol.StatusMethod }));
+        Assert.False(TrayProtocol.Valid(request with { Method = TrayProtocol.ListTicketsMethod }));
+        using var stream = new MemoryStream();
+        await Assert.ThrowsAsync<InvalidDataException>(() => TrayProtocol.Write(stream,request,CancellationToken.None));
+        await TrayProtocol.Write(stream,request,CancellationToken.None,TrayProtocol.MaxSupportPayload); stream.Position=0;
+        Assert.Equal(request,await TrayProtocol.Read<TrayRequest>(stream,CancellationToken.None,TrayProtocol.MaxSupportPayload));
+    }
+    [Fact]
+    public async Task Nested_duplicate_fields_are_rejected()
+    {
+        var body = Encoding.UTF8.GetBytes("{\"ticket\":{\"subject\":\"one\",\"Subject\":\"two\"}}");
+        var header = new byte[4]; BinaryPrimitives.WriteInt32LittleEndian(header,body.Length);
+        using var stream = new MemoryStream();stream.Write(header);stream.Write(body);stream.Position=0;
+        await Assert.ThrowsAsync<InvalidDataException>(()=>TrayProtocol.Read<TrayRequest>(stream,CancellationToken.None));
+    }
+    [Fact]
     public async Task Truncated_frames_are_not_accepted()
     {
         var header = new byte[4]; BinaryPrimitives.WriteInt32LittleEndian(header, 100);
