@@ -492,3 +492,24 @@ anche dopo pubblicazione; sonda HTTPS readiness/dashboard/asset/anonymous401
 passata. Windows Update reale dopo aggiornamento ancora da eseguire, il vecchio
 job failed resta tale. Nessun test dichiara risolto un eventuale errore WUA/WSUS
 che emerga dopo il lancio del processo.
+
+### Assistenza: nome computer e navigazione contestuale
+
+API staff /support ora proietta deviceName dal dispositivo gia correlato al
+ticket, dopo il filtro tickets.view globale/gruppo/device esistente. La UI mostra
+quel nome nella tabella/dettaglio e non l'UUID enrollment; la chiave UUID resta
+per autorizzazione e apertura scheda. Risposte agent/support e contratto condiviso
+Tray invariati per compatibilita con i client installati. Nome attuale della
+console, inizialmente Environment.MachineName: nessuna risoluzione DNS CNAME.
+
+Ricerca staff per oggetto/nome computer, filtro stato validato e max200 caratteri,
+applicati prima del limite100 ma sempre dopo i vincoli di visibilita nella stessa
+query. Nessuna ricerca globale di nomi o conteggi non autorizzati. Pulsante PC
+visibile solo se gia presente nell'elenco dispositivi autorizzati, e status API
+ricontrolla view. Migrazione non necessaria.
+
+Suite PostgreSQL/Vitest iniziale passata: nome corretto, ricerca case-insensitive,
+stati, wildcard percentuale letterale, input invalidi, ricerca scoped senza
+esposizione del dispositivo fuori ambito. Browser esteso a nome senza UUID,
+filtri, nome aggiornato dopo rinomina e apertura scheda contestuale; esito da
+registrare dopo esecuzione.

@@ -99,3 +99,13 @@ PowerShell con RemoteSigned solo nel processo, precedenza Group Policy preservat
 nessun riavvio automatico; nuovo Agent/MSI 0.7.2 da compilare e collaudare.
 
 Consegna corrente: UI ridisegnata e policy non presidiata pubblicate su LAN dopo 43 xUnit, 3 Vitest, smoke Chromium desktop/mobile e sonda motore reale. Policy pilota disattivata per default, attivabile dall'amministratore dalla scheda dispositivo. Windows kit 0.7.2 pubblicato dopo run Windows 39219223914 riuscito (incluse entrambe le baseline upgrade, repair e rollback). Scansione WUA reale e prove non presidiate restano collaudi client separati; revisione Microsoft del rilevamento ancora non inviata.
+
+Incremento assistenza corrente: nome computer nella colonna Dispositivo e nel
+dettaglio ticket (stesso nome registrato nella console, inizializzato dal nome
+Windows all'enrollment), ricerca per oggetto/nome senza distinzione maiuscole,
+filtro stato e apertura contestuale della scheda RMM solo per dispositivi
+visibili all'operatore. UUID resta interno per correlazione e autorizzazione.
+Contratti macchina/Tray invariati; nessun nuovo enrollment o MSI richiesto.
+Si tratta del miglioramento del modulo ticket esistente: sedi, assegnazioni,
+SLA, email e cronologia collaborativa delle fasi SD restano incrementi distinti.
+Test PostgreSQL iniziali passati; build/browser/deploy da registrare sotto.
