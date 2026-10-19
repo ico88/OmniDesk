@@ -285,14 +285,15 @@ verificate da schema vuoto e da uno schema isolato con ticket preesistente; upgr
 del database LAN non eseguito e nessun deploy effettuato. Restano code, SLA,
 bulk assignment e viste operative.
 
-### Identità leggibile dell’operatore nelle sessioni remote — 2026-10-19
+### Identità leggibile dell’operatore nelle sessioni remote — implementata su LAN, prova PC aperta
 
 MeshCentral riceveva l’ID interno dell’account come guest name, visibile nel banner
-sul PC assistito. In implementazione: campo nome visualizzato nell’account,
-modificabile dall’utente; nome passato alla creazione della sessione e fallback
-all’email. La migrazione `OperatorDisplayName` aggiunge un campo nullable, quindi
-non richiede modifiche ai profili esistenti. Il comportamento resta soggetto ai
-permessi e alla creazione sessione già applicati dal server.
+sul PC assistito. La console ora consente di impostare il nome in Account e sicurezza;
+la sessione passa quel nome a MeshCentral e usa l’email se il profilo è vuoto. La
+migrazione `OperatorDisplayName` è applicata su LAN. Test API/PostgreSQL e browser
+smoke verificano il forwarding al motore fake e la persistenza del profilo. Resta
+la conferma visiva sul PC Windows pilota; nessuna sessione remota viene avviata
+automaticamente.
 
 ### Durata sessioni remote — 2026-10-19
 

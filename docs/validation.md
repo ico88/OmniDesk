@@ -898,9 +898,10 @@ nome configurato invece dell’ID account. `./scripts/test.sh` passato: 64 test
 API/PostgreSQL, 4 test Vitest, TypeScript e build dashboard. Deploy LAN completato con backup protetto `.backups/20261019T133343Z.6LTaS8`;
 migrazione applicata con API ferma dopo verifica zero sessioni attive, poi API e
 dashboard ricreate. `verify-lan.py` ha confermato CA/readiness, dashboard/assets e
-rifiuto anonimo. Prova visiva sull’indicatore del PC ancora pendente. Gli account
-esistenti hanno il nuovo campo vuoto e vedono l’email come fallback finché non
-impostano il nome in Account e sicurezza.
+rifiuto anonimo. Il test browser isolato verifica che il nome si possa salvare e persista al reload.
+La prova visiva dell’indicatore sul PC Windows resta pendente. Gli account esistenti
+hanno il nuovo campo vuoto e vedono l’email come fallback finché non impostano il
+nome in Account e sicurezza.
 
 La durata del link MeshCentral è stata estesa a 30 minuti (prima 5); il countdown
 UI continua a riflettere `ExpiresAt` fornito dal server. Deploy LAN completato con
@@ -911,3 +912,5 @@ Verifica finale dopo la durata di 30 minuti: `./scripts/test.sh` passato con 64
 test xUnit/PostgreSQL, 4 test Vitest, TypeScript e build dashboard. Test dedicato
 vincola la durata a 30 minuti; `docker compose build api dashboard` passato. CI per il commit `9355c75` ha passato Linux build/test/smoke; la pipeline Windows
 per packaging dell’agente resta in corso e non blocca le modifiche web.
+
+Smoke Chromium esteso per impostare il nome operatore e verificarne la persistenza; `./scripts/smoke.sh --browser` passato. Questo non avvia MeshCentral né sostituisce la verifica visiva sul PC pilota.
