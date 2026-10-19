@@ -255,6 +255,11 @@ processo PowerShell temporaneo. È consentito annullare solo lavori ancora in co
 Release MSI candidata 0.8.5. Il test su un processo applicativo reale del PC pilota
 e la verifica CI Windows sono ancora aperti.
 
+La console ticket aggiunge filtri server-side per priorità e assegnatario (email),
+senza allargare l’insieme dei ticket restituiti oltre gli ambiti `tickets.view`.
+Test API verificano filtri e rifiuto di priorità non valide; code, categorie,
+contatori/SLA e assegnazione massiva restano da sviluppare.
+
 
 ### SD1 — priorità e assegnazione ticket — sorgenti e test verificati
 

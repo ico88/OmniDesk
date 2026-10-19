@@ -802,6 +802,10 @@ Windows MSI 0.8.4 ha superato build, installazione, recovery e disinstallazione;
 upgrade/repair/rollback è ancora in corso. Nessun deploy o test di upgrade su DB
 LAN con record reali.
 
+La console filtra ora ticket autorizzati per priorità e email assegnatario. La
+suite copre filtri positivi e priorità non ammessa; non si effettuano conteggi o
+risultati prima dell’applicazione dei normali filtri di autorizzazione.
+
 
 ## Terminazione processi RMM — 19 ottobre 2026
 
