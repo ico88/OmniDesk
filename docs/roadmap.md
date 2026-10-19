@@ -18,12 +18,14 @@ all'interfaccia nativa MeshCentral effettivamente incorporata; React non tenta
 di controllare il DOM cross-origin. La UI indica che il caricamento iframe non
 dimostra la connessione video. Processi, servizi ed eventi hanno ora raccolta
 su richiesta in sola lettura dall'Agent, autorizzazione device/group scoped
-`diagnostics.view`, coda, rivalidazione al claim, limiti di output e audit. Le
-azioni per terminare processi o modificare servizi non esistono. Le metriche
+`diagnostics.view`, coda, rivalidazione al claim, limiti di output e audit.
+Terminazione processi e controllo stop/start/restart servizi sono operazioni
+separate con permessi `processes.manage` e `services.manage`, conferma e audit.
+Le metriche
 attuali sono snapshot/counter e non generano grafici storici. Build e test sono registrati
 in [validation.md](validation.md). Sessione Mesh reale e collaudo interattivo
-Windows restano gate separati. Il deploy live è escluso per non interrompere
-sessioni remote correnti.
+Windows restano gate separati. Deploy live consentito solo dopo backup e
+verifica che non vi siano sessioni remote o job mutanti attivi.
 
 - M1: infrastruttura Compose/Caddy/PostgreSQL, setup Ubuntu, schema e migrazioni Identity, bootstrap, autenticazione e CSRF, utenti, permessi globali/gruppo/device, audit, dashboard e branding. Consegna iniziale: vedi validation.md per prove effettive e limiti.
 - M2 (implementazione iniziale compilata; MSI compilato in CI; gate installazione Windows/firma ancora aperto): servizio Windows .NET con enrollment monouso, chiavi dispositivo, revoca, retry/backoff, metriche CPU/RAM/disco/rete/uptime, inventario; MSI unico firmato e aggiornamento sicuro. Test Windows e reti NAT differenti obbligatori.
@@ -55,7 +57,7 @@ Incremento gestione dispositivi: etichetta/gruppo e revoca identità dalla conso
 | Fase | Risultato previsto | Dipendenze e gate di ingresso/uscita |
 | --- | --- | --- |
 | SD0 — basi comuni e progetto esecutivo | **Implementato:** registro sedi e Device.SiteId, sede backfill “Sede da assegnare”, concessioni site-scoped, snapshot sede sui ticket, outbox transazionale core per gli eventi elencati nelle verifiche. **Da completare:** consumer/worker outbox, copertura completa eventi, storage allegati, antivirus, retention e identità portale | Migrazioni versionate e upgrade LAN verificati; nessun gruppo trasformato implicitamente in sede. Il ticket conserva la sede storica quando il dispositivo si sposta |
-| SD1 — ticket e console IT | **Parziale implementato:** intake Agent/Tray mono-dispositivo, stati open/in_progress/resolved/closed, priorità e categorie, code/site routing/membership, assegnazione singola/bulk, chat pubblica, audit, note interne con `tickets.note.internal`. **Da completare:** link espliciti multi-dispositivo, workflow configurabile e interventi RMM correlati | Test PostgreSQL su autorizzazione, versioni, intake/idempotenza, assegnazioni e note; migrazioni versionate. Le azioni RMM richiedono comunque la capability corrente e i gate M3/M4 |
+| SD1 — ticket e console IT | **Parziale implementato:** intake Agent/Tray mono-dispositivo, stati open/in_progress/resolved/closed, priorità e categorie, code/site routing/membership, assegnazione singola/bulk, chat pubblica, audit, note interne e link multi-dispositivo nella stessa sede. **Da completare:** workflow configurabile e interventi RMM correlati | Test PostgreSQL su autorizzazione, vincolo sede, versioni, intake/idempotenza, assegnazioni e note; migrazioni versionate. Le azioni RMM richiedono comunque la capability corrente e i gate M3/M4 |
 | SD2 — portale e collaborazione | **Parziale implementato:** Tray locale mostra i ticket del SID Windows, conversazione pubblica e risposte dell’utente; dashboard IT mostra conversazione e note riservate separate. Screenshot solo con consenso. **Da completare:** portale web con account/relazioni verificate, allegati generici in quarantena, antivirus, notifiche e KB iniziale | Screenshot PNG ristretto, consenso, audit e test anti-fuga note; il portale personale, storage esterno e antivirus restano gate separati |
 | SD3 — ingressi agente/email e storico interventi | **Parziale implementato:** intake macchina autenticato, limitato e idempotente. **Da completare:** mailbox/thread verificati, qualificazione email, correlazione sessioni/job e riepilogo interventi | Identità macchina separata da quella umana, rate limit e test replay esistenti; segreti mailbox e test spoof/replay/loop obbligatori prima di collegare email. Nessuna identità umana deriva dal solo mittente |
 | SD4 — allarmi, SLA ed escalation | Motore allarmi core persistente, ticket da occorrenze correlate, SLA/calendari versionati, timer durevoli e automazioni allowlist | SD0–SD3 e sviluppo/validazione del motore allarmi, oggi assente. Gate DST/pausa/riapertura/crash, deduplica escalation e prevenzione loop. Nessuna shell automatica |
@@ -344,15 +346,15 @@ da verificare il comando contro una sessione MeshCentral interattiva. Il deploy
 LAN e la migrazione sono stati completati dopo backup e verifica di zero job e
 zero sessioni; smoke HTTPS/CA e bundle aggiornato passano.
 
-### SD2 — ticket associati a più dispositivi — sviluppo in verifica
+### SD1 — vincolo sede per ticket multi-dispositivo — sorgenti e test verificati
 
-Il ticket conserva il dispositivo principale e supporta collegamenti espliciti
-ad altri dispositivi, con snapshot nome/sede, permessi `tickets.manage` su
-entrambi i lati, limite dieci, lock per dispositivo, versione attesa, audit e
-outbox. I ticket esistenti vengono migrati mantenendo il loro dispositivo
-primario. Build dashboard, Vitest 5/5 e API/PostgreSQL 64/64 passati. La
-migrazione è applicata su LAN dopo backup e con zero sessioni/job; smoke
-HTTPS/CA passata. L'interazione autenticata ticket non è ancora collaudata.
+Il collegamento multi-dispositivo esiste già con snapshot, permessi, limite dieci,
+lock, versione, audit/outbox e migrazione backfill del primario. Questa correzione
+applica la specifica: il dispositivo candidato deve condividere la sede del
+ticket e la UI non propone sedi diverse. Il server ricontrolla la sede dopo il
+lock dispositivo per evitare link durante uno spostamento concorrente. Test API/
+PostgreSQL 64/64, build dashboard e Vitest 5/5 passati. La correzione è ancora
+da distribuire su LAN; la versione precedente è attualmente pubblicata.
 
 
 ### SD1 — creazione manuale ticket dalla console — sorgenti e test verificati

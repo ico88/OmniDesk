@@ -1106,3 +1106,13 @@ MeshCentral è stato eseguito. CI Linux `39276800149` e Windows `39276800079`
 sono passate sul commit finale con codice applicativo; anche Windows
 `39276440522` è passato sul commit della feature. I workflow del successivo
 commit solo documentale sono stati avviati dopo la validazione runtime.
+
+### Ticket multi-dispositivo: vincolo stessa sede
+
+La specifica SD1 richiede che ogni dispositivo associato appartenga alla sede
+storica del ticket al momento del link. API aggiornata per filtrare i candidati
+alla stessa sede e rifiutare link cross-site; dopo i lock dispositivo il server
+rilegge sede/nome, ricontrolla il permesso e produce lo snapshot aggiornato.
+Test PostgreSQL: cross-site rifiutato, target same-site senza grant negato,
+link same-site amministrativo consentito. `./scripts/test.sh` passa con 64/64
+xUnit e 5/5 Vitest. Deploy LAN non ancora effettuato per questo incremento.
