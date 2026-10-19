@@ -61,6 +61,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
     public DbSet<UpdateJob> UpdateJobs => Set<UpdateJob>();
     public DbSet<DashboardLayout> DashboardLayouts => Set<DashboardLayout>();
     public DbSet<CoreOutboxEvent> CoreOutboxEvents => Set<CoreOutboxEvent>();
+    public DbSet<KnowledgeArticle> KnowledgeArticles => Set<KnowledgeArticle>();
     protected override void OnModelCreating(ModelBuilder b)
     {
         base.OnModelCreating(b);
@@ -171,6 +172,13 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
         b.Entity<CoreOutboxEvent>().Property(x => x.Payload).HasColumnType("jsonb");
         b.Entity<CoreOutboxEvent>().HasIndex(x => new { x.NextAttemptAt, x.OccurredAt })
             .HasFilter("\"PublishedAt\" IS NULL");
+        b.Entity<KnowledgeArticle>().Property(x => x.Slug).HasMaxLength(120);
+        b.Entity<KnowledgeArticle>().Property(x => x.NormalizedSlug).HasMaxLength(120);
+        b.Entity<KnowledgeArticle>().Property(x => x.Title).HasMaxLength(160);
+        b.Entity<KnowledgeArticle>().Property(x => x.Summary).HasMaxLength(500);
+        b.Entity<KnowledgeArticle>().Property(x => x.Body).HasMaxLength(30000);
+        b.Entity<KnowledgeArticle>().HasIndex(x => x.NormalizedSlug).IsUnique();
+        b.Entity<KnowledgeArticle>().HasIndex(x => new { x.IsPublished, x.UpdatedAt });
         foreach (var role in Security.Permissions.Roles)
         {
             b.Entity<IdentityRole>().HasData(new IdentityRole { Id = role, Name = role, NormalizedName = role.ToUpperInvariant(), ConcurrencyStamp = role });

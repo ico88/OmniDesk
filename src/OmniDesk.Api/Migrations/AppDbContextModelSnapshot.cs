@@ -543,6 +543,62 @@ namespace OmniDesk.Api.Migrations
                     b.ToTable("EnrollmentTokens");
                 });
 
+            modelBuilder.Entity("OmniDesk.Api.Data.KnowledgeArticle", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasMaxLength(30000)
+                        .HasColumnType("character varying(30000)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsPublished")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("NormalizedSlug")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<DateTimeOffset?>("PublishedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Slug")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<string>("Summary")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("Version")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NormalizedSlug")
+                        .IsUnique();
+
+                    b.HasIndex("IsPublished", "UpdatedAt");
+
+                    b.ToTable("KnowledgeArticles");
+                });
+
             modelBuilder.Entity("OmniDesk.Api.Data.MeshDeviceMapping", b =>
                 {
                     b.Property<Guid>("DeviceId")
@@ -718,6 +774,16 @@ namespace OmniDesk.Api.Migrations
                         },
                         new
                         {
+                            RoleId = "Administrator",
+                            Permission = "knowledge.view"
+                        },
+                        new
+                        {
+                            RoleId = "Administrator",
+                            Permission = "knowledge.manage"
+                        },
+                        new
+                        {
                             RoleId = "Operator",
                             Permission = "view"
                         },
@@ -755,6 +821,11 @@ namespace OmniDesk.Api.Migrations
                         {
                             RoleId = "Operator",
                             Permission = "tickets.manage"
+                        },
+                        new
+                        {
+                            RoleId = "Operator",
+                            Permission = "knowledge.view"
                         },
                         new
                         {

@@ -1,0 +1,16 @@
+.knowledge-layout{display:grid;grid-template-columns:minmax(260px,360px) minmax(0,1fr);gap:20px;align-items:start}
+.knowledge-list,.knowledge-detail{min-width:0}
+.knowledge-article-list{display:grid;gap:8px}
+.knowledge-article-choice{display:grid;justify-content:stretch;text-align:left;background:transparent;color:var(--text);border:1px solid var(--border);padding:13px;border-radius:10px;gap:6px}
+.knowledge-article-choice:hover,.knowledge-article-choice.selected{background:var(--hover);filter:none}
+.knowledge-article-choice small{font-weight:400;white-space:normal}
+.knowledge-article-choice .status-pill{justify-self:start}
+.knowledge-content h2{margin:6px 0 0}
+.knowledge-summary{font-size:15px;color:var(--text)}
+.knowledge-body{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.75;margin-top:24px}
+.knowledge-editor label{margin:14px 0}
+.knowledge-editor textarea{min-height:260px}
+.knowledge-editor .knowledge-publish{display:flex;align-items:center;gap:9px}
+.knowledge-editor .knowledge-publish input{width:auto;margin:0}
+.knowledge-editor>small{display:block;margin-top:12px}
+@media(max-width:800px){.knowledge-layout{grid-template-columns:1fr}.knowledge-list,.knowledge-detail{margin-bottom:14px}}

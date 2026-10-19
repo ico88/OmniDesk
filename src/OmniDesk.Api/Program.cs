@@ -152,5 +152,6 @@ app.MapUpdateEndpoints();
 app.MapAccountEndpoints();
 app.MapDashboardEndpoints();
 app.MapDownloadEndpoints();
+app.MapKnowledgeEndpoints();
 app.Run();
 public partial class Program { }
