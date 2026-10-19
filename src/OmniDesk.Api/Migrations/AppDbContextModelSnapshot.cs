@@ -894,6 +894,9 @@ namespace OmniDesk.Api.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<Guid?>("SiteId")
+                        .HasColumnType("uuid");
+
                     b.Property<long>("Version")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("bigint")
@@ -902,7 +905,12 @@ namespace OmniDesk.Api.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("NormalizedName")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("\"SiteId\" IS NULL");
+
+                    b.HasIndex("SiteId", "NormalizedName")
+                        .IsUnique()
+                        .HasFilter("\"SiteId\" IS NOT NULL");
 
                     b.ToTable("SupportQueues");
                 });
@@ -1310,6 +1318,14 @@ namespace OmniDesk.Api.Migrations
                         .HasForeignKey("TicketId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("OmniDesk.Api.Data.SupportQueue", b =>
+                {
+                    b.HasOne("OmniDesk.Api.Data.Site", null)
+                        .WithMany()
+                        .HasForeignKey("SiteId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("OmniDesk.Api.Data.SupportQueueMember", b =>

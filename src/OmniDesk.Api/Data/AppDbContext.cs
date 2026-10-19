@@ -88,7 +88,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
         b.Entity<SupportQueue>().Property(x => x.Name).HasMaxLength(100);
         b.Entity<SupportQueue>().Property(x => x.NormalizedName).HasMaxLength(100);
         b.Entity<SupportQueue>().Property(x => x.Version).HasDefaultValue(1L);
-        b.Entity<SupportQueue>().HasIndex(x => x.NormalizedName).IsUnique();
+        b.Entity<SupportQueue>().HasOne<Site>().WithMany().HasForeignKey(x => x.SiteId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<SupportQueue>().HasIndex(x => x.NormalizedName).IsUnique().HasFilter("\"SiteId\" IS NULL");
+        b.Entity<SupportQueue>().HasIndex(x => new { x.SiteId, x.NormalizedName }).IsUnique().HasFilter("\"SiteId\" IS NOT NULL");
         b.Entity<SupportQueueMember>().HasKey(x => new { x.QueueId, x.UserId });
         b.Entity<SupportQueueMember>().HasOne<SupportQueue>().WithMany().HasForeignKey(x => x.QueueId).OnDelete(DeleteBehavior.Cascade);
         b.Entity<SupportQueueMember>().HasOne<AppUser>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);

@@ -3,6 +3,7 @@ namespace OmniDesk.Api.Data;
 public sealed class SupportQueue
 {
     public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid? SiteId { get; set; }
     public string Name { get; set; } = "";
     public string NormalizedName { get; set; } = "";
     public bool IsActive { get; set; } = true;

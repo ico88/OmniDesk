@@ -12,7 +12,7 @@ public sealed record CreateRoleRequest(string Name, string[] Permissions);
 public sealed record GrantRequest(string UserId, string Role, Guid? GroupId, Guid? DeviceId, Guid? SiteId = null);
 public sealed record SiteRequest(string Name);
 public sealed record SiteEditRequest(string Name, string ExpectedName, bool IsArchived);
-public sealed record SupportQueueRequest(string Name);
+public sealed record SupportQueueRequest(string Name, Guid? SiteId = null);
 public sealed record SupportQueueEditRequest(string Name, string ExpectedName, long ExpectedVersion, bool IsActive);
 public sealed record SupportQueueMembersRequest(long ExpectedVersion, string[] UserIds);
 public sealed record SupportQueueRoutingRequest(Guid? SiteId, string Category, Guid QueueId);
@@ -42,17 +42,18 @@ public static class ManagementEndpoints
             return await p.Allows(ctx.HttpContext.User.UserId(), "administration") ? await next(ctx) : Results.Forbid();
         });
         admin.MapGet("/sites", async (AppDbContext db) => Results.Ok(await db.Sites.AsNoTracking().OrderBy(x => x.Name).Select(x => new { x.Id, x.Name, x.IsArchived, deviceCount = db.Devices.Count(d => d.SiteId == x.Id), ticketCount = db.SupportTickets.Count(t => t.SiteId == x.Id) }).ToListAsync()));
-        admin.MapGet("/support-queues", async (AppDbContext db) => Results.Ok(await db.SupportQueues.AsNoTracking().OrderBy(x => x.Name).Select(x => new { x.Id, x.Name, x.IsActive, x.Version, ticketCount = db.SupportTickets.Count(t => t.QueueId == x.Id) }).ToListAsync()));
+        admin.MapGet("/support-queues", async (AppDbContext db) => Results.Ok(await db.SupportQueues.AsNoTracking().OrderBy(x => x.SiteId).ThenBy(x => x.Name).Select(x => new { x.Id, x.SiteId, siteName = x.SiteId == null ? null : db.Sites.Where(s => s.Id == x.SiteId).Select(s => s.Name).FirstOrDefault(), x.Name, x.IsActive, x.Version, ticketCount = db.SupportTickets.Count(t => t.QueueId == x.Id) }).ToListAsync()));
         admin.MapPost("/support-queues", async (SupportQueueRequest r, HttpContext c, AppDbContext db) => {
             var name = r.Name?.Trim();
             if (string.IsNullOrWhiteSpace(name) || name.Length > 100) return Results.BadRequest();
+            if (r.SiteId is not null && !await db.Sites.AnyAsync(s => s.Id == r.SiteId && !s.IsArchived)) return Results.BadRequest(new { error = "La sede selezionata non è attiva." });
             var normalized = name.ToUpperInvariant();
-            if (await db.SupportQueues.AnyAsync(x => x.NormalizedName == normalized)) return Results.Conflict();
-            var queue = new SupportQueue { Name = name, NormalizedName = normalized };
+            if (await db.SupportQueues.AnyAsync(x => x.NormalizedName == normalized && x.SiteId == r.SiteId)) return Results.Conflict();
+            var queue = new SupportQueue { Name = name, NormalizedName = normalized, SiteId = r.SiteId };
             db.SupportQueues.Add(queue); db.AuditEvents.Add(Event(c, "support.queue.create", queue.Id.ToString()));
-            CoreOutbox.Add(db, "support.queue.created", "support-queue", queue.Id, new { queueId = queue.Id, queue.Name }, c.TraceIdentifier);
+            CoreOutbox.Add(db, "support.queue.created", "support-queue", queue.Id, new { queueId = queue.Id, queue.SiteId, queue.Name }, c.TraceIdentifier);
             try { await db.SaveChangesAsync(); } catch (DbUpdateException e) when (e.InnerException is Npgsql.PostgresException { SqlState: "23505" }) { return Results.Conflict(); }
-            return Results.Created($"/api/admin/support-queues/{queue.Id}", new { queue.Id, queue.Name, queue.IsActive, queue.Version });
+            return Results.Created($"/api/admin/support-queues/{queue.Id}", new { queue.Id, queue.SiteId, queue.Name, queue.IsActive, queue.Version });
         });
         admin.MapPut("/support-queues/{id:guid}", async (Guid id, SupportQueueEditRequest r, HttpContext c, AppDbContext db) => {
             var queue = await db.SupportQueues.SingleOrDefaultAsync(x => x.Id == id);
@@ -61,7 +62,7 @@ public static class ManagementEndpoints
             var name = r.Name?.Trim();
             if (string.IsNullOrWhiteSpace(name) || name.Length > 100) return Results.BadRequest();
             var normalized = name.ToUpperInvariant();
-            if (await db.SupportQueues.AnyAsync(x => x.Id != id && x.NormalizedName == normalized)) return Results.Conflict();
+            if (await db.SupportQueues.AnyAsync(x => x.Id != id && x.SiteId == queue.SiteId && x.NormalizedName == normalized)) return Results.Conflict();
             if (queue.Name == name && queue.IsActive == r.IsActive) return Results.NoContent();
             queue.Name = name; queue.NormalizedName = normalized; queue.IsActive = r.IsActive; queue.Version++;
             db.AuditEvents.Add(Event(c, r.IsActive ? "support.queue.update" : "support.queue.deactivate", id.ToString()));
@@ -100,7 +101,7 @@ public static class ManagementEndpoints
         admin.MapGet("/support-routing", async (AppDbContext db) => Results.Ok(await db.SupportQueueRoutingRules.AsNoTracking().OrderBy(x => x.SiteId).ThenBy(x => x.Category)
             .Select(x => new { x.Id, x.SiteId, siteName = x.SiteId == null ? null : db.Sites.Where(s => s.Id == x.SiteId).Select(s => s.Name).FirstOrDefault(), x.Category, x.QueueId, queueName = db.SupportQueues.Where(q => q.Id == x.QueueId).Select(q => q.Name).FirstOrDefault(), x.Version }).ToArrayAsync()));
         admin.MapPost("/support-routing", async (SupportQueueRoutingRequest r, HttpContext c, AppDbContext db) => {
-            if (!SupportEndpoints.ValidCategory(r.Category) || !await db.SupportQueues.AnyAsync(q => q.Id == r.QueueId && q.IsActive) ||
+            if (!SupportEndpoints.ValidCategory(r.Category) || !await db.SupportQueues.AnyAsync(q => q.Id == r.QueueId && q.IsActive && (q.SiteId == null || q.SiteId == r.SiteId)) ||
                 (r.SiteId is not null && !await db.Sites.AnyAsync(s => s.Id == r.SiteId && !s.IsArchived))) return Results.BadRequest();
             var rule = new SupportQueueRoutingRule { SiteId = r.SiteId, Category = r.Category, QueueId = r.QueueId };
             db.SupportQueueRoutingRules.Add(rule);
@@ -110,7 +111,7 @@ public static class ManagementEndpoints
             return Results.Created($"/api/admin/support-routing/{rule.Id}", new { rule.Id, rule.SiteId, rule.Category, rule.QueueId, rule.Version });
         });
         admin.MapPut("/support-routing/{id:guid}", async (Guid id, SupportQueueRoutingEditRequest r, HttpContext c, AppDbContext db) => {
-            if (!SupportEndpoints.ValidCategory(r.Category) || !await db.SupportQueues.AnyAsync(q => q.Id == r.QueueId && q.IsActive) ||
+            if (!SupportEndpoints.ValidCategory(r.Category) || !await db.SupportQueues.AnyAsync(q => q.Id == r.QueueId && q.IsActive && (q.SiteId == null || q.SiteId == r.SiteId)) ||
                 (r.SiteId is not null && !await db.Sites.AnyAsync(s => s.Id == r.SiteId && !s.IsArchived))) return Results.BadRequest();
             var rule = await db.SupportQueueRoutingRules.SingleOrDefaultAsync(x => x.Id == id);
             if (rule is null) return Results.NotFound();
