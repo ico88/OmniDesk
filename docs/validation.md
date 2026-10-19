@@ -859,3 +859,11 @@ PowerShell temporaneo e prova ad arrestare solo quella fixture. `dotnet publish`
 win-x64 e build API/dashboard passati. Workflow Actions 0.8.5 in corso sulla prima
 revisione della feature; una nuova esecuzione verificherà anche l’ultimo hardening;
 nessun deploy LAN né azione su processi reali.
+
+## Code Service Desk per sede — 2026-10-19
+
+Implementato `SupportQueue.SiteId` nullable con migrazione additiva: le code già presenti restano globali, i nomi sono univoci separatamente per code globali e per sede. API amministrative per creare/listare code con ambito; l'ambito non è modificabile dopo la creazione. Le regole di instradamento e le assegnazioni singole/massive rifiutano code di un'altra sede. L'intake usa prima la regola attiva della sede e poi il fallback globale. Le API restituiscono code di sede solo a operatori con ticket visibili in quella sede e le opzioni ticket richiedono `tickets.manage` sul dispositivo.
+
+La dashboard carica le opzioni globali e quelle delle sedi dei ticket visibili, deduplicandole per filtro, assegnazione massiva e scheda ticket. Nessun dato di sede non autorizzato viene dedotto dal client; ogni mutazione è comunque rivalidata lato server. Non è stata eseguita alcuna migrazione o pubblicazione sull'istanza LAN.
+
+Verifiche locali: `./scripts/test.sh > /tmp/omnidesk-site-queues-final.log 2>&1` passato (63 test xUnit con PostgreSQL effimero e migrazioni, 4 test Vitest e build TypeScript); `docker compose config -q` e `docker compose -f compose.test.yaml config -q` passati; `docker compose build api dashboard` passato; `./scripts/smoke.sh --browser > /tmp/omnidesk-site-queues-browser.log 2>&1` passato (container, migrazioni/bootstrap, HTTPS, Chromium e flussi UI esistenti); `git diff --check` passato. Lo smoke Chromium non ha esercitato direttamente le nuove opzioni queue per sede: queste sono coperte dai test API e dalla build UI, non da uno scenario browser dedicato. Nessun test runtime sui servizi LAN o sull'Agent Windows è implicato da queste verifiche.

@@ -68,8 +68,15 @@ richiede `tickets.manage` su ogni ticket. `GET /api/support/queues` richiede alm
 `/api/admin/support-queues`. L'amministrazione gestisce la membership con
 `GET/PUT /api/admin/support-queues/{id}/members` usando la versione attesa della
 coda; membership non concede visibilità sui ticket o permessi sui dispositivi.
+Le code possono essere globali o associate a una sede alla creazione; il nome è
+univoco nell'ambito e tale ambito non è modificabile dopo la creazione. `GET
+/api/support/queues` espone solo code globali; `GET /api/support/{id}/queues`
+richiede `tickets.manage` sul ticket e restituisce code globali e code della sua
+sede. Assegnazioni singole o massive rifiutano code di altre sedi; l'operazione
+massiva può associare una coda site-scoped solo a ticket della stessa sede.
 Le regole di routing sono amministrate sotto `/api/admin/support-routing`, una
-per categoria globale o per sede. Per i nuovi ticket prevale la regola della
-sede; la regola globale è il fallback. Il routing assegna la coda, non l'operatore
-e non cambia i grant.
+per categoria globale o per sede. Le regole globali puntano a code globali; quelle
+di sede possono puntare a code globali o della stessa sede. Per i nuovi ticket
+prevale la regola della sede; la regola globale è il fallback. Il routing assegna
+la coda, non l'operatore e non cambia i grant.
 Vedere [modello Service Desk](service-desk-data-model.md).
