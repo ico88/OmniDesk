@@ -12,11 +12,13 @@ public sealed class FakeMesh : IMeshCentralClient, IMeshProvisioningClient
     public int GroupsRemoved { get; private set; }
     public List<bool> ConsentRequests {get;}=[];
     public bool FailPolicy {get;set;}
+    public string ProvisionedSettings { get; set; } = "MeshName=encrypted-fixture";
+    public int ProvisionCalls { get; private set; }
     public Task ApplySessionConsentPolicy(string meshId,CancellationToken ct) { if(FailPolicy)throw new InvalidOperationException("Fixture policy failure");return Task.CompletedTask; }
     public Task CheckReady(CancellationToken ct)=>Task.CompletedTask;
     public Task RemoveGroup(string meshId,CancellationToken ct){GroupsRemoved++;return Task.CompletedTask;}
     public bool ValidNode { get; set; }
-    public Task<MeshAgentProvisioning> Provision(Guid deviceId,CancellationToken ct) => Task.FromResult(new MeshAgentProvisioning("mesh//fixture", "MeshName=encrypted-fixture"));
+    public Task<MeshAgentProvisioning> Provision(Guid deviceId,CancellationToken ct) { ProvisionCalls++; return Task.FromResult(new MeshAgentProvisioning("mesh//fixture", ProvisionedSettings)); }
     public Task<bool> ContainsNode(string meshId,string nodeId,CancellationToken ct) => Task.FromResult(ValidNode);
     public Func<Task>? DuringCreate {get;set;}
     public bool FailRevocation { get; set; }

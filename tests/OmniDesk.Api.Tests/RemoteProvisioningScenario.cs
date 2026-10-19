@@ -39,6 +39,21 @@ public static class RemoteProvisioningScenario
         async Task<long> Version()=> (await admin.GetFromJsonAsync<System.Text.Json.JsonElement>(route)).GetProperty("accessPolicyVersion").GetInt64();
         var version=await Version();
         Assert.False((await admin.GetFromJsonAsync<System.Text.Json.JsonElement>(route)).GetProperty("unattendedAllowed").GetBoolean());
+        Assert.Equal(HttpStatusCode.Forbidden,(await scoped.PostAsync(route+"/refresh",null)).StatusCode);
+        var sessionResponse=await admin.PostAsJsonAsync($"/api/devices/{device}/remote-sessions",new {capability="remote.control"});
+        Assert.Equal(HttpStatusCode.Created,sessionResponse.StatusCode);
+        var refreshSession=(await sessionResponse.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("id").GetGuid();
+        var oldConfigurationId=config.Id;
+        factory.Mesh.ProvisionedSettings="MeshName=refreshed-fixture";
+        Assert.Equal(HttpStatusCode.NoContent,(await admin.PostAsync(route+"/refresh",null)).StatusCode);
+        Assert.Equal(2,factory.Mesh.ProvisionCalls);
+        Auth();var refreshedConfig=(await agent.GetFromJsonAsync<RemoteAgentConfiguration>("/api/agent/remote/configuration"))!;
+        Assert.NotEqual(oldConfigurationId,refreshedConfig.Id);
+        Assert.Equal("MeshName=refreshed-fixture",refreshedConfig.Settings);
+        var refreshedSession=await admin.GetFromJsonAsync<System.Text.Json.JsonElement>($"/api/devices/{device}/remote-sessions");
+        Assert.Equal("revocation_pending",refreshedSession.EnumerateArray().Single(x=>x.GetProperty("id").GetGuid()==refreshSession).GetProperty("state").GetString());
+        Assert.Equal(HttpStatusCode.NoContent,(await admin.DeleteAsync($"/api/devices/{device}/remote-sessions/{refreshSession}")).StatusCode);
+        version=await Version();
         Assert.Equal(HttpStatusCode.Forbidden,(await scoped.PutAsJsonAsync(policyRoute,new {unattendedAllowed=true,expectedVersion=version})).StatusCode);
         factory.Mesh.FailPolicy=true;
         Assert.Equal(HttpStatusCode.ServiceUnavailable,(await admin.PutAsJsonAsync(policyRoute,new {unattendedAllowed=true,expectedVersion=version})).StatusCode);
@@ -66,6 +81,7 @@ public static class RemoteProvisioningScenario
             Assert.False(await db.RemoteSessions.AnyAsync(x=>x.DeviceId==device&&(x.State=="active"||x.State=="revocation_pending")));
             Assert.True(await db.AuditEvents.AnyAsync(x=>x.Action=="remote.unattended.enable"&&x.Target==device.ToString()));
             Assert.True(await db.AuditEvents.AnyAsync(x=>x.Action=="remote.unattended.disable"&&x.Target==device.ToString()));
+            Assert.True(await db.AuditEvents.AnyAsync(x=>x.Action=="remote.provision.refresh"&&x.Target==device.ToString()));
         }
         Assert.Equal(HttpStatusCode.NoContent,(await admin.DeleteAsync(route)).StatusCode);
         availability=await admin.GetFromJsonAsync<System.Text.Json.JsonElement>($"/api/devices/{device}/remote-sessions/availability");

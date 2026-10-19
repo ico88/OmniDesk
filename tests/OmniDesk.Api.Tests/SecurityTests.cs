@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using OmniDesk.Api.Data;
 using OmniDesk.Api.Security;
 using OmniDesk.Remote.MeshCentral;
@@ -16,7 +17,12 @@ namespace OmniDesk.Api.Tests;
 public sealed class ApiFactory : WebApplicationFactory<Program>
 {
     public FakeMesh Mesh { get; } = new();
-    protected override void ConfigureWebHost(IWebHostBuilder builder) => builder.ConfigureServices(s => s.AddSingleton<IMeshCentralClient>(Mesh)).ConfigureAppConfiguration((_, c) =>
+    protected override void ConfigureWebHost(IWebHostBuilder builder) => builder.ConfigureServices(s => {
+        // Integration scenarios invoke these workers explicitly so their retries do not race the assertions.
+        var workers = new[] { typeof(AssertionCleanup), typeof(RemoteSessionGuard), typeof(RemoteProvisioningGuard) };
+        foreach (var descriptor in s.Where(x => x.ServiceType == typeof(IHostedService) && x.ImplementationType is not null && workers.Contains(x.ImplementationType)).ToArray()) s.Remove(descriptor);
+        s.AddSingleton<IMeshCentralClient>(Mesh);
+    }).ConfigureAppConfiguration((_, c) =>
         c.AddInMemoryCollection(new Dictionary<string, string?> {
             ["Security:TotpEnabled"] = "true",
             ["ConnectionStrings:Database"] = Environment.GetEnvironmentVariable("TEST_DATABASE")
