@@ -1227,3 +1227,27 @@ Windows 39290031180 ha compilato l'MSI 0.8.9, estratto l'icona dal binario
 installato e superato installazione, recovery, disinstallazione e
 upgrade/repair/rollback. `docker compose config --quiet` e `git diff --check`
 passati. Nessun deployment o aggiornamento sulla LAN.
+
+### KB — storico delle revisioni consultabile — 2026-10-19
+
+Ogni articolo crea una revisione snapshot iniziale e ogni aggiornamento aggiunge
+la revisione successiva nella stessa transazione del controllo ottimistico e
+dell'audit. La migrazione `20261019170935_KnowledgeArticleRevisions` crea la
+tabella append-only lato API e copia la versione corrente degli articoli
+esistenti; le revisioni non espongono mutazioni o ripristino automatico. Gli
+endpoint di elenco e dettaglio richiedono `knowledge.manage`; la UI presenta
+revisioni in sola lettura con autore e data, e torna esplicitamente alla versione
+corrente.
+
+`./scripts/test.sh` passato con 64/64 test xUnit/PostgreSQL: copre creazione
+v1, esclusione del body dall'elenco, negazione Viewer, un solo vincitore in
+update concorrenti, conflitto su versione obsoleta, v3 dopo ritiro dalla
+pubblicazione e permanenza delle revisioni precedenti. `docker compose build api
+dashboard` passato; TypeScript/Vite e `dotnet publish` sono stati eseguiti nei
+build container. `./scripts/smoke.sh --browser` passato al secondo tentativo:
+Chromium crea una guida, modifica la descrizione, apre v1, verifica il contenuto
+precedente e ritorna alla versione corrente. Il primo tentativo è fallito per
+un selettore test troppo rigido; corretto il selettore e il flusso è passato.
+Lo smoke usa PostgreSQL e container effimeri isolati; `docker compose config
+--quiet` per test e `git diff --check` passati. Nessun container, schema o dato
+LAN è stato aggiornato.
