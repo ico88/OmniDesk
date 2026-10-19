@@ -56,6 +56,12 @@ function App() {
   useEffect(() => {
     if (tab === 'devices' && admin) api<Group[]>('/admin/groups').then(setGroups).catch(e => setError(e instanceof Error ? e.message : 'Errore caricamento gruppi'));
   }, [tab, admin]);
+  useEffect(()=>{
+    if(!user||!['devices','support'].includes(tab))return;
+    let active=true;
+    void api<Device[]>('/devices').then(list=>{if(active)setDevices(list);}).catch(e=>{if(active)setError(e instanceof Error?e.message:'Elenco dispositivi non disponibile');});
+    return()=>{active=false;};
+  },[tab,user?.id]);
   useEffect(() => { load().catch(() => setUser(null)).finally(() => setLoading(false)); }, []);
   useEffect(() => {
     document.documentElement.dataset.theme = branding.theme;
