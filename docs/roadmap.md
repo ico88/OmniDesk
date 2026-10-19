@@ -55,7 +55,7 @@ Incremento gestione dispositivi: etichetta/gruppo e revoca identità dalla conso
 | Fase | Risultato previsto | Dipendenze e gate di ingresso/uscita |
 | --- | --- | --- |
 | SD0 — basi comuni e progetto esecutivo | **Implementato:** registro sedi e Device.SiteId, sede backfill “Sede da assegnare”, concessioni site-scoped, snapshot sede sui ticket, outbox transazionale core per gli eventi elencati nelle verifiche. **Da completare:** consumer/worker outbox, copertura completa eventi, storage allegati, antivirus, retention e identità portale | Migrazioni versionate e upgrade LAN verificati; nessun gruppo trasformato implicitamente in sede. Il ticket conserva la sede storica quando il dispositivo si sposta |
-| SD1 — ticket e console IT | **Parziale implementato:** intake Agent/Tray mono-dispositivo, stati open/in_progress/resolved/closed, priorità e categorie, code/site routing/membership, assegnazione singola/bulk, chat pubblica, audit, note interne con `tickets.note.internal`. **Da completare:** ticket manuali, link espliciti multi-dispositivo, workflow configurabile e interventi RMM correlati | Test PostgreSQL su autorizzazione, versioni, intake/idempotenza, assegnazioni e note; migrazioni versionate. Le azioni RMM richiedono comunque la capability corrente e i gate M3/M4 |
+| SD1 — ticket e console IT | **Parziale implementato:** intake Agent/Tray mono-dispositivo, stati open/in_progress/resolved/closed, priorità e categorie, code/site routing/membership, assegnazione singola/bulk, chat pubblica, audit, note interne con `tickets.note.internal`. **Da completare:** link espliciti multi-dispositivo, workflow configurabile e interventi RMM correlati | Test PostgreSQL su autorizzazione, versioni, intake/idempotenza, assegnazioni e note; migrazioni versionate. Le azioni RMM richiedono comunque la capability corrente e i gate M3/M4 |
 | SD2 — portale e collaborazione | **Parziale implementato:** Tray locale mostra i ticket del SID Windows, conversazione pubblica e risposte dell’utente; dashboard IT mostra conversazione e note riservate separate. Screenshot solo con consenso. **Da completare:** portale web con account/relazioni verificate, allegati generici in quarantena, antivirus, notifiche e KB iniziale | Screenshot PNG ristretto, consenso, audit e test anti-fuga note; il portale personale, storage esterno e antivirus restano gate separati |
 | SD3 — ingressi agente/email e storico interventi | **Parziale implementato:** intake macchina autenticato, limitato e idempotente. **Da completare:** mailbox/thread verificati, qualificazione email, correlazione sessioni/job e riepilogo interventi | Identità macchina separata da quella umana, rate limit e test replay esistenti; segreti mailbox e test spoof/replay/loop obbligatori prima di collegare email. Nessuna identità umana deriva dal solo mittente |
 | SD4 — allarmi, SLA ed escalation | Motore allarmi core persistente, ticket da occorrenze correlate, SLA/calendari versionati, timer durevoli e automazioni allowlist | SD0–SD3 e sviluppo/validazione del motore allarmi, oggi assente. Gate DST/pausa/riapertura/crash, deduplica escalation e prevenzione loop. Nessuna shell automatica |
@@ -322,3 +322,15 @@ servizi) mantengono la serializzazione reciproca. Test API/PostgreSQL 64/64,
 build API e dashboard e Vitest passati. Deploy API LAN effettuato dopo backup
 verificato e migrazione applicata; readiness HTTPS/CA e rifiuto anonimo passati.
 Prova interattiva Processi/Servizi dal browser ancora da fare.
+
+
+### SD1 — creazione manuale ticket dalla console — sorgenti e test verificati
+
+La console IT crea un ticket associato a un singolo dispositivo selezionato, con
+categoria, priorità, routing per sede/categoria e snapshot della sede corrente.
+Il server applica `tickets.manage` sul dispositivo, registra audit/outbox senza
+contenuto descrittivo e rende l'operazione idempotente per utente/dispositivo
+tramite RequestId. `Origin` distingue ticket Agent da quelli inseriti
+dall'operatore. Test API/PostgreSQL verificano grant scoped, deny fuori ambito,
+retry e conflitto per payload diverso. Build API/dashboard e Vitest passati.
+Deploy LAN e verifica interattiva restano da completare.

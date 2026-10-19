@@ -1012,3 +1012,21 @@ container API. L’istanza riporta la nuova migrazione e zero job attivi.
 ha passato readiness HTTPS/CA, dashboard e rifiuto anonimo. Nessun login o
 comando diagnostico sul dispositivo di produzione è stato eseguito; test
 interattivo da browser ancora da fare.
+
+
+### Ticket manuali da console — 2026-10-19
+
+Aggiunta la rotta `POST /api/support/manual`, protetta da `tickets.manage` per
+il dispositivo e transazione con lock di dispositivo. `RequestId` crea una sola
+riga per operatore/dispositivo; riuso con contenuto diverso risponde 409. Il
+ticket acquisisce sede, priorità e coda di routing; `Origin` distingue intake
+Agent e inserimento operatore. Audit e outbox non includono oggetto o
+descrizione. La UI offre il form nella vista Assistenza e nel pannello ticket
+del dispositivo, selezionando solo dispositivi visibili all'operatore.
+
+Verifiche: `docker compose -f compose.test.yaml run --build --rm tests` — 64/64
+(passano grant scoped, deny fuori ambito, creazione, retry, payload in conflitto
+e priorità/sede); `docker compose build api dashboard`, `npm test -- --run`
+(5/5), entrambe le configurazioni Compose e `git diff --check` passati.
+Migrazione versionata `20261019143300_ManualSupportTickets`. Non ancora applicata
+all'istanza LAN in questa nota.
