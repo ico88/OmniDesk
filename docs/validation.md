@@ -1137,4 +1137,9 @@ scripts/verify-lan.py --server https://192.168.1.233:8085 --ca
 omnidesk-local-ca.crt` passa readiness HTTPS/CA, dashboard e rifiuto anonimo.
 Asset bundle `index-BL35s1G4.js` verificato con le etichette badge. Conteggio
 successivo: 0 sessioni remote e 0 job. Non eseguiti login o verifica visiva
-autenticata nel browser; workflow GitHub Linux e Windows sono ancora in coda.
+autenticata nel browser sulla LAN. Esteso `scripts/browser-smoke.mjs` per inviare
+un heartbeat firmato al dispositivo fixture e controllare il badge Online dalla
+UI autenticata. `./scripts/smoke.sh --browser` passato: migrazioni/bootstrap,
+HTTPS, login, badge, support desk, device management e permessi viewer; lo stack
+temporaneo è stato rimosso dal trap. Workflow GitHub Linux e Windows sono ancora
+in coda.

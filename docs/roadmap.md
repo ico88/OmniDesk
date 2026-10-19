@@ -380,4 +380,5 @@ identità revocate. Il criterio coincide con la scheda dispositivo; tooltip e
 ogni 30 secondi mentre la sezione è aperta. Test PostgreSQL 64/64, Vitest 5/5,
 build Docker e configurazione Compose passati. Pubblicato sull'istanza LAN dopo
 backup e verifica di zero sessioni/job; readiness, CA, bundle e rifiuto anonimo
-verificati. Resta il controllo visivo con login nel browser.
+verificati. Lo smoke Chromium isolato verifica il badge Online con account
+autenticato e heartbeat firmato; resta la verifica manuale sull'istanza LAN.
