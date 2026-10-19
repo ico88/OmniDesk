@@ -8,6 +8,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using OmniDesk.Api.Data;
+using OmniDesk.Api.Attachments;
 using OmniDesk.Api.Security;
 using OmniDesk.Remote.MeshCentral;
 using Xunit;
@@ -17,14 +18,18 @@ namespace OmniDesk.Api.Tests;
 public sealed class ApiFactory : WebApplicationFactory<Program>
 {
     public FakeMesh Mesh { get; } = new();
+    public string AttachmentRoot { get; } = Path.Combine(Path.GetTempPath(), "omnidesk-test-attachments-" + Guid.NewGuid().ToString("N"));
     protected override void ConfigureWebHost(IWebHostBuilder builder) => builder.ConfigureServices(s => {
         // Integration scenarios invoke these workers explicitly so their retries do not race the assertions.
-        var workers = new[] { typeof(AssertionCleanup), typeof(RemoteSessionGuard), typeof(RemoteProvisioningGuard), typeof(TicketNotificationWorker) };
+        var workers = new[] { typeof(AssertionCleanup), typeof(RemoteSessionGuard), typeof(RemoteProvisioningGuard), typeof(TicketNotificationWorker), typeof(AttachmentScanWorker) };
         foreach (var descriptor in s.Where(x => x.ServiceType == typeof(IHostedService) && x.ImplementationType is not null && workers.Contains(x.ImplementationType)).ToArray()) s.Remove(descriptor);
+        foreach (var descriptor in s.Where(x => x.ServiceType == typeof(IAttachmentScanner)).ToArray()) s.Remove(descriptor);
         s.AddSingleton<IMeshCentralClient>(Mesh);
+        s.AddSingleton<IAttachmentScanner, FakeAttachmentScanner>();
     }).ConfigureAppConfiguration((_, c) =>
         c.AddInMemoryCollection(new Dictionary<string, string?> {
             ["Security:TotpEnabled"] = "true",
+            ["Attachments:RootPath"] = AttachmentRoot,
             ["ConnectionStrings:Database"] = Environment.GetEnvironmentVariable("TEST_DATABASE")
                 ?? throw new InvalidOperationException("TEST_DATABASE must point to an isolated PostgreSQL test database")
         }));

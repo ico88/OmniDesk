@@ -35,14 +35,33 @@ services:
       DataProtection__Path: /keys
       Proxy__Network: 172.29.85.0/24
       Downloads__Directory: /packages
+      Attachments__RootPath: /attachments
+      Attachments__ClamAvHost: clamav
     volumes:
       - ${SMOKE_SECRETS:?Set isolated secret directory}/downloads:/packages:ro
     secrets: [db_password]
     tmpfs:
       - /keys:uid=1654,gid=1654,mode=0700
+      - /attachments:uid=1654,gid=1654,mode=0700
     depends_on:
       db:
         condition: service_healthy
+      clamav:
+        condition: service_started
+  clamav:
+    image: clamav/clamav:1.4.5@sha256:4de20bd9ab45a4b763c5412b769217ef5082572ebc8a63aff1a77943419e5dd8
+    volumes:
+      - clamav_data:/var/lib/clamav
+  clamav-probe:
+    image: node:22-alpine
+    profiles: [verification]
+    environment:
+      CLAMAV_HOST: clamav
+      CLAMAV_PORT: 3310
+    volumes:
+      - ./scripts/clamav-smoke.mjs:/work/clamav-smoke.mjs:ro
+    command: [node, /work/clamav-smoke.mjs]
+    depends_on: [clamav]
   dashboard:
     image: omnidesk-dashboard:local
   caddy:
@@ -76,6 +95,9 @@ secrets:
     file: ${SMOKE_SECRETS:?Set isolated secret directory}/db_password
   bootstrap_password:
     file: ${SMOKE_SECRETS:?Set isolated secret directory}/bootstrap_password
+
+volumes:
+  clamav_data:
 
 networks:
   default:

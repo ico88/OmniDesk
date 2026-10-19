@@ -30,6 +30,7 @@ if docker compose -f compose.smoke.yaml run --rm bootstrap > "$SMOKE_SECRETS/boo
 fi
 docker compose -f compose.smoke.yaml up -d api dashboard caddy
 docker compose -f compose.smoke.yaml run --rm probe
+docker compose -f compose.smoke.yaml --profile verification run --rm clamav-probe
 
 if [[ "${1:-}" == --browser ]]; then
   docker compose -f compose.smoke.yaml run --rm browser

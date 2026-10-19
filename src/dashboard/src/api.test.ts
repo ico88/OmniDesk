@@ -22,6 +22,18 @@ describe('API session boundaries', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({code:'job_active',message:'Attendi il completamento e riprova.'}),{status:409})));
     await expect(api('/devices/fixture/services/actions', 'POST', {})).rejects.toThrow('Attendi il completamento e riprova.');
   });
+  it('sends multipart attachments without overriding the browser boundary and keeps CSRF protection', async () => {
+    const fetch = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({token:'multipart-token'}),{status:200}))
+      .mockResolvedValueOnce(new Response(JSON.stringify({id:'attachment'}),{status:202}));
+    vi.stubGlobal('fetch', fetch);
+    await refreshCsrf();
+    const form = new FormData(); form.append('file', new Blob(['fixture']), 'note.txt');
+    await api('/support/ticket/attachments', 'POST', form);
+    const request = fetch.mock.calls[1][1];
+    expect(request.headers['Content-Type']).toBeUndefined();
+    expect(request.headers['X-CSRF-TOKEN']).toBe('multipart-token');
+    expect(request.body).toBe(form);
+  });
 });
 
 it('shows actionable ticket validation errors', async () => {

@@ -6,6 +6,7 @@ using System.Net.Http.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
+using OmniDesk.Api.Attachments;
 using OmniDesk.Api.Data;
 using OmniDesk.Api.Endpoints;
 using OmniDesk.Api.Security;
@@ -613,6 +614,48 @@ public static class SupportScenario
         Assert.Contains(readerNotifications.GetProperty("notifications").EnumerateArray(), x => x.GetProperty("ticketId").GetGuid() == participantTicketId && x.GetProperty("kind").GetString() == "ticket.reply");
         Assert.Equal(HttpStatusCode.NoContent, (await admin.DeleteAsync($"{participantsUrl}/{readerParticipant.GetProperty("id").GetGuid()}?expectedVersion=3")).StatusCode);
         Assert.Empty((await readerClient.GetFromJsonAsync<System.Text.Json.JsonElement[]>(participantsUrl))!);
+        var attachmentUrl = $"/api/support/{participantTicketId}/attachments";
+        async Task<HttpResponseMessage> Upload(string name, string contents, long version, string visibility)
+        {
+            using var form = new MultipartFormDataContent();
+            form.Add(new StringContent(version.ToString()), "expectedVersion");
+            form.Add(new StringContent(visibility), "visibility");
+            if (visibility == "public") form.Add(new StringContent("true"), "consent");
+            var payload = new ByteArrayContent(System.Text.Encoding.UTF8.GetBytes(contents));
+            payload.Headers.ContentType = new MediaTypeHeaderValue("text/plain");
+            form.Add(payload, "file", name);
+            return await admin.PostAsync(attachmentUrl, form);
+        }
+        var upload = await Upload("report.txt", "support attachment clean fixture", 4, "public");
+        Assert.Equal(HttpStatusCode.Accepted, upload.StatusCode);
+        var uploaded = await upload.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        var attachmentId = uploaded.GetProperty("id").GetGuid();
+        Assert.Equal("quarantined", uploaded.GetProperty("scanState").GetString());
+        Assert.Equal(HttpStatusCode.NotFound, (await admin.GetAsync($"{attachmentUrl}/{attachmentId}")).StatusCode);
+        var scanWorker = new AttachmentScanWorker(factory.Services.GetRequiredService<IServiceScopeFactory>(),
+            factory.Services.GetRequiredService<AttachmentStorage>(), factory.Services.GetRequiredService<IAttachmentScanner>(),
+            NullLogger<AttachmentScanWorker>.Instance);
+        Assert.True(await scanWorker.ProcessNext(CancellationToken.None));
+        var attachmentRows = await admin.GetFromJsonAsync<System.Text.Json.JsonElement[]>(attachmentUrl);
+        Assert.Equal("clean", Assert.Single(attachmentRows!).GetProperty("scanState").GetString());
+        var download = await admin.GetAsync($"{attachmentUrl}/{attachmentId}");
+        Assert.Equal(HttpStatusCode.OK, download.StatusCode);
+        Assert.Equal("support attachment clean fixture", await download.Content.ReadAsStringAsync());
+        Assert.Equal("nosniff", download.Headers.GetValues("X-Content-Type-Options").Single());
+        var infectedUpload = await Upload("sample.txt", "EICAR-STANDARD-ANTIVIRUS-TEST-FILE", 5, "public");
+        Assert.Equal(HttpStatusCode.Accepted, infectedUpload.StatusCode);
+        var infectedId = (await infectedUpload.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("id").GetGuid();
+        Assert.True(await scanWorker.ProcessNext(CancellationToken.None));
+        attachmentRows = await admin.GetFromJsonAsync<System.Text.Json.JsonElement[]>(attachmentUrl);
+        Assert.Equal("infected", attachmentRows!.Single(x => x.GetProperty("id").GetGuid() == infectedId).GetProperty("scanState").GetString());
+        Assert.Equal(HttpStatusCode.NotFound, (await admin.GetAsync($"{attachmentUrl}/{infectedId}")).StatusCode);
+        var internalUpload = await Upload("internal.txt", "internal support detail", 6, "internal");
+        Assert.Equal(HttpStatusCode.Accepted, internalUpload.StatusCode);
+        var internalId = (await internalUpload.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("id").GetGuid();
+        Assert.True(await scanWorker.ProcessNext(CancellationToken.None));
+        var readerRows = await readerClient.GetFromJsonAsync<System.Text.Json.JsonElement[]>($"/api/support/{participantTicketId}/attachments");
+        Assert.DoesNotContain(readerRows!, row => row.GetProperty("id").GetGuid() == internalId);
+        Assert.Equal(HttpStatusCode.Forbidden, (await readerClient.GetAsync($"/api/support/{participantTicketId}/attachments/{internalId}")).StatusCode);
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
