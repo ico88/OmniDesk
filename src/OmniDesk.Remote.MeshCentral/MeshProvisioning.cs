@@ -8,6 +8,7 @@ public interface IMeshProvisioningClient
     bool Configured { get; }
     Task<MeshAgentProvisioning> Provision(Guid deviceId, CancellationToken ct);
     Task CheckReady(CancellationToken ct);
+    Task ApplySessionConsentPolicy(string meshId, CancellationToken ct);
     Task RemoveGroup(string meshId,CancellationToken ct);
     Task<bool> ContainsNode(string meshId, string nodeId, CancellationToken ct);
 }
@@ -24,13 +25,13 @@ public sealed partial class MeshCentralClient : IMeshProvisioningClient
         if (matches.Length == 1)
         {
             meshId = matches[0].GetProperty("_id").GetString()!;
-            // Enforce consent even when retrying after a partial provisioning operation.
-            var edited = await Command(new() { ["action"] = "editmesh", ["meshid"] = meshId, ["consent"] = 63 }, ct);
+            // Group enforces visible notifications; every share separately enforces its consent policy.
+            var edited = await Command(new() { ["action"] = "editmesh", ["meshid"] = meshId, ["consent"] = 7 }, ct);
             if (!edited.TryGetProperty("result",out var result) || !string.Equals(result.GetString(),"ok",StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("Group policy rejected");
         }
         else
         {
-            var created = await Command(new() { ["action"] = "createmesh", ["meshname"] = name, ["meshtype"] = 2, ["consent"] = 63 }, ct);
+            var created = await Command(new() { ["action"] = "createmesh", ["meshname"] = name, ["meshtype"] = 2, ["consent"] = 7 }, ct);
             if (!created.TryGetProperty("result",out var result) || !string.Equals(result.GetString(),"ok",StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("Group provisioning rejected");
             meshId = created.GetProperty("meshid").GetString()!;
         }
@@ -41,6 +42,15 @@ public sealed partial class MeshCentralClient : IMeshProvisioningClient
         var origin = new UriBuilder(options.Origin!) { Scheme = "wss", Path = "/agent.ashx" }.Uri;
         var settings = $"MeshName={name}\r\nMeshType=2\r\nMeshID=0x{Convert.ToHexString(mesh)}\r\nServerID={Convert.ToHexString(certificate)}\r\nMeshServer={origin.AbsoluteUri}\r\nmeshServiceName=OmniDeskRemote\r\ndisableUpdate=1\r\nTag={deviceId:N}\r\n";
         return new(meshId,settings);
+    }
+    public async Task ApplySessionConsentPolicy(string meshId, CancellationToken ct)
+    {
+        var groups=await Command(new(){["action"]="meshes"},ct);
+        if(!groups.GetProperty("meshes").EnumerateArray().Any(g=>g.GetProperty("_id").GetString()==meshId))
+            throw new InvalidOperationException("Managed group unavailable");
+        var reply=await Command(new(){["action"]="editmesh",["meshid"]=meshId,["consent"]=7},ct);
+        if(!reply.TryGetProperty("result",out var result)||!string.Equals(result.GetString(),"ok",StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Group policy rejected");
     }
     public async Task CheckReady(CancellationToken ct)
     {

@@ -8,6 +8,8 @@ public sealed class RemoteSession
     public string ActorId { get; set; } = "";
     public string Capability { get; set; } = "";
     public string State { get; set; } = "pending";
+    public bool ConsentRequired { get; set; } = true;
+    public long AccessPolicyVersion { get; set; }
     public string? PublicId { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? ExpiresAt { get; set; }
@@ -22,4 +24,6 @@ public sealed class RemoteProvisioning
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public bool Enabled { get; set; } = true;
     public bool GroupRemoved { get; set; }
+    public bool UnattendedAllowed { get; set; }
+    public long AccessPolicyVersion { get; set; }
 }

@@ -25,14 +25,15 @@ public static class RemoteEndpoints
             if (!await db.Devices.AnyAsync(d => d.Id == id)) return Results.NotFound();
             var mapping = await db.MeshDeviceMappings.AsNoTracking().SingleOrDefaultAsync(m => m.DeviceId == id);
             var revoked = await db.DeviceCredentials.AnyAsync(x => x.DeviceId == id && x.RevokedAt != null);
+            var accessPolicy=await db.RemoteProvisionings.AsNoTracking().SingleOrDefaultAsync(x=>x.DeviceId==id);
             var admin = await p.Allows(c.User.UserId(), "administration");
             return Results.Ok(new { configured = mesh.Configured, mapped = mapping != null, revoked,
-                nodeId = admin ? mapping?.NodeId : null });
+                nodeId = admin ? mapping?.NodeId : null, unattendedAllowed=accessPolicy?.UnattendedAllowed??false });
         });
         devices.MapGet("", async (Guid id, HttpContext c, AppDbContext db, PermissionService p) => {
             if (!await p.Allows(c.User.UserId(), "view", id)) return Results.Forbid();
             return Results.Ok(await db.RemoteSessions.AsNoTracking().Where(x => x.DeviceId == id).OrderByDescending(x => x.CreatedAt).Take(100)
-                .Select(x => new { x.Id, x.ActorId, x.Capability, x.State, x.CreatedAt, x.ExpiresAt }).ToListAsync());
+                .Select(x => new { x.Id, x.ActorId, x.Capability, x.State, x.CreatedAt, x.ExpiresAt, x.ConsentRequired }).ToListAsync());
         });
         devices.MapPost("", async (Guid id, RemoteRequest r, HttpContext c, AppDbContext db, PermissionService p, IMeshCentralClient mesh, ILoggerFactory logs) => {
             if (!Capabilities.Contains(r.Capability)) return Results.BadRequest();
@@ -42,15 +43,16 @@ public static class RemoteEndpoints
             if (await db.RemoteProvisionings.AnyAsync(x => x.DeviceId == id && !x.Enabled)) return Results.Forbid();
             var mapping = await db.MeshDeviceMappings.AsNoTracking().SingleOrDefaultAsync(x => x.DeviceId == id);
             if (!mesh.Configured || mapping is null) return Results.Problem("MeshCentral or device mapping unavailable", statusCode:503);
-            var session = new RemoteSession { DeviceId = id, NodeId = mapping.NodeId, ActorId = c.User.UserId(), Capability = r.Capability };
-            db.RemoteSessions.Add(session); db.AuditEvents.Add(Event(c, "remote.request", session.Id)); await db.SaveChangesAsync();
+            var policy=await db.RemoteProvisionings.AsNoTracking().SingleOrDefaultAsync(x=>x.DeviceId==id);
+            var session = new RemoteSession { DeviceId = id, NodeId = mapping.NodeId, ActorId = c.User.UserId(), Capability = r.Capability, ConsentRequired=!(policy?.UnattendedAllowed??false), AccessPolicyVersion=policy?.AccessPolicyVersion??0 };
+            db.RemoteSessions.Add(session); db.AuditEvents.Add(Event(c, "remote.request", session.Id)); if(!session.ConsentRequired)db.AuditEvents.Add(Event(c,"remote.unattended.request",session.Id)); await db.SaveChangesAsync();
             MeshSession? created = null;
             try
             {
-                created = await mesh.Create(mapping.NodeId, r.Capability, c.User.UserId(), c.RequestAborted);
+                created = await mesh.Create(mapping.NodeId, r.Capability, c.User.UserId(), session.ConsentRequired, c.RequestAborted);
                 session.PublicId = created.PublicId; session.ExpiresAt = created.ExpiresAt; session.State = "active";
                 db.AuditEvents.Add(Event(c, "remote.create", session.Id)); await db.SaveChangesAsync();
-                if (!await p.Allows(c.User.UserId(), r.Capability, id) || await db.DeviceCredentials.AnyAsync(x => x.DeviceId == id && x.RevokedAt != null) || await db.RemoteProvisionings.AnyAsync(x => x.DeviceId == id && !x.Enabled))
+                if (!await p.Allows(c.User.UserId(), r.Capability, id) || await db.DeviceCredentials.AnyAsync(x => x.DeviceId == id && x.RevokedAt != null) || await db.RemoteProvisionings.AnyAsync(x => x.DeviceId == id && (!x.Enabled || x.AccessPolicyVersion != session.AccessPolicyVersion)) || (!session.ConsentRequired && !await db.RemoteProvisionings.AnyAsync(x=>x.DeviceId==id&&x.Enabled&&x.UnattendedAllowed)))
                 {
                     session.State = "revocation_pending";
                     db.AuditEvents.Add(Event(c, "remote.authorization.changed", session.Id)); await db.SaveChangesAsync();

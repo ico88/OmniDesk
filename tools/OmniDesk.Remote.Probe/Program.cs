@@ -7,6 +7,7 @@ if(args.Length==4&&args[3]=="exercise"){
     MeshAgentProvisioning? group=null;
     try{
         var id=Guid.NewGuid();group=await client.Provision(id,CancellationToken.None);
+        await client.ApplySessionConsentPolicy(group.MeshId,CancellationToken.None);
         var repeated=await client.Provision(id,CancellationToken.None);
         if(repeated.MeshId!=group.MeshId)throw new InvalidOperationException("Provisioning retry duplicated group");
         if(await client.ContainsNode(group.MeshId,"node//"+new string('Q',64),CancellationToken.None))throw new InvalidOperationException("Unregistered node accepted");

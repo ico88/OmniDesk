@@ -497,6 +497,9 @@ namespace OmniDesk.Api.Migrations
                     b.Property<Guid>("DeviceId")
                         .HasColumnType("uuid");
 
+                    b.Property<long>("AccessPolicyVersion")
+                        .HasColumnType("bigint");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -517,6 +520,9 @@ namespace OmniDesk.Api.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<bool>("UnattendedAllowed")
+                        .HasColumnType("boolean");
+
                     b.HasKey("DeviceId");
 
                     b.ToTable("RemoteProvisionings");
@@ -528,6 +534,9 @@ namespace OmniDesk.Api.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<long>("AccessPolicyVersion")
+                        .HasColumnType("bigint");
+
                     b.Property<string>("ActorId")
                         .IsRequired()
                         .HasColumnType("text");
@@ -535,6 +544,9 @@ namespace OmniDesk.Api.Migrations
                     b.Property<string>("Capability")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<bool>("ConsentRequired")
+                        .HasColumnType("boolean");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");

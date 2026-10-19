@@ -32,7 +32,8 @@ public sealed class RemoteSessionGuard(IServiceScopeFactory scopes, ILogger<Remo
         {
             if (session.State == "active" && session.ExpiresAt > DateTimeOffset.UtcNow && await permissions.Allows(session.ActorId, session.Capability, session.DeviceId)
                 && !await db.DeviceCredentials.AnyAsync(x => x.DeviceId == session.DeviceId && x.RevokedAt != null, ct)
-                && !await db.RemoteProvisionings.AnyAsync(x => x.DeviceId == session.DeviceId && !x.Enabled, ct)) continue;
+                && !await db.RemoteProvisionings.AnyAsync(x => x.DeviceId == session.DeviceId && (!x.Enabled || x.AccessPolicyVersion != session.AccessPolicyVersion), ct)
+                && (session.ConsentRequired || await db.RemoteProvisionings.AnyAsync(x=>x.DeviceId==session.DeviceId&&x.Enabled&&x.UnattendedAllowed,ct))) continue;
             if (session.State == "active")
             {
                 var claimed = await db.RemoteSessions.Where(x => x.Id == session.Id && x.State == "active").ExecuteUpdateAsync(s => s.SetProperty(x => x.State, "revocation_pending"), ct);

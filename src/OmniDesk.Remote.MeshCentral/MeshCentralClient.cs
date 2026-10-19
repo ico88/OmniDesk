@@ -7,7 +7,7 @@ public sealed record MeshCentralOptions(string? Origin, string? Username, string
 public interface IMeshCentralClient
 {
     bool Configured { get; }
-    Task<MeshSession> Create(string nodeId, string capability, string actor, CancellationToken cancellationToken);
+    Task<MeshSession> Create(string nodeId, string capability, string actor, bool consentRequired, CancellationToken cancellationToken);
     Task Revoke(string nodeId, string publicId, CancellationToken cancellationToken);
 }
 public sealed partial class MeshCentralClient(MeshCentralOptions options) : IMeshCentralClient
@@ -15,11 +15,11 @@ public sealed partial class MeshCentralClient(MeshCentralOptions options) : IMes
     public bool Configured => Uri.TryCreate(options.Origin, UriKind.Absolute, out var origin) && origin.Scheme == "https" &&
         origin.AbsolutePath == "/" && string.IsNullOrEmpty(origin.UserInfo) && string.IsNullOrEmpty(origin.Query) &&
         string.IsNullOrEmpty(origin.Fragment) && !string.IsNullOrWhiteSpace(options.Username) && File.Exists(options.PasswordFile);
-    public async Task<MeshSession> Create(string nodeId, string capability, string actor, CancellationToken cancellationToken)
+    public async Task<MeshSession> Create(string nodeId, string capability, string actor, bool consentRequired, CancellationToken cancellationToken)
     {
-        // Exactly one protocol. Consent prompt enforced; no administrative UI or broad account handed to browser.
+        // Exactly one protocol. Consent policy comes only from the authorized server; no administrative UI or broad account handed to browser.
         var protocol = capability switch { "remote.control" => 2, "terminal" => 1, "files" => 4, _ => throw new ArgumentException("Unsupported remote capability") };
-        var consent = capability switch { "remote.control" => 8, "terminal" => 16, _ => 32 };
+        var consent = SessionConsent(capability, consentRequired);
         var expires = DateTimeOffset.UtcNow.AddMinutes(5);
         var reply = await Command(new Dictionary<string, object> {
             ["action"] = "createDeviceShareLink", ["nodeid"] = nodeId, ["guestname"] = "OmniDesk " + actor[..Math.Min(actor.Length, 80)],
@@ -32,6 +32,9 @@ public sealed partial class MeshCentralClient(MeshCentralOptions options) : IMes
             throw new InvalidOperationException("MeshCentral returned an unexpected session origin");
         return new(reply.GetProperty("publicid").GetString()!, url, expires);
     }
+    internal static int SessionConsent(string capability, bool required) =>
+        (capability switch { "remote.control" => 1, "terminal" => 2, "files" => 4, _ => throw new ArgumentException("Unsupported remote capability") }) |
+        (required ? capability switch { "remote.control" => 8, "terminal" => 16, _ => 32 } : 0);
     public async Task Revoke(string nodeId, string publicId, CancellationToken cancellationToken)
     {
         var reply = await Command(new Dictionary<string, object> { ["action"] = "removeDeviceShare", ["nodeid"] = nodeId, ["publicid"] = publicId }, cancellationToken);
