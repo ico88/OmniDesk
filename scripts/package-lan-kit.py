@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 import ssl
 import zipfile
+import subprocess
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--artifact', type=Path, required=True)
@@ -16,6 +17,7 @@ parser.add_argument('--commit', required=True)
 parser.add_argument('--output', type=Path, required=True)
 parser.add_argument('--version', default='0.6.0')
 parser.add_argument('--remote-engine', action='store_true')
+parser.add_argument('--installer-script-commit', help='Use the installer script from this verified Git commit, keeping the original MSI.')
 parser.add_argument('--ca', type=Path, default=Path('omnidesk-local-ca.crt'))
 args = parser.parse_args()
 if not args.run.isdigit() or not re.fullmatch('[a-f0-9]{40}', args.commit):
@@ -26,6 +28,8 @@ if args.output.name != f'OmniDesk.Windows.LAN-{args.version}.zip':
     parser.error('Nome output non corrispondente alla versione')
 remote_note = ('Include il motore remoto Windows; attivarlo dalla console IT dopo enrollment. Richiede consenso e collaudo Windows.'
                if args.remote_engine else 'Non include MeshCentral Agent: il desktop remoto completo non e disponibile con questo pacchetto.')
+if args.installer_script_commit and not re.fullmatch('[a-f0-9]{40}', args.installer_script_commit):
+    parser.error('Commit script non valido')
 expected = {}
 for line in (args.artifact / 'SHA256SUMS.txt').read_text().splitlines():
     digest, name = line.split(None, 1)
@@ -43,6 +47,12 @@ for name, digest in expected.items():
     files[name] = data
 if not files['OmniDesk.Agent.msi'].startswith(bytes.fromhex('D0CF11E0A1B11AE1')):
     parser.error('Formato MSI non riconosciuto')
+if args.installer_script_commit:
+    script = subprocess.run(['git', 'show', args.installer_script_commit + ':installer/Install-OmniDeskAgent.ps1'],
+                            check=True, capture_output=True).stdout
+    if not script.startswith(b'#Requires -Version 5.1') or len(script) > 65536:
+        parser.error('Script installer non valido')
+    files['Install-OmniDeskAgent.ps1'] = script
 ca = args.ca.read_text()
 if 'PRIVATE KEY' in ca or ca.count('BEGIN CERTIFICATE') != 1:
     parser.error('Attesa solo la CA pubblica')
@@ -57,7 +67,8 @@ $ErrorActionPreference = 'Stop'
 '''.encode()
 files['LEGGIMI.txt'] = f'''OmniDesk Agent + Tray - collaudo LAN x64
 Origine: https://github.com/ico88/OmniDesk/actions/runs/{args.run}
-Commit: {args.commit}
+Commit MSI: {args.commit}
+Commit script: {args.installer_script_commit or args.commit}
 
 Pacchetto unsigned per laboratorio. I checksum non sostituiscono una firma.
 Non include credenziali, token o chiavi private.
@@ -102,6 +113,8 @@ finally:
     temporary.unlink(missing_ok=True)
 release = dict(version=args.version, commit=args.commit, sha256=hashlib.sha256(args.output.read_bytes()).hexdigest(),
                size=args.output.stat().st_size, fileName=args.output.name, remoteEngineIncluded=args.remote_engine)
+if args.installer_script_commit:
+    release['installerScriptCommit'] = args.installer_script_commit
 metadata = args.output.parent / ('windows-release.' + uuid.uuid4().hex + '.tmp')
 metadata.write_text(json.dumps(release, indent=2) + '\n')
 metadata.replace(args.output.parent / 'windows-release.json')

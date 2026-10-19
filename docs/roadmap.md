@@ -72,3 +72,5 @@ Progresso 0.7: pulsante download autenticato disponibile su LAN con kit 0.6 veri
 Kit 0.7 promosso dopo Windows run 39207328177: motore nativo realmente avviato sul runner, generazione NodeID e fail closed senza enrollment verificati. Download UI disponibile su LAN. Aggiunte prove upgrade baseline 0.6, repair ACL e rollback, in attesa del run successivo. Attesa installazione sul client Windows 10 192.168.1.160 per chiudere i test interattivi: non simulati sul server.
 
 Installazione manuale semplificata: launcher LAN con parametri verificati e richiesta interattiva del token mascherata, senza creazione manuale del file. Modalita file preservata per automazioni. Parsing e test prompt Windows nel run 39209165420; pubblicazione del kit solo dopo esito verificato. Resta distinto dal futuro wizard grafico integrato nell'MSI.
+
+Distribuzione del launcher interattivo separata dal binario MSI: mantenuto l'MSI 0.7 verificato (run 39207328177), aggiornato solo lo script con prompt gia testato Windows. Provenienza dei due componenti esplicita nel manifest/LEGGIMI. Il collaudo esteso upgrade/repair/rollback rimane distinto e non viene dichiarato superato.

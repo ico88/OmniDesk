@@ -270,3 +270,21 @@ alla CI Windows, da verificare prima di promuovere il kit aggiornato.
 Il run 39207940658 ha superato lifecycle ma fallito il nuovo test upgrade:
 invocazione della proprieta COM indicizzata ProductState corretta tramite
 InvokeMember/GetProperty. Non dichiarare repair/rollback superati fino al rerun.
+
+### Kit con token interattivo: pacchetto script senza ricompilare MSI
+
+- Run Windows 39209165420: parsing PS5.1, test prompt mascherato (token valido e
+  rifiuto input invalido), contratti e lifecycle MSI passati. Il test aggiuntivo
+  upgrade e fallito sulla lettura dello stato prodotto: non chiude repair/rollback.
+  Il rerun 39209623222 e ancora in esecuzione; non e fonte di un MSI promosso.
+- Kit aggiornato mantiene byte per byte l'MSI del run riuscito 39207328177,
+  commit 742d13f1c6a82dc035613e2ee86d9b1e0c0df2b0. Sostituisce solo lo script con
+  quello del commit bfa378f (provenienza Git esatta registrata nel LEGGIMI e
+  installerScriptCommit del manifest), verificato dal test prompt Windows.
+- Launcher Installa-OmniDesk.ps1 contiene server, CA e hash MSI verificati e
+  richiama lo script senza EnrollmentTokenFile. Richiede ancora PowerShell
+  amministrativa: non e un wizard grafico MSI. Nessun token nel kit.
+- Candidate verificato: CRC ZIP, tutti i checksum interni, uguaglianza binaria MSI
+  con artifact originale e script con git show, assenza di chiave privata CA.
+  Pubblicazione con sostituzione atomica ZIP/manifest tramite helper packaging.
+- API ricompilata/avviata: sonda HTTPS readiness/dashboard/asset/anonymous401 passata.
