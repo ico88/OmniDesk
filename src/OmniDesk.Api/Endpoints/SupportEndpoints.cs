@@ -61,14 +61,16 @@ public static class SupportEndpoints
             return Results.Created($"/api/support/{ticket.Id}", View(ticket));
         });
         var staff = app.MapGroup("/api/support").RequireAuthorization();
-        staff.MapGet("", async (string? state, string? search, HttpContext c, AppDbContext db, PermissionService p) => {
+        staff.MapGet("", async (string? state, string? search, Guid? deviceId, HttpContext c, AppDbContext db, PermissionService p) => {
             if(state is not (null or "" or "open" or "in_progress" or "resolved" or "closed") || search?.Length > 200) return Results.BadRequest();
+            if(deviceId.HasValue && !await p.Allows(c.User.UserId(), "tickets.view", deviceId)) return Results.Forbid();
             var term=search?.Trim().ToLowerInvariant();
             var global = (await p.Global(c.User.UserId())).Contains("tickets.view");
             var grants = from g in db.ScopeGrants join permission in db.RolePermissions on g.RoleId equals permission.RoleId
                          where g.UserId == c.User.UserId() && permission.Permission == "tickets.view" select g;
             var query = db.SupportTickets.AsNoTracking().Where(t => db.Users.Any(u => u.Id == c.User.UserId() && !u.IsDisabled) && (global || db.Devices.Any(d => d.Id == t.DeviceId &&
                 grants.Any(g => g.DeviceId == d.Id || (d.GroupId != null && g.GroupId == d.GroupId)))));
+            if(deviceId.HasValue)query=query.Where(t=>t.DeviceId==deviceId.Value);
             if(!string.IsNullOrEmpty(state))query=query.Where(t=>t.State==state);
             if(!string.IsNullOrEmpty(term))query=query.Where(t=>t.Subject.ToLower().Contains(term)||db.Devices.Any(d=>d.Id==t.DeviceId&&d.Name.ToLower().Contains(term)));
             return Results.Ok(await query.OrderByDescending(t => t.CreatedAt).Take(100)

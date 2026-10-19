@@ -10,7 +10,7 @@ https://{$OMNIDESK_LAN_IP}, https://{$OMNIDESK_DOMAIN} {
         X-Content-Type-Options nosniff
         Referrer-Policy no-referrer
         X-Frame-Options DENY
-        Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+        Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https:; connect-src 'self'; frame-src 'self' {$MESH_PUBLIC_ORIGIN}; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
     }
     handle /api/* {
         reverse_proxy api:8080

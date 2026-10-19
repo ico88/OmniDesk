@@ -7,7 +7,7 @@ type Message = {id:number;kind:string;body:string;fromState:string|null;toState:
 type Thread = {version:number;state:string;resolution:string|null;canReply:boolean;hasMore:boolean;oldestId:number|null;messages:Message[]};
 const labels: Record<string,string> = {open:'Aperto',in_progress:'In lavorazione',resolved:'Risolto',closed:'Chiuso'};
 const date=(value:string)=>new Date(value).toLocaleString('it-IT');
-export function SupportDesk({visibleDeviceIds,onOpenDevice}:{visibleDeviceIds:string[];onOpenDevice:(id:string)=>Promise<void>}) {
+export function SupportDesk({visibleDeviceIds,onOpenDevice,deviceId}:{visibleDeviceIds:string[];onOpenDevice:(id:string)=>Promise<void>;deviceId?:string}) {
   const [tickets,setTickets] = useState<Ticket[]>([]);
   const [error,setError] = useState('');
   const [busy,setBusy] = useState(false);
@@ -21,7 +21,7 @@ export function SupportDesk({visibleDeviceIds,onOpenDevice}:{visibleDeviceIds:st
   const reply=useRef<HTMLTextAreaElement>(null);
   const preview=useRef<HTMLDialogElement>(null);
   const needsReply=(state==='resolved'||state==='closed')&&!selected?.resolution;
-  async function load() { const query=new URLSearchParams();if(filterState)query.set('state',filterState);if(search.trim())query.set('search',search.trim());setTickets(await api<Ticket[]>('/support?'+query.toString())); }
+  async function load() { const query=new URLSearchParams();if(filterState)query.set('state',filterState);if(search.trim())query.set('search',search.trim());if(deviceId)query.set('deviceId',deviceId);setTickets(await api<Ticket[]>('/support?'+query.toString())); }
   async function loadThread(ticket:Ticket,before?:number) {
     const data=await api<Thread>(`/support/${ticket.id}/messages${before?'?before='+before:''}`);
     if(before){setThread(old=>old?{...old,hasMore:data.hasMore,oldestId:data.oldestId,messages:[...data.messages,...old.messages]}:data);return;}
@@ -32,7 +32,7 @@ export function SupportDesk({visibleDeviceIds,onOpenDevice}:{visibleDeviceIds:st
     try { await action(); } catch(e) { setError(e instanceof Error ? e.message : 'Operazione non riuscita'); }
     finally { setBusy(false); }
   }
-  useEffect(()=>{void work(load);},[]);
+  useEffect(()=>{void work(load);},[deviceId]);
   useEffect(()=>{if(selected)panel.current?.scrollIntoView({behavior:'smooth',block:'start'});},[selected?.id]);
   return <section className="panel"><h2><Icon name="support"/>Richieste di assistenza</h2>
     <p>Fino a 100 richieste nei tuoi ambiti autorizzati. Cerca per oggetto o nome del computer.</p>

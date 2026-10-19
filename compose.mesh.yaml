@@ -16,6 +16,7 @@ services:
     restart: unless-stopped
     environment:
       MESH_DOMAIN: ${MESH_DOMAIN:?Set MESH_DOMAIN}
+      OMNIDESK_FRAME_ORIGINS: https://${OMNIDESK_DOMAIN},https://${OMNIDESK_LAN_IP:-192.168.1.233}:${OMNIDESK_HTTPS_PORT:-8085}
     secrets: [mesh_password]
     volumes:
       - mesh_data:/opt/meshcentral/meshcentral-data
@@ -33,6 +34,7 @@ services:
   caddy:
     environment:
       MESH_DOMAIN: ${MESH_DOMAIN:?Set MESH_DOMAIN}
+      MESH_PUBLIC_ORIGIN: https://${MESH_DOMAIN}/
     volumes:
       - ./deploy/mesh.Caddyfile:/etc/caddy/Caddyfile:ro
 secrets:

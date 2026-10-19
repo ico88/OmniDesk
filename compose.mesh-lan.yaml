@@ -15,6 +15,8 @@ services:
       - source: omnidesk_public_ca
         target: /run/omnidesk-ca.crt
   caddy:
+    environment:
+      MESH_PUBLIC_ORIGIN: ${MESH_PUBLIC_ORIGIN:-https://192.168.1.233:8086/}
     ports:
       - "${OMNIDESK_BIND_ADDRESS:-192.168.1.233}:8086:8443"
     volumes:
