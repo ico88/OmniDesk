@@ -25,6 +25,7 @@ internal static class Program
 internal sealed class TrayContext : ApplicationContext
 {
     private readonly NotifyIcon icon;
+    private readonly System.Drawing.Icon brandIcon;
     private readonly ContextMenuStrip menu = new();
     private readonly ToolStripMenuItem status = new("Connessione in verifica…") { Enabled = false };
     private readonly ToolStripMenuItem heartbeat = new("Nessun heartbeat noto") { Enabled = false };
@@ -40,7 +41,9 @@ internal sealed class TrayContext : ApplicationContext
         menu.Items.Add(support);
         menu.Items.Add(new ToolStripSeparator());
         var exit = new ToolStripMenuItem("Chiudi icona"); exit.Click += (_, _) => ExitThread(); menu.Items.Add(exit);
-        icon = new NotifyIcon { Icon = SystemIcons.Application, Visible = true, Text = "OmniDesk — verifica connessione", ContextMenuStrip = menu };
+        using (var stream = typeof(Program).Assembly.GetManifestResourceStream("OmniDesk.Tray.Windows.Assets.OmniDesk.ico") ?? throw new InvalidOperationException("OmniDesk icon resource is missing."))
+            brandIcon = new System.Drawing.Icon(stream);
+        icon = new NotifyIcon { Icon = brandIcon, Visible = true, Text = "OmniDesk — verifica connessione", ContextMenuStrip = menu };
         timer.Tick += async (_, _) => await Poll(); timer.Start();
         _ = Poll();
     }
@@ -67,13 +70,13 @@ internal sealed class TrayContext : ApplicationContext
             };
             status.Text = text;
             heartbeat.Text = response.LastHeartbeat is null ? "Nessun heartbeat confermato" : "Ultimo heartbeat: " + response.LastHeartbeat.Value.ToLocalTime().ToString("g");
-            icon.Text = "OmniDesk — " + text; icon.Icon = state == "online" ? SystemIcons.Information : SystemIcons.Warning;
+            icon.Text = "OmniDesk — " + text;
         }
         catch (Exception) when (!stop.IsCancellationRequested)
         {
             status.Text = "Servizio non disponibile o non verificato";
             heartbeat.Text = "Stato server non disponibile";
-            icon.Text = "OmniDesk — servizio non disponibile"; icon.Icon = SystemIcons.Warning;
+            icon.Text = "OmniDesk — servizio non disponibile";
         }
         catch (Exception) when (stop.IsCancellationRequested) { }
         finally { polling = false; }
@@ -84,7 +87,7 @@ internal sealed class TrayContext : ApplicationContext
     }
     protected override void Dispose(bool disposing)
     {
-        if (disposing) { stop.Cancel(); timer.Dispose(); icon.Dispose(); menu.Dispose(); }
+        if (disposing) { stop.Cancel(); timer.Dispose(); icon.Dispose(); brandIcon.Dispose(); menu.Dispose(); }
         base.Dispose(disposing);
     }
 }

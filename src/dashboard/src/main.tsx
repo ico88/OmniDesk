@@ -81,7 +81,7 @@ function App() {
   if (!user) return <main className="login"><form className="panel login-card" onSubmit={e => {
     e.preventDefault(); const form = new FormData(e.currentTarget);
     void action(async () => { await api('/auth/login', 'POST', { email: form.get('email'), password: form.get('password'), code:form.get('code') || undefined, recoveryCode:form.get('recoveryCode') || undefined }); await load(); });
-  }}><span className="mark"><Icon name="devices" size={24}/></span><h1>OmniDesk</h1><p>Accedi alla console IT</p>
+  }}><img className="brand-mark" src="/favicon.svg" alt=""/><h1>OmniDesk</h1><p>Accedi alla console IT</p>
     <label>Email<input name="email" type="email" autoComplete="username" required maxLength={254}/></label>
     <label>Password<input name="password" type="password" autoComplete="current-password" required maxLength={1024}/></label>
     <details className="login-options"><summary>Usa un codice 2FA o di recupero</summary><label>Codice 2FA (se attiva)<input name="code" inputMode="numeric" autoComplete="one-time-code" maxLength={20}/></label><label>Oppure codice di recupero<input name="recoveryCode" autoComplete="off" maxLength={100}/></label></details>
@@ -89,7 +89,7 @@ function App() {
     <small>Account creati dall’amministratore. 2FA opzionale, inizialmente disattivata.</small>
   </form></main>;
   return <div className="shell"><aside>
-    <div className="brand">{branding.logoUrl ? <img src={branding.logoUrl} alt="Logo" referrerPolicy="no-referrer"/> : <span className="mark"><Icon name="devices" size={24}/></span>}<strong>{branding.name}</strong></div>
+    <div className="brand">{branding.logoUrl ? <img src={branding.logoUrl} alt="Logo" referrerPolicy="no-referrer"/> : <img className="brand-mark" src="/favicon.svg" alt=""/>}<strong>{branding.name}</strong></div>
     <small className="nav-label">WORKSPACE</small>
     <nav aria-label="Navigazione">{[['overview','Panoramica'],['devices','Dispositivi'],['security','Account e sicurezza'],['support','Assistenza'],...(canReadKnowledge ? [['knowledge','Knowledge base']] : []),...(admin ? [['branding','Personalizzazione'],['users','Utenti'],['audit','Audit']] : [])].map(([id,label]) => <button key={id} className={tab === id ? 'active' : ''} aria-current={tab===id?'page':undefined} onClick={() => { setTab(id); setTotpSetup(null); setRecoveryCodes([]); setEnrollment(''); setStatus(null);  setError(''); setMessage(''); }}><Icon name={id}/><span>{label}</span></button>)}</nav>
     <div className="account"><small>{user.email}</small><button disabled={busy} onClick={() => void action(async () => { await api('/auth/logout', 'POST'); setUser(null); setTotpSetup(null); setRecoveryCodes([]); setEnrollment(''); setStatus(null); setGroups([]); setBranding(defaults); setAudit([]); setDevices([]); setTab('overview'); await refreshCsrf(); })}><Icon name="logout"/>Esci</button></div>

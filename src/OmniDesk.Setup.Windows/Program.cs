@@ -37,6 +37,8 @@ internal static class Program
         public SetupForm()
         {
             Text = "OmniDesk Setup"; Width = 640; Height = 340; MinimumSize = new Size(640, 340);
+            using (var stream = typeof(Program).Assembly.GetManifestResourceStream("OmniDesk.Setup.Windows.Assets.OmniDesk.ico") ?? throw new InvalidOperationException("OmniDesk icon resource is missing."))
+                Icon = new Icon(stream);
             StartPosition = FormStartPosition.CenterScreen; FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false; MinimizeBox = false;
             var layout = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(28), ColumnCount = 1, RowCount = 7 };
