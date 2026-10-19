@@ -288,3 +288,11 @@ InvokeMember/GetProperty. Non dichiarare repair/rollback superati fino al rerun.
   con artifact originale e script con git show, assenza di chiave privata CA.
   Pubblicazione con sostituzione atomica ZIP/manifest tramite helper packaging.
 - API ricompilata/avviata: sonda HTTPS readiness/dashboard/asset/anonymous401 passata.
+
+Kit interattivo pubblicato: SHA256 ZIP
+4123397bb86382afefac576a0d8d518f6491a2c1cf0798ed4e0111abc30ad728.
+Verificati anche ZIP definitivo, manifest e checksum di tutti i file dopo la
+pubblicazione; readiness HTTPS e asset passati. Nessun collaudo interattivo sul
+PC Windows dichiarato. Il run esteso 39209623222 resta in esecuzione al momento
+della pubblicazione dello script; l'MSI distribuito resta quello del run verde
+39207328177.
