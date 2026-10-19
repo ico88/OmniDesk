@@ -45,9 +45,14 @@ public sealed class SlaPolicyScenario(ApiFactory factory) : IClassFixture<ApiFac
 
         using var anonymous = factory.CreateClient(ClientOptions());
         Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync("/api/admin/support-sla/policies")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync("/api/admin/support-sla/scopes")).StatusCode);
 
         using var manager = factory.CreateClient(ClientOptions());
         await Login(manager, userName, password);
+        var scopes = await manager.GetFromJsonAsync<SlaScopes>("/api/admin/support-sla/scopes");
+        Assert.NotNull(scopes);
+        Assert.False(scopes.CanManageGlobal);
+        Assert.Equal(siteId, Assert.Single(scopes.Sites).Id);
         Assert.Equal(HttpStatusCode.Forbidden, (await manager.PostAsJsonAsync("/api/admin/support-sla/policies",
             new SlaPolicyCreate("Global", null, Definition()))).StatusCode);
 
@@ -69,7 +74,9 @@ public sealed class SlaPolicyScenario(ApiFactory factory) : IClassFixture<ApiFac
         var policy = Assert.Single(listed!);
         Assert.Equal(siteId, policy.SiteId);
         Assert.Equal(2, policy.CurrentVersion);
+        Assert.Equal("Site SLA", policy.Name);
         Assert.Equal([1, 2], policy.Versions.Select(item => item.Version).ToArray());
+        Assert.Equal("Site SLA revised", policy.Versions.Single(item => item.Version == 2).Name);
         Assert.DoesNotContain("tickets.sla.manage", Permissions.ForRole("Operator"));
 
         var deviceId = Guid.NewGuid();
@@ -198,6 +205,8 @@ public sealed class SlaPolicyScenario(ApiFactory factory) : IClassFixture<ApiFac
     }
 
     private sealed record CreatedPolicy(Guid Id, string ScopeKey, int CurrentVersion, long Version);
-    private sealed record PolicyListItem(Guid Id, Guid? SiteId, string ScopeKey, int CurrentVersion, long Version, PolicyVersionItem[] Versions);
+    private sealed record SlaScopes(bool CanManageGlobal, SlaSite[] Sites);
+    private sealed record SlaSite(Guid Id, string Name);
+    private sealed record PolicyListItem(Guid Id, string Name, Guid? SiteId, string ScopeKey, int CurrentVersion, long Version, PolicyVersionItem[] Versions);
     private sealed record PolicyVersionItem(int Version, string Name, Guid? SiteId, SlaPolicyDefinition Definition, DateTimeOffset PublishedAt);
 }
