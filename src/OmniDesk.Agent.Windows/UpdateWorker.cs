@@ -53,6 +53,7 @@ public sealed class UpdateWorker(ILogger<UpdateWorker> logger) : BackgroundServi
                             // Crash during native operation: never execute the same install again automatically.
                             var recovery = receipt.Kind is "service.start" or "service.stop" or "service.restart"
                                 ? "Operation interrupted; inspect the service state before retry"
+                                : receipt.Kind == "process.kill" ? "Operation interrupted; inspect the process list before retry"
                                 : "Operation interrupted; inspect Windows Update history before retry";
                             receipt = receipt with { Result = new(receipt.LeaseId, false, false, [], recovery) };
                             Save(receiptPath, receipt);
@@ -110,6 +111,12 @@ public sealed class UpdateWorker(ILogger<UpdateWorker> logger) : BackgroundServi
                             {
                                 Save(receiptPath, new UpdateReceipt(job.Id, job.LeaseId, null, job.Kind));
                                 var result = ExecuteServiceControl(job);
+                                Save(receiptPath, new UpdateReceipt(job.Id, job.LeaseId, result, job.Kind));
+                            }
+                            else if (job.Kind == "process.kill")
+                            {
+                                Save(receiptPath, new UpdateReceipt(job.Id, job.LeaseId, null, job.Kind));
+                                var result = ExecuteProcessControl(job);
                                 Save(receiptPath, new UpdateReceipt(job.Id, job.LeaseId, result, job.Kind));
                             }
                             else if (job.Kind is "scan" or "install")
@@ -187,6 +194,26 @@ public sealed class UpdateWorker(ILogger<UpdateWorker> logger) : BackgroundServi
         {
             return new(job.LeaseId, false, false, [], $"Service operation failed ({e.GetType().Name})");
         }
+    }
+
+    internal static UpdateResultRequest ExecuteProcessControl(UpdateLease job)
+    {
+        var control = job.ProcessControl;
+        if (control is null || !ProcessControlPolicy.IsControllable(control.ProcessId, control.ProcessName, control.StartedAt))
+            return new(job.LeaseId, false, false, [], "Process operation rejected by local policy");
+        try
+        {
+            using var process = Process.GetProcessById(control.ProcessId);
+            if (!string.Equals(process.ProcessName, Path.GetFileNameWithoutExtension(control.ProcessName), StringComparison.OrdinalIgnoreCase))
+                return new(job.LeaseId, false, false, [], "Process identity changed; refresh the process list before retry");
+            if (Math.Abs(new DateTimeOffset(process.StartTime.ToUniversalTime()).ToUnixTimeMilliseconds() - control.StartedAt.ToUnixTimeMilliseconds()) > 2000)
+                return new(job.LeaseId, false, false, [], "Process instance changed; refresh the process list before retry");
+            process.Kill(entireProcessTree: false);
+            if (!process.WaitForExit(5000)) return new(job.LeaseId, false, false, [], "Process did not exit within the allowed timeout");
+            return new(job.LeaseId, true, false, [], null);
+        }
+        catch (Exception e) when (e is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception or NotSupportedException)
+        { return new(job.LeaseId, false, false, [], $"Process operation failed ({e.GetType().Name})"); }
     }
     private static string AgentVersion() => typeof(UpdateWorker).Assembly.GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
         .OfType<System.Reflection.AssemblyInformationalVersionAttribute>().FirstOrDefault()?.InformationalVersion.Split('+')[0] ?? "0.0.0";

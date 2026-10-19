@@ -1,12 +1,32 @@
 using System.Security.Cryptography;
+using System.Diagnostics;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
+using OmniDesk.Contracts;
 namespace OmniDesk.Agent.Windows;
 public static class WindowsSelfTest
 {
     // Read-only Windows checks. Does not install/start services or execute Windows Update.
     public static async Task Run()
     {
+        var now = DateTimeOffset.UtcNow;
+        if (!ProcessControlPolicy.IsControllable(12345, "notepad.exe", now) ||
+            ProcessControlPolicy.IsControllable(4, "notepad.exe", now) ||
+            ProcessControlPolicy.IsControllable(12345, "lsass.exe", now) ||
+            ProcessControlPolicy.IsControllable(12345, "MeshService64.exe", now) ||
+            ProcessControlPolicy.IsControllable(12345, "OmniDesk.Agent.Windows.exe", now) ||
+            ProcessControlPolicy.IsControllable(12345, "notepad.exe", default))
+            throw new InvalidOperationException("Process control safety policy failed");
+        var command = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "cmd.exe");
+        using (var child = Process.Start(new ProcessStartInfo(command) { UseShellExecute = false, CreateNoWindow = true, ArgumentList = { "/c", "timeout", "/t", "30", "/nobreak" } })
+               ?? throw new InvalidOperationException("Unable to start isolated process-control self-test fixture"))
+        {
+            var startedAt = new DateTimeOffset(child.StartTime.ToUniversalTime());
+            var fixture = new UpdateLease(Guid.NewGuid(), Guid.NewGuid(), "process.kill", [], DateTimeOffset.UtcNow.AddMinutes(1),
+                ProcessControl: new ProcessControlPayload(child.Id, child.ProcessName + ".exe", startedAt));
+            var result = UpdateWorker.ExecuteProcessControl(fixture);
+            if (!result.Succeeded || !child.WaitForExit(5000)) throw new InvalidOperationException("Process control did not terminate the matching test child");
+        }
         using (var windowsIdentity = System.Security.Principal.WindowsIdentity.GetCurrent())
         {
             var logonSid = OmniDesk.Windows.Ipc.TokenLogonSid.Read(windowsIdentity.AccessToken);
@@ -44,6 +64,6 @@ public static class WindowsSelfTest
             AgentIdentity.SecureDirectory(directory);
         }
         finally { if (Directory.Exists(directory)) Directory.Delete(directory, recursive:true); }
-        Console.WriteLine("PASS: Windows CPU/RAM/disks/network/uptime, inventory queries, DPAPI, consecutive device assertions and trusted file ACLs. No services or updates modified.");
+        Console.WriteLine("PASS: process termination policy and PID/name/start-time matching; Windows CPU/RAM/disks/network/uptime, inventory queries, DPAPI, consecutive device assertions and trusted file ACLs. Only a disposable cmd.exe test child was terminated; no services or updates modified.");
     }
 }

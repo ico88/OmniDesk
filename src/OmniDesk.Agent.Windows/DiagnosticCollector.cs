@@ -20,12 +20,13 @@ internal static class DiagnosticCollector
 
     private static ProcessDiagnostic[] Processes()
     {
-        using var search = new ManagementObjectSearcher("SELECT ProcessId, Name FROM Win32_Process");
+        using var search = new ManagementObjectSearcher("SELECT ProcessId, Name, CreationDate FROM Win32_Process");
         search.Options.Timeout = TimeSpan.FromSeconds(12);
         using var rows = search.Get();
         return rows.Cast<ManagementObject>().Take(1000).Select(x => new ProcessDiagnostic(
                 Convert.ToInt32(x["ProcessId"], System.Globalization.CultureInfo.InvariantCulture),
-                ((string?)x["Name"] ?? "(sconosciuto)")[..Math.Min(((string?)x["Name"] ?? "(sconosciuto)").Length, 260)]))
+                ((string?)x["Name"] ?? "(sconosciuto)")[..Math.Min(((string?)x["Name"] ?? "(sconosciuto)").Length, 260)],
+                ManagementDateTimeConverter.ToDateTime((string)x["CreationDate"]!).ToUniversalTime()))
             .OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase).Take(500).ToArray();
     }
 

@@ -136,6 +136,35 @@ public static class UpdateEndpoints
             db.AuditEvents.Add(Event(c.User.UserId(), "service.control.cancel", jobId));
             await db.SaveChangesAsync(); await tx.CommitAsync(); return Results.NoContent();
         });
+        var processes = app.MapGroup("/api/devices/{id:guid}/processes").RequireAuthorization().AddEndpointFilter(async (c, next) => {
+            var id = Guid.Parse(c.HttpContext.Request.RouteValues["id"]!.ToString()!);
+            return await c.HttpContext.RequestServices.GetRequiredService<PermissionService>().Allows(c.HttpContext.User.UserId(), "processes.manage", id) ? await next(c) : Results.Forbid();
+        });
+        processes.MapGet("jobs", async (Guid id, AppDbContext db) => Results.Ok(await db.UpdateJobs.AsNoTracking()
+            .Where(x => x.DeviceId == id && x.Kind == "process.kill").OrderByDescending(x => x.CreatedAt).Take(30)
+            .Select(x => new { x.Id, x.Kind, x.State, x.CreatedAt, x.CompletedAt, x.Result, x.Payload }).ToListAsync()));
+        processes.MapPost("actions", async (Guid id, ProcessControlRequest r, HttpContext c, AppDbContext db, PermissionService permissions) => {
+            if (r.RequestId == Guid.Empty || !ProcessControlPolicy.IsControllable(r.ProcessId, r.ProcessName, r.StartedAt)) return Results.BadRequest();
+            await using var tx = await db.Database.BeginTransactionAsync();
+            await DeviceOperationLock.Acquire(db, id);
+            if (!await permissions.Allows(c.User.UserId(), "processes.manage", id)) return Results.Forbid();
+            if (!await db.DeviceCredentials.AnyAsync(x => x.DeviceId == id && x.RevokedAt == null)) return Results.Conflict();
+            var control = new ProcessControlPayload(r.ProcessId, Path.GetFileName(r.ProcessName), r.StartedAt);
+            var payload = JsonSerializer.Serialize(control);
+            var existing = await db.UpdateJobs.AsNoTracking().SingleOrDefaultAsync(x => x.DeviceId == id && x.RequestId == r.RequestId);
+            if (existing is not null)
+            {
+                var existingControl = existing.Kind == "process.kill" ? JsonSerializer.Deserialize<ProcessControlPayload>(existing.Payload) : null;
+                return existingControl == control ? Results.Ok(new { existing.Id, existing.State }) : Results.Conflict();
+            }
+            if (await db.UpdateJobs.AnyAsync(x => x.DeviceId == id && (x.State == "queued" || x.State == "leased"))) return Results.Conflict(new { code = "job_active", message = "È già in corso un lavoro per questo dispositivo." });
+            var job = new UpdateJob { DeviceId = id, RequestId = r.RequestId, RequestedBy = c.User.UserId(), Kind = "process.kill", Payload = payload };
+            db.UpdateJobs.Add(job);
+            db.AuditEvents.Add(Event(c.User.UserId(), "process.kill.queue", job.Id));
+            CoreOutbox.Add(db, "process.action.queued", "device", id, new { jobId = job.Id, processId = control.ProcessId, processName = control.ProcessName }, c.TraceIdentifier);
+            try { await db.SaveChangesAsync(); } catch (DbUpdateException e) when (e.InnerException is Npgsql.PostgresException { SqlState: "23505" }) { return Results.Conflict(); }
+            await tx.CommitAsync(); return Results.Created($"/api/devices/{id}/processes/jobs/{job.Id}", new { job.Id, job.State });
+        });
         var agent = app.MapGroup("/api/agent/jobs").WithMetadata(new MachineRequest()).RequireAuthorization(new AuthorizeAttribute { AuthenticationSchemes = DeviceAuthentication.SchemeName });
         agent.MapPost("/claim", async (HttpContext c, AppDbContext db, PermissionService permissions) => {
             var id = Guid.Parse(c.User.UserId()); var now = DateTimeOffset.UtcNow;
@@ -154,6 +183,8 @@ public static class UpdateEndpoints
                     ? (job.Kind is "diagnostics.processes" or "diagnostics.services" or "diagnostics.events") && await permissions.Allows(job.RequestedBy, "diagnostics.view", id)
                 : job.Kind.StartsWith("service.")
                     ? (job.Kind is "service.start" or "service.stop" or "service.restart") && await permissions.Allows(job.RequestedBy, "services.manage", id)
+                : job.Kind == "process.kill"
+                    ? await permissions.Allows(job.RequestedBy, "processes.manage", id)
                 : await permissions.Allows(job.RequestedBy, "updates", id);
             if (!authorized)
             {
@@ -164,12 +195,13 @@ public static class UpdateEndpoints
             var lease = Guid.NewGuid(); var expiry = now.AddMinutes(65);
             var changed = await db.UpdateJobs.Where(x => x.Id == job.Id && x.State == "queued").ExecuteUpdateAsync(s => s.SetProperty(x => x.State, "leased").SetProperty(x => x.LeaseId, lease).SetProperty(x => x.LeaseExpiresAt, expiry));
             if (changed != 1) return Results.NoContent();
-            var claimAction = job.Kind.StartsWith("diagnostics.") ? "diagnostics.claim" : job.Kind.StartsWith("service.") ? "service.control.claim" : "update.claim";
+            var claimAction = job.Kind.StartsWith("diagnostics.") ? "diagnostics.claim" : job.Kind.StartsWith("service.") ? "service.control.claim" : job.Kind == "process.kill" ? "process.control.claim" : "update.claim";
             db.AuditEvents.Add(Event(null, claimAction, job.Id)); await db.SaveChangesAsync(); await tx.CommitAsync();
             var updatePackage = job.Kind == "agent.update" ? JsonSerializer.Deserialize<AgentUpdatePackage>(job.Payload) : null;
             var serviceControl = job.Kind.StartsWith("service.") ? JsonSerializer.Deserialize<ServiceControlPayload>(job.Payload) : null;
-            var selections = job.Kind == "agent.update" || job.Kind.StartsWith("service.") ? [] : JsonSerializer.Deserialize<UpdateSelection[]>(job.Payload)!;
-            return Results.Ok(new UpdateLease(job.Id, lease, job.Kind, selections, expiry, updatePackage, serviceControl));
+            var processControl = job.Kind == "process.kill" ? JsonSerializer.Deserialize<ProcessControlPayload>(job.Payload) : null;
+            var selections = job.Kind == "agent.update" || job.Kind.StartsWith("service.") || job.Kind == "process.kill" ? [] : JsonSerializer.Deserialize<UpdateSelection[]>(job.Payload)!;
+            return Results.Ok(new UpdateLease(job.Id, lease, job.Kind, selections, expiry, updatePackage, serviceControl, processControl));
         });
         agent.MapGet("/{jobId:guid}/package", async (Guid jobId, Guid leaseId, HttpContext c, AppDbContext db, IConfiguration config) => {
             var deviceId = Guid.Parse(c.User.UserId()); var now = DateTimeOffset.UtcNow;
@@ -213,7 +245,7 @@ public static class UpdateEndpoints
             var changed = await db.UpdateJobs.Where(x => x.Id == jobId && x.DeviceId == id && x.State == "leased" && x.LeaseId == r.LeaseId && x.LeaseExpiresAt > now)
                 .ExecuteUpdateAsync(s => s.SetProperty(x => x.State, state).SetProperty(x => x.Result, payload).SetProperty(x => x.CompletedAt, now));
             if (changed != 1) return Results.Conflict();
-            var resultAction = job.Kind.StartsWith("diagnostics.") ? "diagnostics.result." : job.Kind.StartsWith("service.") ? "service.control.result." : "update.result.";
+            var resultAction = job.Kind.StartsWith("diagnostics.") ? "diagnostics.result." : job.Kind.StartsWith("service.") ? "service.control.result." : job.Kind == "process.kill" ? "process.control.result." : "update.result.";
             db.AuditEvents.Add(Event(null, resultAction + state, jobId)); await db.SaveChangesAsync(); await tx.CommitAsync(); return Results.NoContent();
         });
     }
