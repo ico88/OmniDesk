@@ -17,8 +17,11 @@ public static class WindowsSelfTest
             ProcessControlPolicy.IsControllable(12345, "OmniDesk.Agent.Windows.exe", now) ||
             ProcessControlPolicy.IsControllable(12345, "notepad.exe", default))
             throw new InvalidOperationException("Process control safety policy failed");
-        var command = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "cmd.exe");
-        using (var child = Process.Start(new ProcessStartInfo(command) { UseShellExecute = false, CreateNoWindow = true, ArgumentList = { "/c", "timeout", "/t", "30", "/nobreak" } })
+        var currentProcess = DiagnosticCollector.Collect("diagnostics.processes").Processes?.SingleOrDefault(x => x.ProcessId == Environment.ProcessId);
+        if (currentProcess is null || currentProcess.CanTerminate)
+            throw new InvalidOperationException("Process inventory did not protect the running OmniDesk agent");
+        var command = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "WindowsPowerShell", "v1.0", "powershell.exe");
+        using (var child = Process.Start(new ProcessStartInfo(command) { UseShellExecute = false, CreateNoWindow = true, ArgumentList = { "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", "Start-Sleep -Seconds 30" } })
                ?? throw new InvalidOperationException("Unable to start isolated process-control self-test fixture"))
         {
             var startedAt = new DateTimeOffset(child.StartTime.ToUniversalTime());
@@ -64,6 +67,6 @@ public static class WindowsSelfTest
             AgentIdentity.SecureDirectory(directory);
         }
         finally { if (Directory.Exists(directory)) Directory.Delete(directory, recursive:true); }
-        Console.WriteLine("PASS: process termination policy and PID/name/start-time matching; Windows CPU/RAM/disks/network/uptime, inventory queries, DPAPI, consecutive device assertions and trusted file ACLs. Only a disposable cmd.exe test child was terminated; no services or updates modified.");
+        Console.WriteLine("PASS: process termination policy and PID/name/start-time matching; Windows CPU/RAM/disks/network/uptime, inventory queries, DPAPI, consecutive device assertions and trusted file ACLs. Only a disposable PowerShell test process was terminated; no services or updates modified.");
     }
 }

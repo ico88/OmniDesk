@@ -143,6 +143,17 @@ public static class UpdateEndpoints
         processes.MapGet("jobs", async (Guid id, AppDbContext db) => Results.Ok(await db.UpdateJobs.AsNoTracking()
             .Where(x => x.DeviceId == id && x.Kind == "process.kill").OrderByDescending(x => x.CreatedAt).Take(30)
             .Select(x => new { x.Id, x.Kind, x.State, x.CreatedAt, x.CompletedAt, x.Result, x.Payload }).ToListAsync()));
+        processes.MapDelete("jobs/{jobId:guid}", async (Guid id, Guid jobId, HttpContext c, AppDbContext db, PermissionService permissions) => {
+            await using var tx = await db.Database.BeginTransactionAsync();
+            await DeviceOperationLock.Acquire(db, id);
+            if (!await permissions.Allows(c.User.UserId(), "processes.manage", id)) return Results.Forbid();
+            var changed = await db.UpdateJobs.Where(x => x.Id == jobId && x.DeviceId == id && x.Kind == "process.kill" && x.State == "queued")
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.State, "cancelled").SetProperty(x => x.CompletedAt, DateTimeOffset.UtcNow));
+            if (changed != 1) return Results.Conflict();
+            db.AuditEvents.Add(Event(c.User.UserId(), "process.kill.cancel", jobId));
+            CoreOutbox.Add(db, "process.action.cancelled", "device", id, new { jobId }, c.TraceIdentifier);
+            await db.SaveChangesAsync(); await tx.CommitAsync(); return Results.NoContent();
+        });
         processes.MapPost("actions", async (Guid id, ProcessControlRequest r, HttpContext c, AppDbContext db, PermissionService permissions) => {
             if (r.RequestId == Guid.Empty || !ProcessControlPolicy.IsControllable(r.ProcessId, r.ProcessName, r.StartedAt)) return Results.BadRequest();
             await using var tx = await db.Database.BeginTransactionAsync();

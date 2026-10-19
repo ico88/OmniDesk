@@ -23,10 +23,16 @@ internal static class DiagnosticCollector
         using var search = new ManagementObjectSearcher("SELECT ProcessId, Name, CreationDate FROM Win32_Process");
         search.Options.Timeout = TimeSpan.FromSeconds(12);
         using var rows = search.Get();
-        return rows.Cast<ManagementObject>().Take(1000).Select(x => new ProcessDiagnostic(
-                Convert.ToInt32(x["ProcessId"], System.Globalization.CultureInfo.InvariantCulture),
-                ((string?)x["Name"] ?? "(sconosciuto)")[..Math.Min(((string?)x["Name"] ?? "(sconosciuto)").Length, 260)],
-                ManagementDateTimeConverter.ToDateTime((string)x["CreationDate"]!).ToUniversalTime()))
+        return rows.Cast<ManagementObject>().Take(1000).Select(x =>
+            {
+                var processId = Convert.ToInt32(x["ProcessId"], System.Globalization.CultureInfo.InvariantCulture);
+                var rawName = (string?)x["Name"] ?? "(sconosciuto)";
+                var name = rawName[..Math.Min(rawName.Length, 260)];
+                DateTimeOffset startedAt = default;
+                try { if (x["CreationDate"] is string created) startedAt = ManagementDateTimeConverter.ToDateTime(created).ToUniversalTime(); }
+                catch (Exception e) when (e is FormatException or ArgumentOutOfRangeException) { }
+                return new ProcessDiagnostic(processId, name, startedAt, ProcessControlPolicy.IsControllable(processId, name, startedAt));
+            })
             .OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase).Take(500).ToArray();
     }
 

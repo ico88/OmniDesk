@@ -206,7 +206,7 @@ public sealed class UpdateWorker(ILogger<UpdateWorker> logger) : BackgroundServi
             using var process = Process.GetProcessById(control.ProcessId);
             if (!string.Equals(process.ProcessName, Path.GetFileNameWithoutExtension(control.ProcessName), StringComparison.OrdinalIgnoreCase))
                 return new(job.LeaseId, false, false, [], "Process identity changed; refresh the process list before retry");
-            if (Math.Abs(new DateTimeOffset(process.StartTime.ToUniversalTime()).ToUnixTimeMilliseconds() - control.StartedAt.ToUnixTimeMilliseconds()) > 2000)
+            if (Math.Abs(new DateTimeOffset(process.StartTime.ToUniversalTime()).ToUnixTimeMilliseconds() - control.StartedAt.ToUnixTimeMilliseconds()) > 250)
                 return new(job.LeaseId, false, false, [], "Process instance changed; refresh the process list before retry");
             process.Kill(entireProcessTree: false);
             if (!process.WaitForExit(5000)) return new(job.LeaseId, false, false, [], "Process did not exit within the allowed timeout");

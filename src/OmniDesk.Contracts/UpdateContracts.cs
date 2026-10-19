@@ -45,7 +45,7 @@ public static class ServiceControlPolicy
     public static bool IsControllable(string? name) => IsValidServiceName(name) && !ProtectedServices.Contains(name!);
 }
 public sealed record DiagnosticLease(Guid JobId, Guid LeaseId, string Kind);
-public sealed record ProcessDiagnostic(int ProcessId, string Name, DateTimeOffset StartedAt);
+public sealed record ProcessDiagnostic(int ProcessId, string Name, DateTimeOffset StartedAt, bool CanTerminate);
 public sealed record ServiceDiagnostic(string Name, string DisplayName, string State, string StartType);
 public sealed record EventDiagnostic(string Log, DateTime TimeCreated, int Id, string Level, string Source, string Message);
 public sealed record DiagnosticResult(string Kind, DateTimeOffset CollectedAt, ProcessDiagnostic[]? Processes = null, ServiceDiagnostic[]? Services = null, EventDiagnostic[]? Events = null);

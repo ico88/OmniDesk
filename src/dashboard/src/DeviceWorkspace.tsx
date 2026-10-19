@@ -18,7 +18,7 @@ type Group = { id: string; name: string };
 type UpdateItem = { UpdateId: string; Revision: number; Title: string; Kb: string[]; ResultCode: number | null };
 type UpdateJob = { id: string; kind: string; state: string; createdAt: string; result: string | null };
 type DiagnosticJob = UpdateJob & { completedAt: string | null };
-type DiagnosticData = { Kind: string; CollectedAt: string; Processes?: { ProcessId: number; Name: string; StartedAt: string }[]; Services?: { Name: string; DisplayName: string; State: string; StartType: string }[]; Events?: { Log: string; TimeCreated: string; Id: number; Level: string; Source: string; Message: string }[] };
+type DiagnosticData = { Kind: string; CollectedAt: string; Processes?: { ProcessId: number; Name: string; StartedAt: string; CanTerminate: boolean }[]; Services?: { Name: string; DisplayName: string; State: string; StartType: string }[]; Events?: { Log: string; TimeCreated: string; Id: number; Level: string; Source: string; Message: string }[] };
 type ServiceJob = UpdateJob & { completedAt: string | null; payload?: string };
 type WindowsDownload = { available: boolean; release: { version: string; msiSha256?: string | null; msiSize?: number | null } | null };
 
@@ -219,13 +219,13 @@ export function DeviceWorkspace({ device, admin, groups, sites, onDeviceChanged,
             {!latest && <p>Nessuna raccolta richiesta. I dati vengono letti solo dopo aver premuto “Raccogli dati”.</p>}
             {kind === 'processes' && <>
               {!count('processes.manage') && <p className="muted">La terminazione richiede il permesso separato <code>processes.manage</code>.</p>}
-              <div className="table-wrap"><table><thead><tr><th>PID</th><th>Processo</th><th>Avvio</th><th>Azioni</th></tr></thead><tbody>{(data?.Processes ?? []).map((item, i) => <tr key={`${item.ProcessId}-${i}`}><td>{item.ProcessId}</td><td>{item.Name}</td><td>{new Date(item.StartedAt).toLocaleString('it-IT')}</td><td>{count('processes.manage') && <button className="secondary compact" disabled={busy || device.revoked || !device.online} onClick={() => void requestProcessKill(item.ProcessId, item.Name, item.StartedAt)}>Termina…</button>}</td></tr>)}</tbody></table></div>
+              <div className="table-wrap"><table><thead><tr><th>PID</th><th>Processo</th><th>Avvio</th><th>Azioni</th></tr></thead><tbody>{(data?.Processes ?? []).map((item, i) => <tr key={`${item.ProcessId}-${i}`}><td>{item.ProcessId}</td><td>{item.Name}</td><td>{new Date(item.StartedAt).toLocaleString('it-IT')}</td><td>{count('processes.manage') && (item.CanTerminate ? <button className="secondary compact" disabled={busy || device.revoked || !device.online} onClick={() => void requestProcessKill(item.ProcessId, item.Name, item.StartedAt)}>Termina…</button> : <span className="muted">Protetto</span>)}</td></tr>)}</tbody></table></div>
               {count('processes.manage') && <div className="service-action-history"><h4>Interventi sui processi</h4>{!processJobs.length && <p className="muted">Nessuna azione registrata.</p>}{processJobs.map(job => {
                 let result: { Succeeded?: boolean; Error?: string | null } | null = null;
                 try { result = job.result ? JSON.parse(job.result) as { Succeeded?: boolean; Error?: string | null } : null; } catch { result = null; }
                 let target = 'Processo selezionato';
                 try { const payload = JSON.parse(job.payload ?? '{}') as { ProcessId?: number; ProcessName?: string }; target = `${payload.ProcessName ?? 'Processo'} · PID ${payload.ProcessId ?? '?'}`; } catch { /* corrupted legacy result */ }
-                return <article className="update-job-card" key={job.id}><div><strong>Terminazione · {job.id.slice(0, 8)}</strong><span className={`status-pill ${job.state === 'succeeded' ? 'online' : job.state === 'failed' ? 'danger' : 'offline'}`}>{jobLabels[job.state] ?? job.state}</span></div><small>{new Date(job.createdAt).toLocaleString('it-IT')}</small><small>{target}</small>{result?.Error && <small>{result.Error}</small>}</article>;
+                return <article className="update-job-card" key={job.id}><div><strong>Terminazione · {job.id.slice(0, 8)}</strong><span className={`status-pill ${job.state === 'succeeded' ? 'online' : job.state === 'failed' ? 'danger' : 'offline'}`}>{jobLabels[job.state] ?? job.state}</span></div><small>{new Date(job.createdAt).toLocaleString('it-IT')}</small><small>{target}</small>{result?.Error && <small>{result.Error}</small>}{job.state === 'queued' && <button className="secondary compact" disabled={busy} onClick={() => void work(async () => { await api(`/devices/${device.id}/processes/jobs/${job.id}`, 'DELETE'); await loadProcessJobs(); })}>Annulla</button>}</article>;
               })}</div>}
             </>}
             {kind === 'services' && <>
