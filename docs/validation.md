@@ -1605,3 +1605,30 @@ migrazione o test sull'istanza LAN. CI Windows MSI `39326865702` in coda e il ru
 precedente `39324222524` ancora attivo; non interrotti. Allegati generici in
 quarantena, notifiche esterne, email, allarmi, SLA e automazioni restano da
 sviluppare.
+
+## SD1 — allegati ticket con scansione antivirus — 2026-10-19
+
+Implementati la migrazione `SupportAttachmentsQuarantine`, storage filesystem
+privato con key casuale, hash SHA-256 e quote (10 MiB/file, 50 file e 100 MiB per
+ticket), API staff/portale, consenso esplicito per gli upload pubblici, visibilità
+public/internal, download forzato come attachment solo dopo scansione pulita e
+UI console/portale con aggiornamento dello stato di scansione. Il worker usa claim
+PostgreSQL `SKIP LOCKED`, lease e retry durevoli; stati terminali infetto e
+scansione fallita non consentono il download. ClamAV 1.4.5 è fissato al digest
+`sha256:4de20bd9ab45a4b763c5412b769217ef5082572ebc8a63aff1a77943419e5dd8`;
+la porta 3310 non è pubblicata e il servizio è raggiungibile dall'API solo sulla
+rete Compose privata. Lo script smoke prova il protocollo reale del motore con
+fixture pulito ed EICAR. Il test API separato usa uno scanner fake deterministico
+per verificare quarantena, pulito, infetto, download e autorizzazione; i test
+scanner verificano framing INSTREAM e risposta ClamD.
+
+Verifiche locali: `docker compose -f compose.test.yaml up --build
+--abort-on-container-exit --exit-code-from tests` passato con 82 xUnit/PostgreSQL;
+build production API/dashboard passata; npm build e 6 Vitest passati; `docker
+compose config -q` e Compose smoke config passati; `./scripts/smoke.sh --browser`
+passato su stack effimero, incluse migrazioni, login/HTTPS, ClamAV clean/EICAR e
+Chromium. Il backup ora copia i blob dopo lo snapshot PostgreSQL e genera un
+manifest SHA-256; questo ordinamento si basa sui blob immutabili (l'app non li
+cancella). Non è stato eseguito un backup o restore completo dei blob sul server.
+Nessun servizio LAN è stato riavviato o aggiornato; questa implementazione non è
+ancora pubblicata e non ha ancora esito CI sul nuovo commit.

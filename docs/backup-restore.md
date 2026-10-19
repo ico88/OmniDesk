@@ -1,6 +1,6 @@
 # Backup e verifica ripristino
 
-Disponibili backup locale e prova di ripristino **del database** su PostgreSQL effimero. Non costituiscono ancora un disaster recovery completo: ripristino delle chiavi Identity/CA nell'applicazione, storage Mesh opzionale, cifratura dei backup, copia off-site, retention e tempi RPO/RTO restano da collaudare/configurare.
+Disponibili backup locale e prova di ripristino **del database** su PostgreSQL effimero. I nuovi backup includono anche i blob degli allegati e il relativo checksum. Non costituiscono ancora un disaster recovery completo: ripristino applicativo dei blob/chiavi Identity/CA, storage Mesh opzionale, cifratura dei backup, copia off-site, retention e tempi RPO/RTO restano da collaudare/configurare.
 
 ## Backup dell'istanza standard
 
@@ -10,13 +10,13 @@ Eseguire dalla root del progetto, con container DB/API/Caddy avviati:
 bash scripts/backup.sh
 ```
 
-Lo script crea una directory casuale datata sotto `.backups`, con permessi riservati. Contiene dump PostgreSQL custom, chiavi Identity, dati Caddy incluse chiavi private CA, configurazione ambiente, password DB e configurazione Compose/Caddy. Registra gli identificativi delle immagini in esecuzione e la revisione Git HEAD; modifiche non committate e sorgenti vanno conservati separatamente. Non include la password bootstrap né gli eventuali volumi MeshCentral. `.backups` è esclusa da Git e dal contesto Docker.
+Lo script crea una directory casuale datata sotto `.backups`, con permessi riservati. Contiene dump PostgreSQL custom, blob allegati, chiavi Identity, dati Caddy incluse chiavi private CA, configurazione ambiente, password DB e configurazione Compose/Caddy. Registra gli identificativi delle immagini in esecuzione e la revisione Git HEAD; modifiche non committate e sorgenti vanno conservati separatamente. Non include la password bootstrap né gli eventuali volumi MeshCentral. `.backups` è esclusa da Git e dal contesto Docker.
 
 Questi file contengono segreti: trasferirli solo su storage riservato e cifrato. Il backup locale sullo stesso disco non protegge dal guasto del server. Non pubblicare il contenuto tramite la dashboard. Nessuna pianificazione o cancellazione automatica viene attivata.
 
-`pg_dump` usa uno snapshot coerente del DB; le chiavi/configurazioni vengono copiate successivamente. Non ruotare credenziali o CA, modificare MFA/Identity, configurazione o deployment durante il backup. Non viene promessa atomicità tra PostgreSQL e filesystem; una futura funzione allegati richiederà una strategia coerente DB/blob. Non fermare i servizi di altri prodotti sul server.
+`pg_dump` acquisisce lo snapshot DB prima della copia immutabile dei blob allegati. I blob sono scritti e sincronizzati su disco prima che la riga DB venga confermata e l'applicazione non elimina allegati: questo ordinamento include nel backup ogni blob referenziato dallo snapshot; eventuali file creati dopo lo snapshot possono comparire come orfani. Il manifest SHA-256 copre tutti i file copiati. Non ruotare credenziali o CA, modificare MFA/Identity, configurazione o deployment durante il backup. La procedura non garantisce atomicità contro cancellazioni manuali o guasti del filesystem; il recupero applicativo DB/blob deve essere collaudato insieme. Non fermare i servizi di altri prodotti sul server.
 
-Il file `READY` è scritto solo a completamento riuscito; un dump parziale conserva estensione `.partial`. Il checksum copre il dump, non autentica l'intero backup e non sostituisce una firma. Gli archivi incompleti restano disponibili per diagnosi e non vengono accettati dal verificatore.
+Il file `READY` è scritto solo a completamento riuscito; un dump parziale conserva estensione `.partial`. I checksum verificano dump e blob ma non autenticano l'intero backup e non sostituiscono una firma. Gli archivi incompleti restano disponibili per diagnosi e non vengono accettati dal verificatore.
 
 ## Prova non distruttiva del database
 

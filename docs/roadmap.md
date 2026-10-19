@@ -2,6 +2,10 @@
 
 Stato corrente sintetico: [consegna Windows/LAN](completion-status.md). Le sezioni successive conservano lo storico; gli stati iniziali progettato/non compilato sono superati solo dalle verifiche successive esplicitamente registrate.
 
+### Incremento SD1 — Allegati ticket con quarantena (implementato nel branch, non pubblicato)
+
+API e UI React supportano allegati fino a 10 MiB, quote per ticket, consenso esplicito nel portale, visibilità pubblica/interna, storage privato con hash e download negato finché ClamAV non registra una scansione pulita. Il worker usa claim PostgreSQL con lease, retry durevoli e audit; il servizio antivirus è fissato a ClamAV 1.4.5 via digest e non pubblica porte. Build API/dashboard, 82 test xUnit/PostgreSQL, 6 Vitest, configurazione Compose e smoke isolato con scansione reale di fixture pulita/EICAR sono passati. Il backup include i blob con manifest SHA-256 dopo lo snapshot DB; non è ancora collaudato un restore completo del volume. Non distribuito sul server LAN; retention, retry amministrativo manuale dopo `scan_failed` e conferma sul portale con account reale restano gate aperti.
+
 ### Incremento console RMM React e MeshCentral — sorgenti implementati, collaudo live aperto
 
 Interfaccia dedicata nella scheda dispositivo con Panoramica, Desktop remoto,
