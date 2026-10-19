@@ -1441,3 +1441,12 @@ dopo il collegamento e verifica che l'API mantenga lo stato storico e mostri
 quello corrente più il completamento. `docker compose config -q`, Compose test
 config e `git diff --check` passati. Nessuna migrazione, deploy o modifica al
 server LAN.
+
+Sul commit `815cd76`, GitHub Actions ha verificato nuovamente entrambi i target:
+[build-and-test 39312456323](https://github.com/ico88/OmniDesk/actions/runs/39312456323)
+e [windows-agent-package
+39312456274](https://github.com/ico88/OmniDesk/actions/runs/39312456274) sono
+riusciti. Il runner Windows ha superato publish Console, build Agent/Tray/MSI,
+installazione, recovery, disinstallazione e upgrade/repair/rollback. Il collaudo
+resta CI isolata: nessuna installazione sul PC Windows LAN e nessun deploy del
+server.
