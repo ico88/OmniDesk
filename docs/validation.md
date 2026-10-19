@@ -1278,4 +1278,6 @@ mentre la richiesta esplicita sposta l'articolo e genera la revisione di gruppo.
 Compose isolato: Chromium crea un gruppo fixture e una guida associata al gruppo,
 quindi verifica modifica e consultazione della versione precedente. Compose
 standard/test validato e `git diff --check` passato. Nessun dato, container o
-schema LAN è stato modificato.
+schema LAN è stato modificato. GitHub Actions `build-and-test` run
+39295874327 e `windows-agent-package` run 39295874352 passate; il secondo ha
+incluso MSI, recovery/uninstall e upgrade/repair/rollback su runner Windows.
