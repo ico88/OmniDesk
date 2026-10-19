@@ -1,12 +1,12 @@
-# OmniDesk Service Desk — progetto proposto
+# OmniDesk Service Desk — specifica e stato
 
-**Stato: solo progettazione.** Nessun componente, endpoint, migrazione, portale, connettore email o worker descritto qui è implementato o testato. Questo documento aggiunge un percorso futuro senza modificare le milestone M1–M5, i loro gate o il deployment corrente.
+**Stato: implementazione parziale nel core API/dashboard.** Sono disponibili ticket da Agent/Tray, viste e aggiornamenti IT, categorie, code con membership/routing, cronologia chat e note interne autorizzate. Migrazioni, test PostgreSQL e smoke browser sono registrati in [validation.md](validation.md). Restano progettati, non implementati, il portale con identità personale, allegati generici e quarantena antivirus, notifiche, email, KB, interventi correlati, allarmi persistenti, SLA e automazioni. Questo percorso non chiude i gate M1–M5 o produzione.
 
 ## Confini e dipendenze
 
 Modulo backend ASP.NET Core separato, futuro `OmniDesk.ServiceDesk`, con livelli Domain, Application, Infrastructure ed Endpoints. Inizialmente è caricato dallo stesso host API: non richiede un nuovo servizio pubblico. Possiede il proprio DbContext e le proprie migrazioni nello schema PostgreSQL `service_desk`. Riusa Identity, autorizzazione e audit tramite interfacce; non replica utenti, inventario o credenziali. La dashboard React/TypeScript avrà un'area Service Desk e un portale utenti con policy e DTO distinti. Nessuna nuova porta o modifica Nginx è prevista.
 
-Il RMM attuale fornisce dispositivi, gruppi di autorizzazione, identità, snapshot di monitoraggio, sessioni remote e job aggiornamenti. **Sedi e motore di allarmi persistenti non sono ancora implementati.** Una sede rappresenta un luogo operativo; non coincide con un gruppo di autorizzazione. Prima del modulo occorrono registro sedi, associazione dispositivi, migrazione dei dati esistenti e concessioni per sede. Il prodotto resta single-tenant: sedi non costituiscono tenant isolati.
+Il RMM attuale fornisce dispositivi, gruppi di autorizzazione, identità, snapshot di monitoraggio, sessioni remote e job aggiornamenti. Il registro sedi e le concessioni site-scoped sono implementati; il motore di allarmi persistenti non lo è. Una sede rappresenta un luogo operativo; non coincide con un gruppo di autorizzazione. Il prodotto resta single-tenant: sedi non costituiscono tenant isolati.
 
 Le dipendenze RMM sono porte applicative: catalogo dispositivi/sedi, autorizzazione, monitoraggio/allarmi, sessioni remote, job aggiornamenti e audit. Il modulo non accede direttamente a credenziali MeshCentral o dispositivo. Le integrazioni asincrone usano eventi versionati con outbox transazionale e inbox deduplicata. Worker ASP.NET Core per notifiche, email, timer ed escalation usano lease persistenti, retry limitati e coda degli errori; un broker esterno non è necessario per la prima versione. Occorre definire prima atomicità degli eventi fra DbContext: transazione PostgreSQL condivisa dove disponibile, altrimenti consegna almeno una volta e riconciliazione; nessuna promessa di consegna exactly-once.
 
@@ -14,7 +14,7 @@ Le dipendenze RMM sono porte applicative: catalogo dispositivi/sedi, autorizzazi
 
 Ogni ticket effettivo appartiene a **una sede e almeno un dispositivo**. Tutti i dispositivi collegati devono appartenere alla sede al momento del collegamento. Spostamenti successivi preservano sede e descrizioni storiche; ricollegamenti o cambi sede sono espliciti, autorizzati e registrati. Nessuna azione RMM usa i dati storici per decidere i permessi correnti.
 
-Stati iniziali proposti: nuovo, triage, aperto, in lavorazione, attesa richiedente, attesa esterna, risolto, chiuso, annullato. Transizioni configurabili e versionate, motivo di risoluzione obbligatorio, riapertura tracciata. Priorità P1–P4 derivata da impatto/urgenza, distinta dalla severità dell'allarme; categorie, coda/team, assegnatario e partecipanti completano il ticket. Cronologia append-only, controllo versione/ETag e idempotency key impediscono aggiornamenti persi e doppie creazioni.
+Stati core attuali: aperto, in lavorazione, risolto e chiuso; gli ultimi due richiedono una risposta pubblica. Transizioni configurabili/versionate, attesa richiedente/esterna, motivo di risoluzione e priorità P1–P4 restano proposti. Le categorie core, le priorità low/normal/high/urgent, code/team, assegnatari e chat sono implementati. Le note interne usano una capability separata `tickets.note.internal`, sono escluse dalle proiezioni macchina e aggiornano il versionamento del ticket. Multi-dispositivo, partecipanti e workflow completo restano da sviluppare. Cronologia append-only e versioni attese proteggono dagli aggiornamenti persi; l'intake macchina è idempotente per dispositivo/richiedente/RequestId.
 
 | Ingresso | Verifica e comportamento proposti |
 | --- | --- |

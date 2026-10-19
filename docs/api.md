@@ -32,7 +32,7 @@ JSON, stessa origine, cookie Identity. Errori 400/401/403/409/429; nessun redire
 | DELETE /api/admin/grants/{id} | administration globale + CSRF; revoca; 204 |
 | GET /api/admin/audit | administration globale; ultimi 100 eventi decrescenti |
 
-Permessi distinti: `view`, `remote.control`, `terminal`, `files`, `updates`, `diagnostics.view`, `services.manage`, `processes.manage`, `tickets.view`, `tickets.manage` e `administration`. Ogni capability RMM mutante è separata dalla lettura diagnostica. Grant locale administration non abilita gli endpoint amministrativi globali. Nessuna registrazione pubblica. Bootstrap amministratore tramite comando dedicato e secret file temporaneo, una sola volta quando non esistono utenti.
+Permessi distinti: `view`, `remote.control`, `terminal`, `files`, `updates`, `diagnostics.view`, `services.manage`, `processes.manage`, `tickets.view`, `tickets.manage`, `tickets.note.internal` e `administration`. `tickets.note.internal` è assegnato al ruolo Administrator e può essere concesso in un ambito esplicito; la creazione delle note richiede anche `tickets.view`. Ogni capability RMM mutante è separata dalla lettura diagnostica. Grant locale administration non abilita gli endpoint amministrativi globali. Nessuna registrazione pubblica. Bootstrap amministratore tramite comando dedicato e secret file temporaneo, una sola volta quando non esistono utenti.
 
 M2: enrollment token monouso, heartbeat con identità device separata, gruppi, inventario e metriche. M3: adapter MeshCentral, sessioni effimere dopo autorizzazione, audit ed esplicita revoca; nessuna condivisione credenziali admin MeshCentral con browser. M4: job Windows Update idempotenti con approvazione, stato, timeout e audit. API future non ancora disponibili.
 
@@ -51,6 +51,8 @@ Accodamento, claim, cancellazione queued, modifica metadata e revoca dispositivo
 Contratti ticket/screenshot, identità locale del richiedente, permessi `tickets.view`/`tickets.manage`, limiti e idempotenza: [support-implementation.md](support-implementation.md). `/api/devices/{id}/remote-sessions/availability` espone la presenza di configurazione/mapping, senza attestare connessione reale del dispositivo. NodeId visibile solo ad amministrazione globale.
 
 ## Service Desk SD1
+
+`POST /api/support/{id}/internal-notes` aggiunge una nota con `{expectedVersion,body}`. Richiede `tickets.view` e `tickets.note.internal` sull'ambito storico del ticket, CSRF e versione corrente; restituisce 409 per conflitti. `GET /api/support/{id}/messages` include note interne solo per chi possiede la capability dedicata e segnala `canNote`. Le note non sono incluse nell'intake o nel feed Agent, nell'oggetto ticket né negli eventi outbox; la mutazione è auditata senza copiare il corpo.
 
 `GET /api/support` restituisce i ticket visibili e include il numero stabile `OD-` (campo numerico `number`), `priority`, `category`, `queueId`, `queueName`, `assigneeId`
 e `assigneeEmail`; accetta filtri `priority=low|normal|high|urgent`, `category=general|hardware|software|network|account|other`, `queue={id|unassigned}` e `assignee=email`

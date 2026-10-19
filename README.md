@@ -72,6 +72,6 @@ Dettagli milestone: [M2 agente](docs/milestone-2.md), [M3 remoto](docs/milestone
 
 Documenti: [architettura](docs/architecture.md), [database](docs/database.md), [API](docs/api.md), [roadmap](docs/roadmap.md), [verifiche e limiti](docs/validation.md). Regole di sviluppo in [AGENTS.md](AGENTS.md).
 
-OmniDesk Service Desk è un modulo futuro, **solo progettato**: [specifiche e confini](docs/service-desk.md), [schema PostgreSQL proposto](docs/service-desk-data-model.md), [fasi e dipendenze](docs/roadmap.md#percorso-futuro-omnidesk-service-desk). Non è disponibile nell'interfaccia corrente e non modifica le milestone implementate.
+OmniDesk Service Desk è parzialmente implementato nel core: intake Agent/Tray, ticket e conversazione IT, categorie, code, assegnazioni e note interne con permesso dedicato. Portale con identità personale, allegati generici/quarantena, notifiche, email, KB e SLA restano da sviluppare: [specifiche e stato](docs/service-desk.md), [schema proposto](docs/service-desk-data-model.md), [roadmap](docs/roadmap.md#percorso-futuro-omnidesk-service-desk).
 
 Kit Windows 0.8.0: [OmniDesk Agent e OmniDesk Tray](docs/windows-agent-tray.md), installati con Setup grafico e MSI unico; la disinstallazione MSI richiede la revoca dell’identità sul server. Il pacchetto è compilato, ma installazione, enrollment e rimozione richiedono ancora il collaudo sul PC Windows pilota. Non è firmato per la distribuzione pubblica.

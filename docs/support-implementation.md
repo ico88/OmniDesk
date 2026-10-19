@@ -8,7 +8,7 @@ La Tray non riceve credenziali macchina. Si connette alla pipe locale verificand
 
 Il servizio invia ogni richiesta HTTPS con una nuova assertion dispositivo firmata. Il server deriva sempre DeviceId dalla credenziale autenticata e applica revoca e anti replay esistenti. La lista macchina filtra dispositivo e richiedente; include oggetto, stato e risposta ma non il testo originale o l'immagine. La lista è limitata a dieci richieste per contenere il messaggio IPC. Le risposte di risoluzione sono visibili al richiedente: non inserirvi note interne.
 
-La console usa Identity, CSRF sulle mutazioni e capacità separate `tickets.view` e `tickets.manage`, globali/gruppo/dispositivo. Administrator e Operator ricevono queste capacità tramite migrazione; Viewer no. Un permesso ticket non concede desktop, terminale o file. Gli aggiornamenti usano una versione attesa; conflitti restituiscono 409. Gli stati sono open, in_progress, resolved e closed; gli ultimi due richiedono una risposta. Nessuna notifica o azione remota automatica.
+La console usa Identity, CSRF sulle mutazioni e capacità distinte `tickets.view`, `tickets.manage` e `tickets.note.internal`, globali/gruppo/dispositivo. Administrator e Operator ricevono view/manage; solo Administrator riceve la capability note interna predefinita. Una concessione scoped deve includere anche `tickets.view`; il permesso non concede desktop, terminale o file. Gli aggiornamenti usano una versione attesa; conflitti restituiscono 409. Gli stati sono open, in_progress, resolved e closed; gli ultimi due richiedono una risposta visibile al richiedente. Le note interne sono messaggi `Visibility=internal`, append-only, visibili solo con il permesso dedicato; non modificano la risposta pubblica, non entrano nel feed macchina, e audit/outbox non ne contengono il testo. Nessuna notifica o azione remota automatica.
 
 ## Screenshot
 
@@ -21,8 +21,8 @@ Ticket e immagini sono conservati nel database PostgreSQL e inclusi nei backup. 
 ## Contratti
 
 - Macchina: GET `/api/agent/support/{requesterKey}`, POST `/api/agent/support`.
-- Operatori: GET `/api/support`, PUT `/api/support/{id}`, GET `/api/support/{id}/screenshot`.
-- Migrazione: `SupportTickets`; tabella propria con FK Device, indice cronologico, vincolo device/requester/requestId e seed capacità.
+- Operatori: GET `/api/support`, PUT `/api/support/{id}`, GET `/api/support/{id}/screenshot`, GET `/api/support/{id}/messages`, POST `/api/support/{id}/internal-notes`.
+- Migrazioni: `SupportTickets` e `TicketInternalNotes`; quest'ultima aggiunge `Visibility` con default storico `public` e semina `tickets.note.internal` solo per Administrator.
 - Pipe: GetConnectionStatus, CreateTicket e ListTickets. Nessun comando stop/start/uninstall o shell.
 
 La build e i test server non attestano cattura schermo o IPC su Windows reale. Vedere validation.md per risultati effettivi e gate ancora aperti.

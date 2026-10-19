@@ -43,6 +43,8 @@
 
 ## Invarianti e ciclo di vita
 
+Stato schema effettivo al 2026-10-19: i messaggi di conversazione risiedono in `SupportMessages`; la migrazione `TicketInternalNotes` aggiunge `Visibility` (`public` per tutti i record preesistenti, `internal` per le note nuove). Il modello concettuale `TicketComments` resta una proposta per quando si implementeranno revisioni, tombstone e allegati associati ai commenti.
+
 - `Tickets.SiteId` è NOT NULL. Il vincolo almeno un dispositivo non è ottenibile con un semplice CHECK sulla riga ticket: creazione, ricollegamento e promozione intake saranno transazionali, con verifica applicativa e constraint trigger differibile PostgreSQL da progettare/testare. Lo stesso vale per coerenza sede/device durante il collegamento. Non si rilasciano API che permettano ticket privi di associazioni.
 - Promozione intake una sola volta: lock/versione e unicità su PromotedTicketId, scrittura ticket/dispositivi/storico/outbox nella stessa transazione. ReceivedAt non viene azzerato.
 - TicketDevices non consente cancellazione dell'ultimo collegamento. Spostare un dispositivo non modifica retroattivamente la sede storica del ticket; nuovi collegamenti richiedono coerenza con la sede corrente. Eventuali riassociazioni storiche richiedono workflow esplicito.
