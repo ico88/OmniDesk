@@ -799,7 +799,7 @@ public static class SupportEndpoints
             if (!await p.Allows(userId, "tickets.view", ticket.DeviceId, siteId: ticket.SiteId)) return Results.Forbid();
             var rows = await db.SupportMessages.AsNoTracking().Where(x => x.TicketId == id && x.Kind == "rmm_intervention")
                 .OrderByDescending(x => x.Id).Take(100).ToArrayAsync();
-            var visible = new List<JsonElement>();
+            var visible = new List<object>();
             foreach (var row in rows)
             {
                 try
@@ -809,7 +809,35 @@ public static class SupportEndpoints
                     var deviceId = root.GetProperty("deviceId").GetGuid();
                     var capability = root.GetProperty("capability").GetString();
                     if (capability is null || !await p.Allows(userId, "tickets.view", deviceId) || !await p.Allows(userId, capability, deviceId)) continue;
-                    visible.Add(root.Clone());
+                    var artifactType = root.GetProperty("artifactType").GetString();
+                    var artifactId = root.GetProperty("artifactId").GetGuid();
+                    string? currentState = null;
+                    DateTimeOffset? currentCompletedAt = null;
+                    if (artifactType == "remote_session")
+                        currentState = await db.RemoteSessions.AsNoTracking().Where(x => x.Id == artifactId && x.DeviceId == deviceId)
+                            .Select(x => x.State).SingleOrDefaultAsync();
+                    else if (artifactType == "update_job")
+                    {
+                        var currentJob = await db.UpdateJobs.AsNoTracking().Where(x => x.Id == artifactId && x.DeviceId == deviceId)
+                            .Select(x => new { x.State, x.CompletedAt }).SingleOrDefaultAsync();
+                        currentState = currentJob?.State;
+                        currentCompletedAt = currentJob?.CompletedAt;
+                    }
+                    DateTimeOffset? linkedCompletedAt = root.TryGetProperty("completedAt", out var linkedCompleted) &&
+                        linkedCompleted.ValueKind == JsonValueKind.String ? linkedCompleted.GetDateTimeOffset() : null;
+                    visible.Add(new
+                    {
+                        deviceId,
+                        deviceName = root.GetProperty("deviceName").GetString(),
+                        artifactType,
+                        artifactId,
+                        capability,
+                        label = root.GetProperty("label").GetString(),
+                        state = root.GetProperty("state").GetString(),
+                        occurredAt = root.GetProperty("occurredAt").GetDateTimeOffset(),
+                        currentState,
+                        completedAt = currentCompletedAt ?? linkedCompletedAt
+                    });
                 }
                 catch (JsonException) { /* Skip legacy or malformed records without exposing their body. */ }
                 catch (KeyNotFoundException) { }
