@@ -3,6 +3,8 @@ using System.Buffers.Binary;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
+using System.Security.Cryptography;
+using OmniDesk.Api.Attachments;
 using OmniDesk.Api.Data;
 using OmniDesk.Api.Security;
 using OmniDesk.Contracts;
@@ -16,6 +18,8 @@ public sealed record SupportInternalNote(long ExpectedVersion, string Body);
 public sealed record ManualSupportCreate(Guid RequestId, Guid DeviceId, string Subject, string Description, string Category, string Priority);
 public sealed record SupportTicketDeviceChange(long ExpectedVersion, Guid DeviceId);
 public sealed record SupportTicketParticipantChange(long ExpectedVersion, string UserId);
+public sealed record SupportAttachmentView(Guid Id, string FileName, string MediaType, long SizeBytes,
+    string Visibility, string ScanState, DateTimeOffset CreatedAt);
 public sealed record SupportInterventionLink(long ExpectedVersion, Guid DeviceId, string ArtifactType, Guid ArtifactId);
 public sealed record SupportInterventionSummaryCreate(long ExpectedVersion, Guid DeviceId, string ArtifactType,
     Guid ArtifactId, string Summary, string Outcome, string? FollowUp);
@@ -45,6 +49,14 @@ public static class SupportEndpoints
     private static bool ValidKey(string? key) => key is { Length: 64 } && key.All(Uri.IsHexDigit);
     private static SupportTicketView View(SupportTicket t) => new(t.Id, t.Number, t.DeviceId, t.Subject, t.Description, t.State,
         t.Resolution, t.Version, t.CreatedAt, t.UpdatedAt, t.Screenshot != null, t.Category, t.Origin);
+    private static SupportAttachmentView AttachmentView(SupportAttachment item) => new(item.Id, item.OriginalFileName,
+        item.MediaType, item.SizeBytes, item.Visibility, item.ScanState, item.CreatedAt);
+    private static string SafeAttachmentName(string? name)
+    {
+        var leaf = (name ?? "").Replace('\\', '/').Split('/').LastOrDefault() ?? "";
+        var safe = new string(leaf.Where(c => !char.IsControl(c) && c is not ('/' or '\\' or ':' or '\0')).ToArray()).Trim().Trim('.');
+        return string.IsNullOrWhiteSpace(safe) ? "allegato" : safe.Length <= 255 ? safe : safe[^255..];
+    }
     private static async Task<bool> CanViewManageTicket(PermissionService permissions, string userId, SupportTicket ticket) =>
         await permissions.Allows(userId, "tickets.view", ticket.DeviceId, siteId: ticket.SiteId) &&
         await permissions.Allows(userId, "tickets.manage", ticket.DeviceId, siteId: ticket.SiteId);
@@ -303,6 +315,100 @@ public static class SupportEndpoints
             c.Response.Headers["X-Content-Type-Options"] = "nosniff";
             return Results.File(row.Screenshot, "image/png");
         });
+        portal.MapGet("/tickets/{id:guid}/attachments", async (Guid id, HttpContext c, AppDbContext db) => {
+            var userId = c.User.UserId();
+            var allowed = await (from ticket in db.SupportTickets.AsNoTracking()
+                join site in db.Sites.AsNoTracking() on ticket.SiteId equals site.Id
+                where ticket.Id == id && ticket.RequesterUserId == userId && !site.IsArchived &&
+                    db.Users.Any(user => user.Id == userId && !user.IsDisabled) &&
+                    db.PortalDeviceAccesses.Any(access => access.UserId == userId && access.DeviceId == ticket.DeviceId) &&
+                    db.DeviceCredentials.Any(credential => credential.DeviceId == ticket.DeviceId && credential.RevokedAt == null)
+                select ticket.Id).AnyAsync();
+            if (!allowed) return Results.NotFound();
+            var rows = await db.SupportAttachments.AsNoTracking().Where(x => x.TicketId == id && x.Visibility == "public")
+                .OrderBy(x => x.CreatedAt).Select(x => new SupportAttachmentView(x.Id, x.OriginalFileName,
+                    x.MediaType, x.SizeBytes, x.Visibility, x.ScanState, x.CreatedAt)).ToArrayAsync();
+            c.Response.Headers.CacheControl = "no-store";
+            return Results.Ok(rows);
+        });
+        portal.MapPost("/tickets/{id:guid}/attachments", async (Guid id, HttpContext c, AppDbContext db,
+            AttachmentStorage storage, CancellationToken ct) => {
+            if (!c.Request.HasFormContentType) return Results.BadRequest(new { error = "Carica un file multipart valido." });
+            var form = await c.Request.ReadFormAsync(ct);
+            var file = form.Files.GetFile("file");
+            if (file is null || file.Length is <= 0 or > AttachmentStorage.MaxBytes ||
+                !long.TryParse(form["expectedVersion"], out var expectedVersion) || expectedVersion < 1 || form["consent"] != "true")
+                return Results.BadRequest(new { error = "Seleziona un file entro 10 MiB, conferma il consenso e ricarica il ticket." });
+            var userId = c.User.UserId();
+            var ticket = await (from item in db.SupportTickets.AsNoTracking()
+                join site in db.Sites.AsNoTracking() on item.SiteId equals site.Id
+                where item.Id == id && item.RequesterUserId == userId && !site.IsArchived &&
+                    db.Users.Any(user => user.Id == userId && !user.IsDisabled) &&
+                    db.PortalDeviceAccesses.Any(access => access.UserId == userId && access.DeviceId == item.DeviceId) &&
+                    db.DeviceCredentials.Any(credential => credential.DeviceId == item.DeviceId && credential.RevokedAt == null)
+                select item).SingleOrDefaultAsync(ct);
+            if (ticket is null) return Results.NotFound();
+            if (ticket.Version != expectedVersion) return Results.Conflict(new { error = "Il ticket è stato aggiornato. Ricarica la conversazione." });
+            if (ticket.State is "resolved" or "closed") return Results.Conflict(new { error = "Il ticket è chiuso." });
+            if (await db.SupportAttachments.CountAsync(x => x.TicketId == id, ct) >= 50 ||
+                ((await db.SupportAttachments.Where(x => x.TicketId == id).SumAsync(x => (long?)x.SizeBytes, ct) ?? 0L) + file.Length) > 100L * 1024 * 1024)
+                return Results.StatusCode(429);
+
+            (string StorageKey, long SizeBytes, string Sha256) stored;
+            try { await using var stream = file.OpenReadStream(); stored = await storage.SaveQuarantinedAsync(stream, ct); }
+            catch (AttachmentTooLargeException) { return Results.StatusCode(413); }
+            catch (AttachmentStorageUnavailableException) { return Results.StatusCode(503); }
+
+            try
+            {
+                await using var tx = await db.Database.BeginTransactionAsync(ct);
+                await PortalDeviceAccessLock.Acquire(db, userId, ticket.DeviceId);
+                var current = await db.SupportTickets.AsNoTracking().SingleOrDefaultAsync(item => item.Id == id && item.RequesterUserId == userId &&
+                    item.State != "resolved" && item.State != "closed" && db.Users.Any(user => user.Id == userId && !user.IsDisabled) &&
+                    db.PortalDeviceAccesses.Any(access => access.UserId == userId && access.DeviceId == item.DeviceId) &&
+                    db.DeviceCredentials.Any(credential => credential.DeviceId == item.DeviceId && credential.RevokedAt == null), ct);
+                if (current is null) { storage.Delete(stored.StorageKey); return Results.NotFound(); }
+                if (current.Version != expectedVersion) { storage.Delete(stored.StorageKey); return Results.Conflict(new { error = "Il ticket è stato aggiornato. Ricarica la conversazione." }); }
+                if (await db.SupportAttachments.CountAsync(x => x.TicketId == id, ct) >= 50 ||
+                    ((await db.SupportAttachments.Where(x => x.TicketId == id).SumAsync(x => (long?)x.SizeBytes, ct) ?? 0L) + file.Length) > 100L * 1024 * 1024)
+                { storage.Delete(stored.StorageKey); return Results.StatusCode(429); }
+                var now = DateTimeOffset.UtcNow;
+                var changed = await db.SupportTickets.Where(item => item.Id == id && item.RequesterUserId == userId && item.Version == expectedVersion &&
+                        item.State != "resolved" && item.State != "closed" && db.PortalDeviceAccesses.Any(access => access.UserId == userId && access.DeviceId == item.DeviceId))
+                    .ExecuteUpdateAsync(update => update.SetProperty(item => item.UpdatedAt, now).SetProperty(item => item.Version, item => item.Version + 1), ct);
+                if (changed == 0) { storage.Delete(stored.StorageKey); return Results.Conflict(new { error = "Il ticket è stato aggiornato. Ricarica la conversazione." }); }
+                var attachment = new SupportAttachment { TicketId = id, UploaderId = userId, StorageKey = stored.StorageKey,
+                    OriginalFileName = SafeAttachmentName(file.FileName), MediaType = "application/octet-stream", SizeBytes = stored.SizeBytes,
+                    Sha256 = stored.Sha256, Visibility = "public", CreatedAt = now };
+                db.SupportAttachments.Add(attachment);
+                db.AuditEvents.Add(new AuditEvent { ActorId = userId, Action = "ticket.portal.attachment.consent", Target = attachment.Id.ToString() });
+                db.AuditEvents.Add(new AuditEvent { ActorId = userId, Action = "ticket.portal.attachment.upload", Target = attachment.Id.ToString() });
+                await db.SaveChangesAsync(ct);
+                await tx.CommitAsync(ct);
+                c.Response.Headers.CacheControl = "no-store";
+                return Results.Accepted($"/api/portal/tickets/{id}/attachments/{attachment.Id}", AttachmentView(attachment));
+            }
+            catch { storage.Delete(stored.StorageKey); throw; }
+        });
+        portal.MapGet("/tickets/{id:guid}/attachments/{attachmentId:guid}", async (Guid id, Guid attachmentId, HttpContext c,
+            AppDbContext db, AttachmentStorage storage) => {
+            var userId = c.User.UserId();
+            var row = await (from attachment in db.SupportAttachments.AsNoTracking()
+                join ticket in db.SupportTickets.AsNoTracking() on attachment.TicketId equals ticket.Id
+                join site in db.Sites.AsNoTracking() on ticket.SiteId equals site.Id
+                where attachment.Id == attachmentId && attachment.TicketId == id && attachment.Visibility == "public" &&
+                    attachment.ScanState == "clean" && ticket.RequesterUserId == userId && !site.IsArchived &&
+                    db.Users.Any(user => user.Id == userId && !user.IsDisabled) &&
+                    db.PortalDeviceAccesses.Any(access => access.UserId == userId && access.DeviceId == ticket.DeviceId) &&
+                    db.DeviceCredentials.Any(credential => credential.DeviceId == ticket.DeviceId && credential.RevokedAt == null)
+                select attachment).SingleOrDefaultAsync();
+            if (row is null) return Results.NotFound();
+            c.Response.Headers.CacheControl = "no-store";
+            c.Response.Headers["X-Content-Type-Options"] = "nosniff";
+            c.Response.Headers["Content-Security-Policy"] = "sandbox";
+            try { return Results.File(storage.OpenRead(row.StorageKey), "application/octet-stream", SafeAttachmentName(row.OriginalFileName)); }
+            catch (FileNotFoundException) { return Results.StatusCode(410); }
+        });
         portal.MapPost("/tickets/{id:guid}/messages", async (Guid id, PortalTicketReply r, HttpContext c, AppDbContext db) => {
             if (r.ExpectedVersion < 1 || string.IsNullOrWhiteSpace(r.Body) || r.Body.Trim().Length > 8000) return Results.BadRequest();
             var userId = c.User.UserId();
@@ -434,6 +540,88 @@ public static class SupportEndpoints
             await db.SaveChangesAsync();
             await tx.CommitAsync();
             return Results.NoContent();
+        });
+        staff.MapGet("/{id:guid}/attachments", async (Guid id, HttpContext c, AppDbContext db, PermissionService p) => {
+            var ticket = await db.SupportTickets.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id);
+            if (ticket is null) return Results.NotFound();
+            var userId = c.User.UserId();
+            if (!await p.Allows(userId, "tickets.view", ticket.DeviceId, siteId: ticket.SiteId)) return Results.Forbid();
+            var canSeeInternal = await p.Allows(userId, "tickets.note.internal", ticket.DeviceId, siteId: ticket.SiteId);
+            var rows = await db.SupportAttachments.AsNoTracking().Where(x => x.TicketId == id && (x.Visibility == "public" || (canSeeInternal && x.Visibility == "internal")))
+                .OrderBy(x => x.CreatedAt).Select(x => new SupportAttachmentView(x.Id, x.OriginalFileName,
+                    x.MediaType, x.SizeBytes, x.Visibility, x.ScanState, x.CreatedAt)).ToArrayAsync();
+            c.Response.Headers.CacheControl = "no-store";
+            return Results.Ok(rows);
+        });
+        staff.MapGet("/{id:guid}/attachments/{attachmentId:guid}", async (Guid id, Guid attachmentId, HttpContext c,
+            AppDbContext db, PermissionService p, AttachmentStorage storage) => {
+            var ticket = await db.SupportTickets.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id);
+            if (ticket is null) return Results.NotFound();
+            var userId = c.User.UserId();
+            if (!await p.Allows(userId, "tickets.view", ticket.DeviceId, siteId: ticket.SiteId)) return Results.Forbid();
+            var row = await db.SupportAttachments.AsNoTracking().SingleOrDefaultAsync(x => x.Id == attachmentId && x.TicketId == id && x.ScanState == "clean");
+            if (row is null) return Results.NotFound();
+            if (row.Visibility == "internal" && !await p.Allows(userId, "tickets.note.internal", ticket.DeviceId, siteId: ticket.SiteId)) return Results.Forbid();
+            c.Response.Headers.CacheControl = "no-store";
+            c.Response.Headers["X-Content-Type-Options"] = "nosniff";
+            c.Response.Headers["Content-Security-Policy"] = "sandbox";
+            try { return Results.File(storage.OpenRead(row.StorageKey), "application/octet-stream", SafeAttachmentName(row.OriginalFileName)); }
+            catch (FileNotFoundException) { return Results.StatusCode(410); }
+        });
+        staff.MapPost("/{id:guid}/attachments", async (Guid id, HttpContext c, AppDbContext db, PermissionService p,
+            AttachmentStorage storage, CancellationToken ct) => {
+            if (!c.Request.HasFormContentType) return Results.BadRequest(new { error = "Carica un file multipart valido." });
+            var form = await c.Request.ReadFormAsync(ct);
+            var file = form.Files.GetFile("file");
+            var visibility = form["visibility"].ToString();
+            if (file is null || file.Length is <= 0 or > AttachmentStorage.MaxBytes ||
+                !long.TryParse(form["expectedVersion"], out var expectedVersion) || expectedVersion < 1 ||
+                visibility is not ("public" or "internal") || (visibility == "public" && form["consent"] != "true"))
+                return Results.BadRequest(new { error = "Seleziona un file entro 10 MiB, indica la visibilità e conferma la condivisione pubblica." });
+            var actorId = c.User.UserId();
+            var ticket = await db.SupportTickets.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id);
+            if (ticket is null) return Results.NotFound();
+            if (!await CanViewManageTicket(p, actorId, ticket)) return Results.Forbid();
+            if (visibility == "internal" && !await p.Allows(actorId, "tickets.note.internal", ticket.DeviceId, siteId: ticket.SiteId)) return Results.Forbid();
+            if (ticket.Version != expectedVersion) return Results.Conflict(new { error = "Il ticket è stato aggiornato. Ricaricalo prima di allegare il file." });
+            if (await db.SupportAttachments.CountAsync(x => x.TicketId == id, ct) >= 50 ||
+                (await db.SupportAttachments.Where(x => x.TicketId == id).SumAsync(x => (long?)x.SizeBytes, ct) ?? 0L) + file.Length > 100L * 1024 * 1024)
+                return Results.StatusCode(429);
+
+            (string StorageKey, long SizeBytes, string Sha256) stored;
+            try { await using var stream = file.OpenReadStream(); stored = await storage.SaveQuarantinedAsync(stream, ct); }
+            catch (AttachmentTooLargeException) { return Results.StatusCode(413); }
+            catch (AttachmentStorageUnavailableException) { return Results.StatusCode(503); }
+
+            try
+            {
+                await using var tx = await db.Database.BeginTransactionAsync(ct);
+                await DeviceOperationLock.Acquire(db, ticket.DeviceId);
+                var current = await db.SupportTickets.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, ct);
+                if (current is null) { storage.Delete(stored.StorageKey); return Results.NotFound(); }
+                if (!await CanViewManageTicket(p, actorId, current)) { storage.Delete(stored.StorageKey); return Results.Forbid(); }
+                if (visibility == "internal" && !await p.Allows(actorId, "tickets.note.internal", current.DeviceId, siteId: current.SiteId))
+                { storage.Delete(stored.StorageKey); return Results.Forbid(); }
+                if (current.Version != expectedVersion) { storage.Delete(stored.StorageKey); return Results.Conflict(new { error = "Il ticket è stato aggiornato. Ricaricalo prima di allegare il file." }); }
+                if (await db.SupportAttachments.CountAsync(x => x.TicketId == id, ct) >= 50 ||
+                    (await db.SupportAttachments.Where(x => x.TicketId == id).SumAsync(x => (long?)x.SizeBytes, ct) ?? 0L) + file.Length > 100L * 1024 * 1024)
+                { storage.Delete(stored.StorageKey); return Results.StatusCode(429); }
+                var now = DateTimeOffset.UtcNow;
+                var changed = await db.SupportTickets.Where(x => x.Id == id && x.Version == expectedVersion)
+                    .ExecuteUpdateAsync(update => update.SetProperty(x => x.Version, x => x.Version + 1).SetProperty(x => x.UpdatedAt, now), ct);
+                if (changed == 0) { storage.Delete(stored.StorageKey); return Results.Conflict(new { error = "Il ticket è stato aggiornato. Ricaricalo prima di allegare il file." }); }
+                var attachment = new SupportAttachment { TicketId = id, UploaderId = actorId, StorageKey = stored.StorageKey,
+                    OriginalFileName = SafeAttachmentName(file.FileName), MediaType = "application/octet-stream", SizeBytes = stored.SizeBytes,
+                    Sha256 = stored.Sha256, Visibility = visibility, CreatedAt = now };
+                db.SupportAttachments.Add(attachment);
+                db.AuditEvents.Add(new AuditEvent { ActorId = actorId, Action = "ticket.attachment.upload", Target = attachment.Id.ToString() });
+                if (visibility == "public") db.AuditEvents.Add(new AuditEvent { ActorId = actorId, Action = "ticket.attachment.public.consent", Target = attachment.Id.ToString() });
+                await db.SaveChangesAsync(ct);
+                await tx.CommitAsync(ct);
+                c.Response.Headers.CacheControl = "no-store";
+                return Results.Accepted($"/api/support/{id}/attachments/{attachment.Id}", AttachmentView(attachment));
+            }
+            catch { storage.Delete(stored.StorageKey); throw; }
         });
         staff.MapPost("/manual", async (ManualSupportCreate r, HttpContext c, AppDbContext db, PermissionService p) => {
             var priority = CanonicalPriority(r.Priority);

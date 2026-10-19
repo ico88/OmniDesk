@@ -120,6 +120,27 @@ public sealed class SupportTicketParticipant
     public DateTimeOffset AddedAt { get; set; } = DateTimeOffset.UtcNow;
 }
 
+public sealed class SupportAttachment
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid TicketId { get; set; }
+    public string? UploaderId { get; set; }
+    public string StorageKey { get; set; } = "";
+    public string OriginalFileName { get; set; } = "";
+    public string MediaType { get; set; } = "application/octet-stream";
+    public long SizeBytes { get; set; }
+    public string Sha256 { get; set; } = "";
+    public string Visibility { get; set; } = "public";
+    public string ScanState { get; set; } = "quarantined";
+    public int ScanAttempts { get; set; }
+    public DateTimeOffset NextScanAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset? ScanLeaseUntil { get; set; }
+    public DateTimeOffset? ScannedAt { get; set; }
+    public string? ScannerVersion { get; set; }
+    public string? LastScanErrorType { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
 public sealed class SupportInterventionSummary
 {
     public Guid Id { get; set; } = Guid.NewGuid();

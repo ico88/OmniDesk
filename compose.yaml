@@ -68,8 +68,11 @@ services:
       Proxy__Network: ${OMNIDESK_PROXY_SUBNET:-172.29.84.0/24}
       Security__TotpEnabled: ${OMNIDESK_TOTP_ENABLED:-false}
       Downloads__Directory: /packages
+      Attachments__RootPath: /attachments
+      Attachments__ClamAvHost: clamav
     volumes:
       - identity_keys:/keys
+      - attachments_data:/attachments
       - ./artifacts/windows-lan:/packages:ro
     restart: unless-stopped
     depends_on:
@@ -77,6 +80,23 @@ services:
         condition: service_healthy
       keys-init:
         condition: service_completed_successfully
+      attachments-init:
+        condition: service_completed_successfully
+      clamav:
+        condition: service_started
+  attachments-init:
+    image: alpine:3.22
+    user: root
+    network_mode: none
+    command: [sh, -c, 'chown 1654:1654 /attachments && chmod 700 /attachments']
+    volumes:
+      - attachments_data:/attachments
+  clamav:
+    image: clamav/clamav:1.4.5@sha256:4de20bd9ab45a4b763c5412b769217ef5082572ebc8a63aff1a77943419e5dd8
+    restart: unless-stopped
+    networks: [backend, av-egress]
+    volumes:
+      - clamav_data:/var/lib/clamav
   dashboard:
     networks: [proxy]
     image: omnidesk-dashboard:local
@@ -109,6 +129,8 @@ secrets:
 volumes:
   postgres_data:
   identity_keys:
+  attachments_data:
+  clamav_data:
   caddy_data:
   caddy_config:
 
@@ -119,3 +141,4 @@ networks:
     ipam:
       config:
         - subnet: ${OMNIDESK_PROXY_SUBNET:-172.29.84.0/24}
+  av-egress:

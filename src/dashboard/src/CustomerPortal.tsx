@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from './api';
 import { Icon } from './Icon';
+import { TicketAttachments } from './TicketAttachments';
 import './portal.css';
 
 type PortalDevice = { deviceId:string; deviceName:string; siteId:string; siteName:string };
@@ -65,6 +66,7 @@ export function CustomerPortal({onMessage}:{onMessage:(message:string)=>void}) {
       {selectedId&&<>
         {!detail?<p>Caricamento conversazione…</p>:<><div className="section-heading"><div><span className="eyebrow">TICKET #{detail.ticket.number} · {states[detail.ticket.state]??detail.ticket.state}</span><h2>{detail.ticket.subject}</h2><small>{detail.ticket.deviceName} · {detail.ticket.siteName} · {date(detail.ticket.createdAt)}</small></div></div>
           <div className="conversation-log" role="log" aria-label="Conversazione del ticket" aria-live="polite">{detail.messages.map(message=>message.kind==='state_change'?<p className="chat-event" key={message.id}><Icon name="check" size={14}/>{states[message.fromState??'']??message.fromState} → {states[message.toState??'']??message.toState}<time>{date(message.createdAt)}</time></p>:<article className={`chat-message ${message.kind==='request'?'requester':'staff'}`} key={message.id}><div className="chat-meta"><strong>{message.kind==='request'?'La tua richiesta':'Assistenza OmniDesk'}</strong><time>{date(message.createdAt)}</time></div><p>{message.body}</p>{message.kind==='request'&&detail.ticket.hasScreenshot&&<a className="chat-image-button" href={`/api/portal/tickets/${detail.ticket.id}/screenshot`} target="_blank" rel="noreferrer"><img src={`/api/portal/tickets/${detail.ticket.id}/screenshot`} alt="Screenshot allegato alla richiesta" loading="lazy"/><span><Icon name="search" size={14}/>Apri screenshot</span></a>}</article>)}</div>
+          <TicketAttachments basePath={`/portal/tickets/${detail.ticket.id}`} version={detail.ticket.version} canManage={false} canNote={false} canUpload={detail.ticket.state==='open'||detail.ticket.state==='in_progress'} onChanged={async()=>{await load();setDetail(await api<Detail>(`/portal/tickets/${detail.ticket.id}`));}}/>
           {detail.ticket.state==='open'||detail.ticket.state==='in_progress'?<form className="chat-composer" onSubmit={e=>{e.preventDefault();void run(sendReply);}}><label>Rispondi all’assistenza<textarea required maxLength={8000} value={reply} disabled={busy} onChange={e=>setReply(e.target.value)} placeholder="Scrivi un messaggio…"/></label><div className="composer-footer"><small>La risposta sarà visibile al team di assistenza.</small><button disabled={busy||!reply.trim()}><Icon name="arrow" size={16}/>Invia risposta</button></div></form>:<p className="portal-closed">Questo ticket è chiuso. Se serve altro, apri una nuova richiesta.</p>}
         </>}
       </>}

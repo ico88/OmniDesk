@@ -1036,6 +1036,97 @@ namespace OmniDesk.Api.Migrations
                     b.ToTable("Sites");
                 });
 
+            modelBuilder.Entity("OmniDesk.Api.Data.SupportAttachment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("LastScanErrorType")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("MediaType")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTimeOffset>("NextScanAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("OriginalFileName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<int>("ScanAttempts")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("ScanLeaseUntil")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ScanState")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)");
+
+                    b.Property<DateTimeOffset?>("ScannedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ScannerVersion")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Sha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("StorageKey")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<Guid>("TicketId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("UploaderId")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Visibility")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StorageKey")
+                        .IsUnique();
+
+                    b.HasIndex("UploaderId");
+
+                    b.HasIndex("TicketId", "CreatedAt");
+
+                    b.HasIndex("ScanState", "NextScanAt", "ScanLeaseUntil");
+
+                    b.ToTable("SupportAttachments", t =>
+                        {
+                            t.HasCheckConstraint("CK_SupportAttachment_ScanState", "\"ScanState\" IN ('quarantined', 'scanning', 'clean', 'infected', 'scan_failed')");
+
+                            t.HasCheckConstraint("CK_SupportAttachment_Sha256", "length(\"Sha256\") = 64");
+
+                            t.HasCheckConstraint("CK_SupportAttachment_Size", "\"SizeBytes\" > 0 AND \"SizeBytes\" <= 10485760");
+
+                            t.HasCheckConstraint("CK_SupportAttachment_Visibility", "\"Visibility\" IN ('public', 'internal')");
+                        });
+                });
+
             modelBuilder.Entity("OmniDesk.Api.Data.SupportInterventionSummary", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1847,6 +1938,20 @@ namespace OmniDesk.Api.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("OmniDesk.Api.Data.SupportAttachment", b =>
+                {
+                    b.HasOne("OmniDesk.Api.Data.SupportTicket", null)
+                        .WithMany()
+                        .HasForeignKey("TicketId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("OmniDesk.Api.Data.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UploaderId")
+                        .OnDelete(DeleteBehavior.SetNull);
                 });
 
             modelBuilder.Entity("OmniDesk.Api.Data.SupportInterventionSummary", b =>

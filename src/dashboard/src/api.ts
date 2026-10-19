@@ -6,10 +6,11 @@ export async function refreshCsrf(): Promise<void> {
 }
 export async function api<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
   if (method !== 'GET' && !csrf) await refreshCsrf();
+  const multipart = typeof FormData !== 'undefined' && body instanceof FormData;
   const response = await fetch(`/api${path}`, {
     method, credentials: 'same-origin', cache: 'no-store',
-    headers: { 'Content-Type': 'application/json', ...(method !== 'GET' ? { 'X-CSRF-TOKEN': csrf } : {}) },
-    body: body === undefined ? undefined : JSON.stringify(body),
+    headers: { ...(multipart ? {} : { 'Content-Type': 'application/json' }), ...(method !== 'GET' ? { 'X-CSRF-TOKEN': csrf } : {}) },
+    body: body === undefined ? undefined : multipart ? body : JSON.stringify(body),
   });
   if (!response.ok) {
     if (response.status === 400 || response.status === 409) {

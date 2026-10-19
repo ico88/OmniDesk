@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using OmniDesk.Api.Data;
+using OmniDesk.Api.Attachments;
 using OmniDesk.Api.Endpoints;
 using OmniDesk.Api.Security;
 using OmniDesk.Remote.MeshCentral;
@@ -55,6 +56,9 @@ var keysPath = builder.Configuration["DataProtection:Path"];
 if (!string.IsNullOrEmpty(keysPath))
     builder.Services.AddDataProtection().SetApplicationName("OmniDesk").PersistKeysToFileSystem(new DirectoryInfo(keysPath));
 builder.Services.AddScoped<PermissionService>();
+builder.Services.AddSingleton<AttachmentStorage>();
+builder.Services.AddSingleton<IAttachmentScanner, ClamAvAttachmentScanner>();
+builder.Services.AddHostedService<AttachmentScanWorker>();
 builder.Services.AddSingleton<IMeshCentralClient>(new MeshCentralClient(new MeshCentralOptions(builder.Configuration["MeshCentral:Origin"], builder.Configuration["MeshCentral:Username"], builder.Configuration["MeshCentral:PasswordFile"])));
 builder.Services.AddSingleton<IMeshProvisioningClient>(sp => (IMeshProvisioningClient)sp.GetRequiredService<IMeshCentralClient>());
 builder.Services.AddAuthentication().AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, DeviceAuthentication>(DeviceAuthentication.SchemeName, _ => {});
@@ -116,6 +120,13 @@ app.Use(async (c, next) => {
 });
 if (!string.IsNullOrEmpty(trustedProxyNetwork)) app.UseForwardedHeaders();
 app.Use(async (c, next) => {
+    if (HttpMethods.IsPost(c.Request.Method) && c.Request.Path.Value?.EndsWith("/attachments", StringComparison.OrdinalIgnoreCase) == true)
+    {
+        const long attachmentRequestLimit = AttachmentStorage.MaxBytes + 512 * 1024;
+        var limit = c.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpMaxRequestBodySizeFeature>();
+        if (limit is { IsReadOnly: false }) limit.MaxRequestBodySize = attachmentRequestLimit;
+        if (c.Request.ContentLength > attachmentRequestLimit) { c.Response.StatusCode = 413; return; }
+    }
     if (c.Request.Path.StartsWithSegments("/api/agent/support"))
     {
         var limit = c.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpMaxRequestBodySizeFeature>();

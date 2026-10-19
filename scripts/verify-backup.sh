@@ -5,6 +5,14 @@ if [[ $# != 1 ]]; then echo 'Usage: bash scripts/verify-backup.sh .backups/<back
 backup_path=$(realpath -- "$1")
 [[ -f "$backup_path/READY" && -f "$backup_path/database.dump" ]] || { echo 'Incomplete backup' >&2; exit 1; }
 (cd "$backup_path" && sha256sum --check database.sha256)
+if [[ -d "$backup_path/attachments" && -f "$backup_path/attachments.sha256" ]]; then
+  (cd "$backup_path" && sha256sum --check attachments.sha256)
+elif [[ -d "$backup_path/attachments" || -f "$backup_path/attachments.sha256" ]]; then
+  echo 'Incomplete attachment backup or checksum manifest' >&2
+  exit 1
+else
+  echo 'Legacy database-only backup: attachment restore is not covered.' >&2
+fi
 export BACKUP_CHECK_FILE="$backup_path/database.dump"
 # Unique Compose project prevents simultaneous verifications from sharing a database.
 check_project="omnidesk-backup-check-$(date -u +%s)-$$"

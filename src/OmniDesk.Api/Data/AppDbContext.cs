@@ -40,6 +40,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
     public DbSet<SupportMessage> SupportMessages => Set<SupportMessage>();
     public DbSet<SupportTicketDevice> SupportTicketDevices => Set<SupportTicketDevice>();
     public DbSet<SupportTicketParticipant> SupportTicketParticipants => Set<SupportTicketParticipant>();
+    public DbSet<SupportAttachment> SupportAttachments => Set<SupportAttachment>();
     public DbSet<SupportInterventionSummary> SupportInterventionSummaries => Set<SupportInterventionSummary>();
     public DbSet<PortalDeviceAccess> PortalDeviceAccesses => Set<PortalDeviceAccess>();
     public DbSet<SupportTicket> SupportTickets => Set<SupportTicket>();
@@ -95,6 +96,25 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
         b.Entity<SupportTicketParticipant>().HasOne<AppUser>().WithMany().HasForeignKey(x => x.AddedBy).OnDelete(DeleteBehavior.SetNull);
         b.Entity<SupportTicketParticipant>().HasIndex(x => new { x.TicketId, x.UserId }).IsUnique();
         b.Entity<SupportTicketParticipant>().HasIndex(x => new { x.UserId, x.AddedAt });
+        b.Entity<SupportAttachment>().HasOne<SupportTicket>().WithMany().HasForeignKey(x => x.TicketId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<SupportAttachment>().HasOne<AppUser>().WithMany().HasForeignKey(x => x.UploaderId).OnDelete(DeleteBehavior.SetNull);
+        b.Entity<SupportAttachment>().Property(x => x.StorageKey).HasMaxLength(32);
+        b.Entity<SupportAttachment>().Property(x => x.OriginalFileName).HasMaxLength(255);
+        b.Entity<SupportAttachment>().Property(x => x.MediaType).HasMaxLength(128);
+        b.Entity<SupportAttachment>().Property(x => x.Sha256).HasMaxLength(64);
+        b.Entity<SupportAttachment>().Property(x => x.Visibility).HasMaxLength(20);
+        b.Entity<SupportAttachment>().Property(x => x.ScanState).HasMaxLength(24);
+        b.Entity<SupportAttachment>().Property(x => x.ScannerVersion).HasMaxLength(64);
+        b.Entity<SupportAttachment>().Property(x => x.LastScanErrorType).HasMaxLength(64);
+        b.Entity<SupportAttachment>().ToTable(t => {
+            t.HasCheckConstraint("CK_SupportAttachment_Size", "\"SizeBytes\" > 0 AND \"SizeBytes\" <= 10485760");
+            t.HasCheckConstraint("CK_SupportAttachment_Visibility", "\"Visibility\" IN ('public', 'internal')");
+            t.HasCheckConstraint("CK_SupportAttachment_ScanState", "\"ScanState\" IN ('quarantined', 'scanning', 'clean', 'infected', 'scan_failed')");
+            t.HasCheckConstraint("CK_SupportAttachment_Sha256", "length(\"Sha256\") = 64");
+        });
+        b.Entity<SupportAttachment>().HasIndex(x => x.StorageKey).IsUnique();
+        b.Entity<SupportAttachment>().HasIndex(x => new { x.TicketId, x.CreatedAt });
+        b.Entity<SupportAttachment>().HasIndex(x => new { x.ScanState, x.NextScanAt, x.ScanLeaseUntil });
         b.Entity<SupportInterventionSummary>().HasOne<SupportTicket>().WithMany().HasForeignKey(x => x.TicketId).OnDelete(DeleteBehavior.Cascade);
         b.Entity<SupportInterventionSummary>().HasOne<Device>().WithMany().HasForeignKey(x => x.DeviceId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<SupportInterventionSummary>().HasOne<AppUser>().WithMany().HasForeignKey(x => x.AuthorId).OnDelete(DeleteBehavior.SetNull);

@@ -11,6 +11,11 @@ printf 'Backup directory: %s\n' "$backup_path"
 docker compose exec -T db pg_dump -U omnidesk -d omnidesk --format=custom > "$backup_path/database.dump.partial"
 mv -- "$backup_path/database.dump.partial" "$backup_path/database.dump"
 docker compose cp api:/keys "$backup_path/identity_keys"
+docker compose cp api:/attachments "$backup_path/attachments"
+(
+  cd -- "$backup_path"
+  find attachments -type f -print0 | sort -z | xargs -0 -r sha256sum > attachments.sha256
+)
 docker compose cp caddy:/data "$backup_path/caddy_data"
 if docker compose ps --status running --services | rg -qx meshcentral; then
   docker compose cp meshcentral:/opt/meshcentral/meshcentral-data "$backup_path/mesh_data"
