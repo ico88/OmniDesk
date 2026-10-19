@@ -215,6 +215,15 @@ try {
  const intake=await context.request.post('https://omnidesk.test/api/agent/support',{headers:{Authorization:'Bearer '+agentAssertion()},data:{requesterKey:'A'.repeat(64),ticket:{requestId:crypto.randomUUID(),subject:ticketSubject,description:'Isolated fixture, no live user data',screenshotBase64:screenshot,screenshotConsent:true}}});
  assert.equal(intake.status(),201,'Authenticated isolated ticket intake');
  const smokeTicketId=(await intake.json()).id;
+ const participantRole='Smoke ticket reader '+randomBytes(5).toString('hex');
+ const participantRoleResponse=await context.request.post('https://omnidesk.test/api/admin/roles',{headers:csrfHeaders,data:{name:participantRole,permissions:['tickets.view']}});
+ assert.equal(participantRoleResponse.status(),201,'Read-only ticket collaborator role created');
+ const participantEmail='ticket-reader-'+randomBytes(6).toString('hex')+'@example.test'; const participantPassword='Reader!9'+randomBytes(24).toString('hex');
+ const participantUserResponse=await context.request.post('https://omnidesk.test/api/admin/users',{headers:csrfHeaders,data:{email:participantEmail,password:participantPassword,role:null}});
+ assert.equal(participantUserResponse.status(),201,'Ticket participant fixture created');
+ const participantUserId=(await participantUserResponse.json()).id;
+ const participantGrant=await context.request.post('https://omnidesk.test/api/admin/grants',{headers:csrfHeaders,data:{userId:participantUserId,role:participantRole,deviceId:fixtureDevice,groupId:null,siteId:null}});
+ assert.equal(participantGrant.status(),201,'Participant receives only the ticket view grant');
  const diagnosticJob=await context.request.post(`https://omnidesk.test/api/devices/${fixtureDevice}/diagnostics/processes`,{headers:csrfHeaders,data:{requestId:crypto.randomUUID()}});
  assert.equal(diagnosticJob.status(),201,'Authorized RMM diagnostic job created for ticket correlation');
  const diagnosticJobId=(await diagnosticJob.json()).id;
@@ -242,6 +251,17 @@ try {
  await page.getByRole('row').filter({has:page.getByRole('cell',{name:ticketSubject,exact:true})}).getByRole('button',{name:'Apri ticket',exact:true}).click();
  await page.locator('.ticket-interventions').waitFor();
  assert.equal(await page.locator('.ticket-intervention-link').isVisible(),true,'Ticket manager receives the RMM correlation control');
+ const participantsRegion=page.getByRole('region',{name:'Partecipanti al ticket'});
+ await participantsRegion.getByLabel('Partecipante da aggiungere',{exact:true}).selectOption(participantUserId);
+ await participantsRegion.getByRole('button',{name:'Aggiungi',exact:true}).click();
+ await participantsRegion.getByText(participantEmail,{exact:true}).waitFor();
+ const participantRows=await (await context.request.get(`https://omnidesk.test/api/support/${smokeTicketId}/participants`)).json();
+ assert.equal(participantRows.length,1,'Participant relation persisted');
+ assert.equal(participantRows[0].userId,participantUserId);
+ const remainingParticipantCandidates=await (await context.request.get(`https://omnidesk.test/api/support/${smokeTicketId}/participant-candidates`)).json();
+ assert.equal(remainingParticipantCandidates.some(x=>x.id===participantUserId),false,'An existing participant is no longer a candidate');
+ await participantsRegion.getByRole('button',{name:`Rimuovi ${participantEmail}`,exact:true}).click();
+ await participantsRegion.getByText('Nessun partecipante aggiuntivo.',{exact:true}).waitFor();
  await page.waitForFunction(()=>{const select=[...document.querySelectorAll('select')].find(x=>x.labels?.[0]?.textContent?.trim()==='Stato');return select?.options.length>0;});
  assert.deepEqual(await page.getByLabel('Stato',{exact:true}).locator('option').evaluateAll(options=>options.map(option=>option.value)),['open','in_progress','resolved'],'Ticket UI lists only server-approved transitions');
  const interventionPicker=page.locator('.ticket-intervention-link select');
@@ -371,5 +391,5 @@ try {
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true,'No horizontal page overflow on mobile');
  await page.screenshot({path:'/previews/devices-mobile.png',fullPage:true});
  assert.deepEqual(errors,[],'No browser JavaScript exceptions');
- console.log('PASS: Chromium account/grant flows, favicon/shared brand mark, portal screenshot consent/chat/isolation/revocation, signed-heartbeat online badge, ticket notifications and RMM intervention correlation, device management and viewer permissions');
+ console.log('PASS: Chromium account/grant flows, favicon/shared brand mark, portal screenshot consent/chat/isolation/revocation, signed-heartbeat online badge, scoped ticket participants, ticket notifications and RMM intervention correlation, device management and viewer permissions');
 } finally {await browser.close();}

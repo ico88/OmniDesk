@@ -545,6 +545,74 @@ public static class SupportScenario
             Assert.All(events, evt => Assert.DoesNotContain("Verificato il collegamento", evt.Payload));
             Assert.All(events, evt => Assert.DoesNotContain("Confermare con il richiedente", evt.Payload));
         }
+        var readerRole = "Ticket reader " + Guid.NewGuid().ToString("N");
+        Assert.Equal(HttpStatusCode.Created, (await admin.PostAsJsonAsync("/api/admin/roles", new { name = readerRole, permissions = new[] { "tickets.view" } })).StatusCode);
+        var readerEmail = "ticket-reader-" + Guid.NewGuid().ToString("N") + "@example.test";
+        var readerPassword = "Ticket!" + Guid.NewGuid().ToString("N");
+        var readerCreate = await admin.PostAsJsonAsync("/api/admin/users", new { email = readerEmail, password = readerPassword, role = (string?)null });
+        Assert.Equal(HttpStatusCode.Created, readerCreate.StatusCode);
+        var readerId = (await readerCreate.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("id").GetString()!;
+        Assert.Equal(HttpStatusCode.Created, (await admin.PostAsJsonAsync("/api/admin/grants", new { userId = readerId, role = readerRole, groupId = group, deviceId = (Guid?)null })).StatusCode);
+        var noAccessEmail = "ticket-outsider-" + Guid.NewGuid().ToString("N") + "@example.test";
+        var noAccessCreate = await admin.PostAsJsonAsync("/api/admin/users", new { email = noAccessEmail, password = readerPassword, role = (string?)null });
+        Assert.Equal(HttpStatusCode.Created, noAccessCreate.StatusCode);
+        var noAccessId = (await noAccessCreate.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("id").GetString()!;
+        var participantTicket = customTicketRequest with { RequestId = Guid.NewGuid(), Subject = "Ticket con partecipanti", Category = "hardware", Priority = "p3" };
+        var participantTicketResponse = await admin.PostAsJsonAsync("/api/support/manual", participantTicket);
+        Assert.Equal(HttpStatusCode.Created, participantTicketResponse.StatusCode);
+        var participantTicketId = (await participantTicketResponse.Content.ReadFromJsonAsync<SupportTicketView>())!.Id;
+        var participantsUrl = $"/api/support/{participantTicketId}/participants";
+        var participantCandidates = await admin.GetFromJsonAsync<System.Text.Json.JsonElement[]>($"/api/support/{participantTicketId}/participant-candidates");
+        Assert.Contains(participantCandidates!, x => x.GetProperty("id").GetString() == readerId);
+        Assert.DoesNotContain(participantCandidates!, x => x.GetProperty("id").GetString() == noAccessId);
+        Assert.Equal(HttpStatusCode.BadRequest, (await admin.PostAsJsonAsync(participantsUrl, new { expectedVersion = 1L, userId = noAccessId })).StatusCode);
+        Assert.Equal(HttpStatusCode.Created, (await admin.PostAsJsonAsync(participantsUrl, new { expectedVersion = 1L, userId = readerId })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await admin.PostAsJsonAsync(participantsUrl, new { expectedVersion = 2L, userId = readerId })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await admin.PostAsJsonAsync(participantsUrl, new { expectedVersion = 1L, userId = scopedId })).StatusCode);
+        var participantRows = await admin.GetFromJsonAsync<System.Text.Json.JsonElement[]>(participantsUrl);
+        var readerParticipant = Assert.Single(participantRows!);
+        Assert.Equal(readerId, readerParticipant.GetProperty("userId").GetString());
+        // Keep this extra interactive login on an isolated limiter instance. The security scenario
+        // intentionally exercises the 20-per-minute limit against the primary host below.
+        using var participantFactory = new ApiFactory();
+        using var readerClient = participantFactory.CreateClient(new Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost"), AllowAutoRedirect = false });
+        async Task RefreshReaderCsrf()
+        {
+            var csrf = await readerClient.GetFromJsonAsync<System.Text.Json.JsonElement>("/api/auth/csrf");
+            readerClient.DefaultRequestHeaders.Remove("X-CSRF-TOKEN");
+            readerClient.DefaultRequestHeaders.Add("X-CSRF-TOKEN", csrf.GetProperty("token").GetString());
+        }
+        await RefreshReaderCsrf();
+        Assert.Equal(HttpStatusCode.NoContent, (await readerClient.PostAsJsonAsync("/api/auth/login", new { email = readerEmail, password = readerPassword })).StatusCode);
+        await RefreshReaderCsrf();
+        Assert.Single((await readerClient.GetFromJsonAsync<System.Text.Json.JsonElement[]>(participantsUrl))!);
+        Assert.Equal(HttpStatusCode.Forbidden, (await readerClient.PostAsJsonAsync(participantsUrl, new { expectedVersion = 2L, userId = scopedId })).StatusCode);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var permissions = scope.ServiceProvider.GetRequiredService<PermissionService>();
+            Assert.True(await permissions.Allows(readerId, "tickets.view", device, siteId: siteId));
+            Assert.False(await permissions.Allows(readerId, "tickets.manage", device, siteId: siteId));
+            Assert.False(await permissions.Allows(readerId, "remote.control", device, siteId: siteId));
+        }
+        Assert.Equal(HttpStatusCode.NoContent, (await admin.PutAsJsonAsync($"/api/support/{participantTicketId}", new
+        { expectedVersion = 2L, state = "open", resolution = "Aggiornamento condiviso con il partecipante.", addReply = true })).StatusCode);
+        var participantWorker = new TicketNotificationWorker(factory.Services.GetRequiredService<IServiceScopeFactory>(), NullLogger<TicketNotificationWorker>.Instance);
+        while (await participantWorker.ProcessNext(CancellationToken.None)) { }
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var notices = await db.UserNotifications.AsNoTracking().Where(x => x.UserId == readerId && x.TicketId == participantTicketId).ToArrayAsync();
+            Assert.Equal(2, notices.Length);
+            Assert.Contains(notices, x => x.Kind == "ticket.participant.added");
+            Assert.Contains(notices, x => x.Kind == "ticket.reply");
+            var participantAudit = await db.AuditEvents.Where(x => x.Target == participantTicketId.ToString() && x.Action == "ticket.participant.added").SingleAsync();
+            Assert.Equal(adminUser, participantAudit.ActorId);
+            Assert.DoesNotContain(readerPassword, (await db.CoreOutboxEvents.Where(x => x.AggregateId == participantTicketId).ToArrayAsync()).Select(x => x.Payload).Aggregate("", (a, b) => a + b));
+        }
+        var readerNotifications = await readerClient.GetFromJsonAsync<System.Text.Json.JsonElement>("/api/notifications");
+        Assert.Contains(readerNotifications.GetProperty("notifications").EnumerateArray(), x => x.GetProperty("ticketId").GetGuid() == participantTicketId && x.GetProperty("kind").GetString() == "ticket.reply");
+        Assert.Equal(HttpStatusCode.NoContent, (await admin.DeleteAsync($"{participantsUrl}/{readerParticipant.GetProperty("id").GetGuid()}?expectedVersion=3")).StatusCode);
+        Assert.Empty((await readerClient.GetFromJsonAsync<System.Text.Json.JsonElement[]>(participantsUrl))!);
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
