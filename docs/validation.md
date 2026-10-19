@@ -1151,6 +1151,8 @@ I workflow Linux e Windows ignorano push e pull request composti solo da file
 Markdown (`docs/**` e `*.md`). Ogni workflow usa un gruppo per workflow/ref con
 `cancel-in-progress: false`: i run in esecuzione vengono preservati e una nuova
 revisione può sostituire quella ancora pending per lo stesso ref. Verificato lo
-YAML con PyYAML e asserzioni su trigger, filtri e concorrenza. La coda già
-esistente precede queste regole e non è dichiarata risolta; il comportamento
-verrà verificato dal prossimo evento Actions sul branch.
+YAML con PyYAML e asserzioni su trigger, filtri e concorrenza. Dopo il commit
+workflow `826d1ca`, il push documentale `d3127bf` non ha creato altri workflow:
+il filtro Markdown è verificato. Il comportamento di coalescenza non è ancora
+verificato: i run in coda/in esecuzione sono precedenti alla nuova regola e
+continuano il loro corso senza essere interrotti.
