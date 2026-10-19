@@ -963,3 +963,23 @@ collaudo LAN; non è una release firmata né una validazione di Defender.
 Il packager ricava la versione dal nome `windows-X.Y.Z` se `--version` è omesso;
 la prova in directory temporanea è passata e `ZipFile.testzip()` ha restituito
 `None` per i cinque file del kit.
+
+### Aggiornamento runtime API LAN — immagine sessioni da 30 minuti
+
+L’ispezione read-only ha trovato che il container API in esecuzione usava
+l’immagine del 13:47, mentre la build locale del 13:59 includeva già
+`SessionLifetime = 30 minuti`. Le sessioni create prima del deploy avevano
+`ExpiresAt - CreatedAt = 5 minuti`; dopo l’avvio del vecchio container non ne
+erano state create altre e il conteggio di sessioni `active`/
+`revocation_pending` era zero. Il DB era già alla migrazione
+`20261019140500_OperatorDisplayName`; nessuna migrazione richiesta.
+
+Backup `.backups/20261019T141342Z.umBpLS` completato e ripristinato su PostgreSQL
+temporaneo: checksum valido, 26 migrazioni, 1 account e 1 dispositivo. Ricreato
+solo `api` con `docker compose up -d --no-deps api`, usando immagine
+`sha256:6c964272243bb0ab5d38e9d970495d2f000e8fcbef2b7a76e1a8a97550072c3f`;
+dashboard, Caddy, DB e MeshCentral non ricreati. `verify-lan.py` ha confermato
+HTTPS/CA, readiness, dashboard e 401 anonimo; tutti i servizi risultano running.
+Il test `Session_lifetime_is_thirty_minutes` è passato nella suite CI. Nessuna
+sessione remota reale è stata aperta dopo il deploy: verifica interattiva della
+durata e del banner sul PC pilota ancora aperta.
