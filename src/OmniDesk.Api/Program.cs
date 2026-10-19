@@ -61,6 +61,7 @@ builder.Services.AddAuthentication().AddScheme<Microsoft.AspNetCore.Authenticati
 builder.Services.AddHostedService<AssertionCleanup>();
 builder.Services.AddHostedService<RemoteSessionGuard>();
 builder.Services.AddHostedService<RemoteProvisioningGuard>();
+builder.Services.AddHostedService<TicketNotificationWorker>();
 builder.Services.AddAuthorization();
 var trustedProxyNetwork = builder.Configuration["Proxy:Network"];
 if (!string.IsNullOrEmpty(trustedProxyNetwork))
@@ -153,5 +154,6 @@ app.MapAccountEndpoints();
 app.MapDashboardEndpoints();
 app.MapDownloadEndpoints();
 app.MapKnowledgeEndpoints();
+app.MapNotificationEndpoints();
 app.Run();
 public partial class Program { }

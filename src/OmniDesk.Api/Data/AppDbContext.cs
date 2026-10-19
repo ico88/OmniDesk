@@ -61,6 +61,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
     public DbSet<UpdateJob> UpdateJobs => Set<UpdateJob>();
     public DbSet<DashboardLayout> DashboardLayouts => Set<DashboardLayout>();
     public DbSet<CoreOutboxEvent> CoreOutboxEvents => Set<CoreOutboxEvent>();
+    public DbSet<CoreOutboxDelivery> CoreOutboxDeliveries => Set<CoreOutboxDelivery>();
+    public DbSet<UserNotification> UserNotifications => Set<UserNotification>();
     public DbSet<KnowledgeArticle> KnowledgeArticles => Set<KnowledgeArticle>();
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -172,6 +174,17 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
         b.Entity<CoreOutboxEvent>().Property(x => x.Payload).HasColumnType("jsonb");
         b.Entity<CoreOutboxEvent>().HasIndex(x => new { x.NextAttemptAt, x.OccurredAt })
             .HasFilter("\"PublishedAt\" IS NULL");
+        b.Entity<CoreOutboxDelivery>().HasKey(x => new { x.EventId, x.ConsumerName });
+        b.Entity<CoreOutboxDelivery>().Property(x => x.ConsumerName).HasMaxLength(100);
+        b.Entity<CoreOutboxDelivery>().Property(x => x.LastErrorType).HasMaxLength(100);
+        b.Entity<CoreOutboxDelivery>().HasOne<CoreOutboxEvent>().WithMany().HasForeignKey(x => x.EventId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<CoreOutboxDelivery>().HasIndex(x => new { x.ConsumerName, x.ProcessedAt, x.DeadLetteredAt, x.NextAttemptAt });
+        b.Entity<UserNotification>().Property(x => x.Kind).HasMaxLength(40);
+        b.Entity<UserNotification>().HasOne<AppUser>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<UserNotification>().HasOne<SupportTicket>().WithMany().HasForeignKey(x => x.TicketId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<UserNotification>().HasOne<CoreOutboxEvent>().WithMany().HasForeignKey(x => x.EventId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<UserNotification>().HasIndex(x => new { x.EventId, x.UserId }).IsUnique();
+        b.Entity<UserNotification>().HasIndex(x => new { x.UserId, x.CreatedAt });
         b.Entity<KnowledgeArticle>().Property(x => x.Slug).HasMaxLength(120);
         b.Entity<KnowledgeArticle>().Property(x => x.NormalizedSlug).HasMaxLength(120);
         b.Entity<KnowledgeArticle>().Property(x => x.Title).HasMaxLength(160);

@@ -14,7 +14,7 @@ const labels: Record<string,string> = {open:'Aperto',in_progress:'In lavorazione
 const priorities: Record<string,string> = {low:'Bassa',normal:'Normale',high:'Alta',urgent:'Urgente'};
 const categories: Record<string,string> = {general:'Generale',hardware:'Hardware',software:'Software',network:'Rete',account:'Account',other:'Altro'};
 const date=(value:string)=>new Date(value).toLocaleString('it-IT');
-export function SupportDesk({visibleDeviceIds,onOpenDevice,deviceId,sites=[],devices=[]}:{visibleDeviceIds:string[];onOpenDevice:(id:string)=>Promise<void>;deviceId?:string;sites?:{id:string;name:string;isArchived?:boolean}[];devices?:{id:string;name:string;siteId:string|null}[]}) {
+export function SupportDesk({visibleDeviceIds,onOpenDevice,deviceId,sites=[],devices=[],focusTicketId,onTicketFocused}:{visibleDeviceIds:string[];onOpenDevice:(id:string)=>Promise<void>;deviceId?:string;sites?:{id:string;name:string;isArchived?:boolean}[];devices?:{id:string;name:string;siteId:string|null}[];focusTicketId?:string|null;onTicketFocused?:()=>void}) {
   const [tickets,setTickets] = useState<Ticket[]>([]);
   const [summary,setSummary]=useState<TicketSummary|null>(null);
   const [queues,setQueues]=useState<Queue[]>([]);
@@ -55,7 +55,7 @@ export function SupportDesk({visibleDeviceIds,onOpenDevice,deviceId,sites=[],dev
   const needsReply=(state==='resolved'||state==='closed')&&!selected?.resolution;
   async function load() {
     const query=new URLSearchParams();
-    if(filterState)query.set('state',filterState);if(search.trim())query.set('search',search.trim());if(deviceId)query.set('deviceId',deviceId);if(siteFilter)query.set('siteId',siteFilter);if(filterPriority)query.set('priority',filterPriority);if(filterCategory)query.set('category',filterCategory);if(filterQueue)query.set('queue',filterQueue);if(assigneeFilter.trim())query.set('assignee',assigneeFilter.trim());
+    if(focusTicketId)query.set('ticketId',focusTicketId);else{if(filterState)query.set('state',filterState);if(search.trim())query.set('search',search.trim());if(deviceId)query.set('deviceId',deviceId);if(siteFilter)query.set('siteId',siteFilter);if(filterPriority)query.set('priority',filterPriority);if(filterCategory)query.set('category',filterCategory);if(filterQueue)query.set('queue',filterQueue);if(assigneeFilter.trim())query.set('assignee',assigneeFilter.trim());}
     const scopeQuery=new URLSearchParams();if(deviceId)scopeQuery.set('deviceId',deviceId);if(siteFilter)scopeQuery.set('siteId',siteFilter);
     const [rows,counts]=await Promise.all([api<Ticket[]>('/support?'+query.toString()),api<TicketSummary>('/support/summary?'+scopeQuery.toString()).catch(()=>null)]);
     const siteIds=[...new Set(rows.map(ticket=>ticket.siteId).filter(Boolean))];
@@ -96,7 +96,13 @@ export function SupportDesk({visibleDeviceIds,onOpenDevice,deviceId,sites=[],dev
     try { await action(); } catch(e) { setError(e instanceof Error ? e.message : 'Operazione non riuscita'); }
     finally { setBusy(false); }
   }
-  useEffect(()=>{void work(load);},[deviceId]);
+  useEffect(()=>{void work(load);},[deviceId,focusTicketId]);
+  useEffect(()=>{
+    const target=focusTicketId? tickets.find(ticket=>ticket.id===focusTicketId):undefined;
+    if(!target)return;
+    setSelected(target);setThread(null);
+    void work(async()=>{const [ticketQueues]=await Promise.all([api<Queue[]>(`/support/${target.id}/queues`),loadAssignees(target),loadTicketDevices(target),loadThread(target)]);setSelectedQueues(ticketQueues);onTicketFocused?.();});
+  },[focusTicketId,tickets]);
   useEffect(()=>{if(selected)panel.current?.scrollIntoView({behavior:'smooth',block:'start'});},[selected?.id]);
   const createableDevices=deviceId?devices.filter(x=>x.id===deviceId):devices;
   return <section className="panel"><div className="section-heading"><h2><Icon name="support"/>Richieste di assistenza</h2>{createableDevices.length>0&&<button className="secondary compact" type="button" onClick={()=>{setManualDevice(deviceId??createableDevices[0]!.id);setManualRequestId(crypto.randomUUID());setManualOpen(value=>!value);setError('');}}><Icon name="support" size={15}/>{manualOpen?'Chiudi':'Nuovo ticket'}</button>}</div>

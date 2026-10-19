@@ -71,8 +71,8 @@ public static class SupportEndpoints
             if (changed == 0) return Results.Conflict(new { error = "Il ticket è stato aggiornato. Ricarica la conversazione." });
             db.SupportMessages.Add(new SupportMessage { TicketId = ticketId, Kind = "requester_reply", Body = r.Body.Trim(), CreatedAt = now });
             db.AuditEvents.Add(new AuditEvent { Action = "ticket.requester.reply", Target = ticketId.ToString() });
-            CoreOutbox.Add(db, "ticket.updated", "ticket", ticketId,
-                new { ticketId, deviceId, siteId = ticket.SiteId, state = ticket.State, version = r.ExpectedVersion + 1 }, c.TraceIdentifier);
+            CoreOutbox.Add(db, "ticket.requester_replied", "ticket", ticketId,
+                new { ticketId, deviceId, siteId = ticket.SiteId, queueId = ticket.QueueId, assigneeId = ticket.AssigneeId, state = ticket.State, version = r.ExpectedVersion + 1 }, c.TraceIdentifier);
             await db.SaveChangesAsync();
             await tx.CommitAsync();
             return Results.NoContent();
@@ -312,7 +312,7 @@ public static class SupportEndpoints
             }).SingleOrDefaultAsync();
             return Results.Ok(summary ?? new { total = 0, open = 0, inProgress = 0, urgent = 0 });
         });
-        staff.MapGet("", async (string? state, string? search, Guid? deviceId, Guid? siteId, string? priority, string? assignee, string? category, string? queue, HttpContext c, AppDbContext db, PermissionService p) => {
+        staff.MapGet("", async (string? state, string? search, Guid? deviceId, Guid? siteId, string? priority, string? assignee, string? category, string? queue, Guid? ticketId, HttpContext c, AppDbContext db, PermissionService p) => {
             if(state is not (null or "" or "open" or "in_progress" or "resolved" or "closed") || search?.Length > 200 ||
                 priority is not (null or "" or "low" or "normal" or "high" or "urgent") || assignee?.Length > 320 ||
                 (!string.IsNullOrEmpty(category) && !Categories.Contains(category)) ||
@@ -328,6 +328,7 @@ public static class SupportEndpoints
                                where g.UserId == c.User.UserId() && permission.Permission == "tickets.manage" select g;
             var query = db.SupportTickets.AsNoTracking().Where(t => db.Users.Any(u => u.Id == c.User.UserId() && !u.IsDisabled) && (global ||
                 grants.Any(g => g.SiteId == t.SiteId) || db.Devices.Any(d => d.Id == t.DeviceId && grants.Any(g => g.DeviceId == d.Id || (d.GroupId != null && g.GroupId == d.GroupId)))));
+            if (ticketId.HasValue) query=query.Where(t=>t.Id==ticketId.Value);
             if(deviceId.HasValue)query=query.Where(t=>t.DeviceId==deviceId.Value);
             if(siteId.HasValue)query=query.Where(t=>t.SiteId==siteId.Value);
             if(!string.IsNullOrEmpty(state))query=query.Where(t=>t.State==state);
@@ -459,7 +460,7 @@ public static class SupportEndpoints
             if (ticket.QueueId != queueId) db.AuditEvents.Add(new AuditEvent { ActorId = c.User.UserId(), Action = "ticket.queue.update", Target = id.ToString() });
             db.AuditEvents.Add(new AuditEvent { ActorId = c.User.UserId(), Action = "ticket.update", Target = id.ToString() });
             CoreOutbox.Add(db, "ticket.updated", "ticket", id,
-                new { ticketId = id, deviceId = ticket.DeviceId, siteId = ticket.SiteId, oldState = ticket.State, state = r.State, oldPriority = ticket.Priority, priority, oldAssigneeId = ticket.AssigneeId, assigneeId, oldQueueId = ticket.QueueId, queueId, version = r.ExpectedVersion + 1 }, c.TraceIdentifier);
+                new { ticketId = id, deviceId = ticket.DeviceId, siteId = ticket.SiteId, actorId = c.User.UserId(), oldState = ticket.State, state = r.State, oldPriority = ticket.Priority, priority, oldAssigneeId = ticket.AssigneeId, assigneeId, oldQueueId = ticket.QueueId, queueId, version = r.ExpectedVersion + 1 }, c.TraceIdentifier);
             await db.SaveChangesAsync(); await tx.CommitAsync(); return Results.NoContent();
         });
         staff.MapPost("/{id:guid}/internal-notes", async (Guid id, SupportInternalNote r, HttpContext c, AppDbContext db, PermissionService p) => {
