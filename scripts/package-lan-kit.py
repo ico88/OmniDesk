@@ -14,10 +14,15 @@ parser.add_argument('--artifact', type=Path, required=True)
 parser.add_argument('--run', required=True)
 parser.add_argument('--commit', required=True)
 parser.add_argument('--output', type=Path, required=True)
-parser.add_argument('--version', default='0.8.7')
+parser.add_argument('--version')
 parser.add_argument('--remote-engine', action='store_true')
 parser.add_argument('--ca', type=Path, default=Path('omnidesk-local-ca.crt'))
 args = parser.parse_args()
+if args.version is None:
+    match = re.fullmatch(r'windows-([0-9]+\.[0-9]+\.[0-9]+)', args.artifact.name)
+    if match is None:
+        parser.error('Specificare --version o usare una directory windows-X.Y.Z')
+    args.version = match.group(1)
 if not args.run.isdigit() or not re.fullmatch('[a-f0-9]{40}', args.commit):
     parser.error('Run e commit GitHub non validi')
 if not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', args.version) or args.artifact.name != 'windows-' + args.version:
