@@ -255,6 +255,9 @@ public static class SupportScenario
         var scopedThread = await scoped.GetFromJsonAsync<System.Text.Json.JsonElement>($"/api/support/{ticket.Id}/messages");
         Assert.False(scopedThread.GetProperty("canNote").GetBoolean());
         Assert.DoesNotContain(scopedThread.GetProperty("messages").EnumerateArray(), m => m.GetProperty("body").GetString() == "Nota interna solo per assistenza");
+        Auth();
+        var requesterView = await agent.GetFromJsonAsync<System.Text.Json.JsonElement>($"/api/agent/support/{owner}/{ticket.Id}/messages");
+        Assert.DoesNotContain(requesterView.GetProperty("messages").EnumerateArray(), m => m.GetProperty("body").GetString() == "Nota interna solo per assistenza");
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
