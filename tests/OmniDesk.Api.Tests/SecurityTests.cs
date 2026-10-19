@@ -9,6 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using OmniDesk.Api.Data;
 using OmniDesk.Api.Attachments;
+using OmniDesk.Api.Maintenance;
 using OmniDesk.Api.Security;
 using OmniDesk.Remote.MeshCentral;
 using Xunit;
@@ -21,7 +22,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     public string AttachmentRoot { get; } = Path.Combine(Path.GetTempPath(), "omnidesk-test-attachments-" + Guid.NewGuid().ToString("N"));
     protected override void ConfigureWebHost(IWebHostBuilder builder) => builder.ConfigureServices(s => {
         // Integration scenarios invoke these workers explicitly so their retries do not race the assertions.
-        var workers = new[] { typeof(AssertionCleanup), typeof(RemoteSessionGuard), typeof(RemoteProvisioningGuard), typeof(TicketNotificationWorker), typeof(AttachmentScanWorker) };
+        var workers = new[] { typeof(AssertionCleanup), typeof(RemoteSessionGuard), typeof(RemoteProvisioningGuard), typeof(TicketNotificationWorker), typeof(AttachmentScanWorker), typeof(CoreOutboxRetentionWorker) };
         foreach (var descriptor in s.Where(x => x.ServiceType == typeof(IHostedService) && x.ImplementationType is not null && workers.Contains(x.ImplementationType)).ToArray()) s.Remove(descriptor);
         foreach (var descriptor in s.Where(x => x.ServiceType == typeof(IAttachmentScanner)).ToArray()) s.Remove(descriptor);
         s.AddSingleton<IMeshCentralClient>(Mesh);
@@ -34,6 +35,19 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
                 ?? throw new InvalidOperationException("TEST_DATABASE must point to an isolated PostgreSQL test database")
         }));
 }
+
+internal static class TestDatabaseMigration
+{
+    private static readonly SemaphoreSlim Gate = new(1, 1);
+
+    public static async Task ApplyAsync(AppDbContext db)
+    {
+        await Gate.WaitAsync();
+        try { await db.Database.MigrateAsync(); }
+        finally { Gate.Release(); }
+    }
+}
+
 public sealed class SecurityTests : IClassFixture<ApiFactory>, IAsyncLifetime
 {
     private readonly ApiFactory factory;
@@ -45,7 +59,7 @@ public sealed class SecurityTests : IClassFixture<ApiFactory>, IAsyncLifetime
     {
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        await db.Database.MigrateAsync();
+        await TestDatabaseMigration.ApplyAsync(db);
         var users = scope.ServiceProvider.GetRequiredService<UserManager<AppUser>>();
         async Task<string> Create(string email, string? role)
         {
