@@ -332,5 +332,6 @@ Il server applica `tickets.manage` sul dispositivo, registra audit/outbox senza
 contenuto descrittivo e rende l'operazione idempotente per utente/dispositivo
 tramite RequestId. `Origin` distingue ticket Agent da quelli inseriti
 dall'operatore. Test API/PostgreSQL verificano grant scoped, deny fuori ambito,
-retry e conflitto per payload diverso. Build API/dashboard e Vitest passati.
-Deploy LAN e verifica interattiva restano da completare.
+retry e conflitto per payload diverso. Build API/dashboard e Vitest passati. Deploy su LAN completato dopo backup
+verificato e migrazione applicata; readiness e bundle aggiornato verificati.
+Prova interattiva autenticata ancora da completare.

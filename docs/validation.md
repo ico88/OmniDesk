@@ -1028,5 +1028,15 @@ Verifiche: `docker compose -f compose.test.yaml run --build --rm tests` — 64/6
 (passano grant scoped, deny fuori ambito, creazione, retry, payload in conflitto
 e priorità/sede); `docker compose build api dashboard`, `npm test -- --run`
 (5/5), entrambe le configurazioni Compose e `git diff --check` passati.
-Migrazione versionata `20261019143300_ManualSupportTickets`. Non ancora applicata
-all'istanza LAN in questa nota.
+Migrazione versionata `20261019143300_ManualSupportTickets`, applicata
+sull'istanza LAN dopo backup verificato. Il runtime è verificato sotto.
+
+
+Deploy LAN ticket manuali: backup `.backups/20261019T143739Z.13NE6M`
+verificato in PostgreSQL isolato (27 migrazioni, 1 account e 1 dispositivo);
+conteggio job e sessioni remote prima del deploy era zero. Applicata la
+migrazione `20261019143300_ManualSupportTickets`, ricreati solo i container API
+e dashboard. `verify-lan.py` ha passato HTTPS/CA, readiness, dashboard e rifiuto
+anonimo; il bundle JS pubblicato contiene il form ticket manuale e l'etichetta
+dell'origine. Nessun login o ticket è stato creato sull'istanza. Prova
+interattiva autenticata dal browser ancora aperta.
