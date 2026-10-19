@@ -64,6 +64,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
     public DbSet<CoreOutboxDelivery> CoreOutboxDeliveries => Set<CoreOutboxDelivery>();
     public DbSet<UserNotification> UserNotifications => Set<UserNotification>();
     public DbSet<KnowledgeArticle> KnowledgeArticles => Set<KnowledgeArticle>();
+    public DbSet<KnowledgeArticleRevision> KnowledgeArticleRevisions => Set<KnowledgeArticleRevision>();
     protected override void OnModelCreating(ModelBuilder b)
     {
         base.OnModelCreating(b);
@@ -192,6 +193,14 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
         b.Entity<KnowledgeArticle>().Property(x => x.Body).HasMaxLength(30000);
         b.Entity<KnowledgeArticle>().HasIndex(x => x.NormalizedSlug).IsUnique();
         b.Entity<KnowledgeArticle>().HasIndex(x => new { x.IsPublished, x.UpdatedAt });
+        b.Entity<KnowledgeArticleRevision>().HasKey(x => new { x.ArticleId, x.Version });
+        b.Entity<KnowledgeArticleRevision>().Property(x => x.Slug).HasMaxLength(120);
+        b.Entity<KnowledgeArticleRevision>().Property(x => x.Title).HasMaxLength(160);
+        b.Entity<KnowledgeArticleRevision>().Property(x => x.Summary).HasMaxLength(500);
+        b.Entity<KnowledgeArticleRevision>().Property(x => x.Body).HasMaxLength(30000);
+        b.Entity<KnowledgeArticleRevision>().Property(x => x.RecordedBy).HasMaxLength(450);
+        b.Entity<KnowledgeArticleRevision>().HasOne<KnowledgeArticle>().WithMany().HasForeignKey(x => x.ArticleId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<KnowledgeArticleRevision>().HasOne<AppUser>().WithMany().HasForeignKey(x => x.RecordedBy).OnDelete(DeleteBehavior.SetNull);
         foreach (var role in Security.Permissions.Roles)
         {
             b.Entity<IdentityRole>().HasData(new IdentityRole { Id = role, Name = role, NormalizedName = role.ToUpperInvariant(), ConcurrencyStamp = role });

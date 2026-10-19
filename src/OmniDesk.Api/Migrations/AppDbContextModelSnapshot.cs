@@ -631,6 +631,54 @@ namespace OmniDesk.Api.Migrations
                     b.ToTable("KnowledgeArticles");
                 });
 
+            modelBuilder.Entity("OmniDesk.Api.Data.KnowledgeArticleRevision", b =>
+                {
+                    b.Property<Guid>("ArticleId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("Version")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasMaxLength(30000)
+                        .HasColumnType("character varying(30000)");
+
+                    b.Property<bool>("IsPublished")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTimeOffset?>("PublishedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("RecordedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("RecordedBy")
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.Property<string>("Slug")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<string>("Summary")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.HasKey("ArticleId", "Version");
+
+                    b.HasIndex("RecordedBy");
+
+                    b.ToTable("KnowledgeArticleRevisions");
+                });
+
             modelBuilder.Entity("OmniDesk.Api.Data.MeshDeviceMapping", b =>
                 {
                     b.Property<Guid>("DeviceId")
@@ -1449,6 +1497,20 @@ namespace OmniDesk.Api.Migrations
                         .HasForeignKey("SiteId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("OmniDesk.Api.Data.KnowledgeArticleRevision", b =>
+                {
+                    b.HasOne("OmniDesk.Api.Data.KnowledgeArticle", null)
+                        .WithMany()
+                        .HasForeignKey("ArticleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("OmniDesk.Api.Data.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("RecordedBy")
+                        .OnDelete(DeleteBehavior.SetNull);
                 });
 
             modelBuilder.Entity("OmniDesk.Api.Data.MeshDeviceMapping", b =>

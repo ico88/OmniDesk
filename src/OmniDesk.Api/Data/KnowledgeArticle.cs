@@ -14,3 +14,17 @@ public sealed class KnowledgeArticle
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? PublishedAt { get; set; }
 }
+
+public sealed class KnowledgeArticleRevision
+{
+    public Guid ArticleId { get; set; }
+    public long Version { get; set; }
+    public string Slug { get; set; } = "";
+    public string Title { get; set; } = "";
+    public string Summary { get; set; } = "";
+    public string Body { get; set; } = "";
+    public bool IsPublished { get; set; }
+    public DateTimeOffset? PublishedAt { get; set; }
+    public DateTimeOffset RecordedAt { get; set; } = DateTimeOffset.UtcNow;
+    public string? RecordedBy { get; set; }
+}

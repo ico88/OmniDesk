@@ -14,3 +14,4 @@
 .knowledge-editor .knowledge-publish input{width:auto;margin:0}
 .knowledge-editor>small{display:block;margin-top:12px}
 @media(max-width:800px){.knowledge-layout{grid-template-columns:1fr}.knowledge-list,.knowledge-detail{margin-bottom:14px}}
+.knowledge-history{margin-top:24px;padding-top:16px;border-top:1px solid var(--border)}.knowledge-history>summary{color:var(--text)}.knowledge-history .count{margin-left:auto}.knowledge-version-list{display:grid;gap:8px}.knowledge-version-list button{display:grid;justify-content:start;text-align:left;gap:3px;padding:10px 12px}.knowledge-version-list button strong{font-size:12px}.knowledge-version-list button small{font-size:11px}.knowledge-version-preview{border-left:3px solid var(--primary);padding-left:16px}
