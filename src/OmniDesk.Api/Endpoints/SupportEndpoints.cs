@@ -601,13 +601,22 @@ public static class SupportEndpoints
             if (r.UpdatePriority && !Priorities.Contains(r.Priority)) return Results.BadRequest(new { error = "Seleziona una priorità valida." });
             if (r.UpdateAssignment && r.AssigneeId?.Length > 450) return Results.BadRequest();
             if(r.Resolution?.Length>8000)return Results.BadRequest(new {error="La risposta puo contenere al massimo 8000 caratteri."});
-            if((r.AddReply||r.State is "resolved" or "closed")&&string.IsNullOrWhiteSpace(r.Resolution))
-                return Results.BadRequest(new {error="Scrivi una risposta all'utente prima di risolvere o chiudere il ticket."});
             await using var tx = await db.Database.BeginTransactionAsync();
             await DeviceOperationLock.Acquire(db, ticket.DeviceId);
             if (!await p.Allows(c.User.UserId(), "tickets.manage", ticket.DeviceId, siteId: ticket.SiteId)) return Results.Forbid();
             ticket=await db.SupportTickets.AsNoTracking().SingleAsync(t=>t.Id==id);
             if(ticket.Version!=r.ExpectedVersion)return Results.Conflict(new {error="Il ticket e stato aggiornato. Ricarica la conversazione prima di salvare."});
+            if (!TicketWorkflowPolicy.Allows(ticket.State, r.State))
+                return Results.Conflict(new { error = "Transizione non consentita dal workflow corrente.", currentState = ticket.State,
+                    allowedStates = TicketWorkflowPolicy.AllowedStates(ticket.State) });
+            var body = r.Resolution?.Trim();
+            if (r.AddReply && string.IsNullOrWhiteSpace(body))
+                return Results.BadRequest(new { error = "La risposta pubblica non può essere vuota." });
+            var resolution = ticket.State == "resolved" && (r.State is "open" or "in_progress")
+                ? null
+                : string.IsNullOrWhiteSpace(body) ? ticket.Resolution : body;
+            if (TicketWorkflowPolicy.RequiresResolution(r.State) && string.IsNullOrWhiteSpace(resolution))
+                return Results.BadRequest(new { error = "Scrivi una risposta all'utente prima di risolvere il ticket." });
             if (r.UpdateQueue && r.QueueId is not null && !await db.SupportQueues.AnyAsync(q => q.Id == r.QueueId && q.IsActive && (q.SiteId == null || q.SiteId == ticket.SiteId)))
                 return Results.BadRequest(new { error = "La coda selezionata non è attiva." });
             var queueId = r.UpdateQueue ? r.QueueId : ticket.QueueId;
@@ -621,10 +630,9 @@ public static class SupportEndpoints
             }
             if ((r.UpdateQueue || r.UpdateAssignment) && queueId is not null && assigneeId is not null && !await db.SupportQueueMembers.AnyAsync(m => m.QueueId == queueId && m.UserId == assigneeId))
                 return Results.BadRequest(new { error = "L’assegnatario deve appartenere alla coda selezionata." });
-            var body=r.Resolution?.Trim();
             var priority = r.UpdatePriority ? r.Priority! : ticket.Priority;
             var updated = await db.SupportTickets.Where(t => t.Id == id && t.Version == r.ExpectedVersion)
-                .ExecuteUpdateAsync(s => s.SetProperty(t => t.State, r.State).SetProperty(t => t.Resolution, body)
+                .ExecuteUpdateAsync(s => s.SetProperty(t => t.State, r.State).SetProperty(t => t.Resolution, resolution)
                     .SetProperty(t => t.Priority, priority).SetProperty(t => t.AssigneeId, assigneeId).SetProperty(t => t.QueueId, queueId)
                     .SetProperty(t => t.UpdatedAt, DateTimeOffset.UtcNow).SetProperty(t => t.Version, t => t.Version + 1));
             if (updated == 0) return Results.Conflict(new {error="Il ticket e stato aggiornato. Ricarica la conversazione prima di salvare."});
@@ -858,7 +866,7 @@ public static class SupportEndpoints
             c.Response.Headers.CacheControl="no-store";
             var oldest=rows.Length>0?rows[^1].Id:(long?)null;
             var hasMore=oldest.HasValue&&await query.AnyAsync(m=>m.Id<oldest.Value);
-            return Results.Ok(new {ticket.Version,ticket.State,ticket.Resolution,canReply=await p.Allows(c.User.UserId(),"tickets.manage",ticket.DeviceId,siteId:ticket.SiteId),canNote=canViewInternal,hasMore,oldestId=oldest,messages=rows.Reverse()});
+            return Results.Ok(new {ticket.Version,ticket.State,ticket.Resolution,allowedStates=TicketWorkflowPolicy.AllowedStates(ticket.State),canReply=await p.Allows(c.User.UserId(),"tickets.manage",ticket.DeviceId,siteId:ticket.SiteId),canNote=canViewInternal,hasMore,oldestId=oldest,messages=rows.Reverse()});
         });
         staff.MapGet("/{id:guid}/screenshot", async (Guid id, bool? inline, HttpContext c, AppDbContext db, PermissionService p) => {
             var ticket = await db.SupportTickets.AsNoTracking().SingleOrDefaultAsync(t => t.Id == id);
