@@ -259,3 +259,14 @@ Sorgenti: provisioning server/worker Windows, vendor nell'MSI, overlay LAN e dow
 - API/dashboard ricompilate e avviate con overlay LAN e CA pubblica; migrazione RemoteProvisioningRevocation applicata. Backup .backups/20261019T060351Z.ZUnfFR include DB/Identity/Caddy, dati/file Mesh e password servizio in directory privata. Copia Mesh a caldo, non attestazione restore consistente.
 - Readiness HTTPS, dashboard/asset, anonymous401 e download ZIP anonimo401 passati dopo il deploy. Sonda motore reale precedente conserva il suo perimetro (control/provisioning), non il desktop.
 - Suite locale con guard revoca gruppo e conversione identita: 28 xUnit e 3 Vitest passati. Guard non rimuove il gruppo finche le revoche dei link noti non sono confermate. Aggiunti script CI di major upgrade da baseline 0.6 verificata, repair con ripristino ACL e rollback di un MSI temporaneo modificato con errore deferred; artifact originale non modificato. Queste nuove prove attendono esecuzione.
+
+### Semplificazione enrollment interattivo
+
+Lo script chiede il token con Read-Host -AsSecureString quando manca
+EnrollmentTokenFile. Staging privato e cleanup restano invariati; aggiunto launcher
+LAN generato con CA/hash verificati e istruzioni senza file token manuale.
+Python py_compile del packaging passato; prompt e parsing PowerShell 5.1 aggiunti
+alla CI Windows, da verificare prima di promuovere il kit aggiornato.
+Il run 39207940658 ha superato lifecycle ma fallito il nuovo test upgrade:
+invocazione della proprieta COM indicizzata ProductState corretta tramite
+InvokeMember/GetProperty. Non dichiarare repair/rollback superati fino al rerun.

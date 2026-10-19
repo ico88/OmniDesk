@@ -50,6 +50,11 @@ fingerprint = hashlib.sha256(ssl.PEM_cert_to_DER_cert(ca)).hexdigest().upper()
 if fingerprint != '45926C7ACA3D49E6619E377AD0FA2110951F6F0E54DF9B83A6C6E3AD712BE5B2':
     parser.error('CA diversa da quella LAN concordata; verificarla prima di cambiare il pin')
 files['omnidesk-local-ca.crt'] = ca.encode()
+files['Installa-OmniDesk.ps1'] = f'''#Requires -Version 5.1
+#Requires -RunAsAdministrator
+$ErrorActionPreference = 'Stop'
+& (Join-Path $PSScriptRoot 'Install-OmniDeskAgent.ps1') -MsiPath (Join-Path $PSScriptRoot 'OmniDesk.Agent.msi') -ServerUrl https://192.168.1.233:8085 -CaCertificatePath (Join-Path $PSScriptRoot 'omnidesk-local-ca.crt') -CaSha256 {fingerprint} -TrustServerCa -AllowUnsignedForTesting -MsiSha256 {expected['OmniDesk.Agent.msi']}
+'''.encode()
 files['LEGGIMI.txt'] = f'''OmniDesk Agent + Tray - collaudo LAN x64
 Origine: https://github.com/ico88/OmniDesk/actions/runs/{args.run}
 Commit: {args.commit}
@@ -59,15 +64,24 @@ Non include credenziali, token o chiavi private.
 {remote_note}
 
 1. Estrai il kit su Windows. Verifica SHA256SUMS.txt contro l'artifact GitHub.
-2. Dalla console https://192.168.1.233:8085 genera un token enrollment.
-   Crea enrollment-token.txt e proteggilo con ACL SYSTEM/Administrators,
-   seguendo docs/windows-lan-install.md. Non inviare il token in chat.
-3. Da PowerShell amministrativa, nella directory estratta:
+2. Dalla console https://192.168.1.233:8085, Dispositivi > Registra un
+   dispositivo, genera un token enrollment. Non salvarlo in un file.
+3. Da PowerShell amministrativa nella directory estratta esegui:
 
-.\\Install-OmniDeskAgent.ps1 -MsiPath .\\OmniDesk.Agent.msi -ServerUrl https://192.168.1.233:8085 -CaCertificatePath .\\omnidesk-local-ca.crt -CaSha256 {fingerprint} -TrustServerCa -AllowUnsignedForTesting -MsiSha256 {expected['OmniDesk.Agent.msi']} -EnrollmentTokenFile .\\enrollment-token.txt
+.\\Installa-OmniDesk.ps1
 
-4. Elimina il file token originale dopo enrollment. Esegui logoff/logon per
-   avviare la Tray, oppure avviala dalla sessione standard senza elevazione.
+   Quando richiesto, incolla il token e premi Invio. L'inserimento e mascherato.
+   Il token non viene passato nella riga di comando. Lo staging privato viene
+   eliminato al termine. Se gli script sono bloccati, per questa sola finestra:
+
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned
+Unblock-File -LiteralPath .\\Installa-OmniDesk.ps1
+Unblock-File -LiteralPath .\\Install-OmniDeskAgent.ps1
+
+   Poi ripeti .\\Installa-OmniDesk.ps1. Le policy aziendali restano vincolanti.
+4. Esegui logoff/logon per avviare la Tray, oppure avviala dalla sessione standard
+   senza elevazione. Per automazioni lo script Install-OmniDeskAgent.ps1 mantiene
+   l'opzione -EnrollmentTokenFile, da usare con un file protetto e da eliminare.
 5. Verifica heartbeat, stato Tray, ticket senza screenshot, screenshot con
    anteprima/consenso e risposta IT. Chiudere la Tray deve lasciare il servizio
    attivo. Le prove interattive/LAN non sono certificate dalla build CI.

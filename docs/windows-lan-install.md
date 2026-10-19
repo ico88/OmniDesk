@@ -97,3 +97,15 @@ Nella UI autenticata come amministratore: Dispositivi → Scarica Agent Windows.
 Dopo enrollment e heartbeat, aprire il dispositivo → Motore e storico sessioni remote → Abilita motore sul dispositivo. Il servizio recupera la configurazione approvata e registra il nodo; usare Aggiorna sessioni per verificare il mapping. Solo dopo l'associazione aprire desktop/terminale/file con il rispettivo permesso e il consenso dell'utente. Motore LAN su HTTPS 192.168.1.233:8086, console su :8085, stessa CA pubblica. Client di collaudo concordato Windows 10 su 192.168.1.160.
 
 Se Windows blocca lo script per la provenienza Internet, verificare prima i checksum, leggere il contenuto e sbloccare quel singolo file tramite Proprieta → Sblocca. Non occorre abbassare la policy di esecuzione globale. Il pacchetto resta unsigned di laboratorio: firma produzione e collaudi interattivi non derivano dal download o dall'installazione CI.
+
+### Installazione manuale guidata dal kit aggiornato
+
+Il kit aggiornato contiene `Installa-OmniDesk.ps1`: avviarlo da PowerShell
+amministrativa nella cartella estratta. Server, CA e checksum MSI sono gia
+impostati nel launcher. Generare il token dalla console e incollarlo quando
+richiesto (input mascherato), senza creare enrollment-token.txt. Il token viene
+scritto solo nello staging SYSTEM/Administrators e rimosso nel finally, senza
+passarlo come argomento al processo. L'opzione EnrollmentTokenFile resta
+supportata per automazioni; le istruzioni precedenti descrivono tale modalita.
+Non modificare policy globali: se necessario usare RemoteSigned con Scope Process
+e sbloccare i due script verificati, come indicato nel LEGGIMI del kit.

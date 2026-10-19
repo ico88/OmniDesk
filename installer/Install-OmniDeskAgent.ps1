@@ -70,8 +70,24 @@ try {
         $identity = Get-Content -LiteralPath $identityPath -Raw | ConvertFrom-Json
         if ($identity.ServerUrl -ne $server.AbsoluteUri) { throw 'Existing enrollment uses another server. Revoke and migrate the identity explicitly.' }
     } else {
-        if (-not $EnrollmentTokenFile) { throw 'EnrollmentTokenFile is required for a new device.' }
-        [IO.File]::Copy((Resolve-Path -LiteralPath $EnrollmentTokenFile).Path, $stagedToken, $false)
+        if ($EnrollmentTokenFile) {
+            [IO.File]::Copy((Resolve-Path -LiteralPath $EnrollmentTokenFile).Path, $stagedToken, $false)
+        } else {
+            Write-Host 'Dalla console OmniDesk: Dispositivi > Registra un dispositivo. Genera il token e incollalo qui.'
+            $secureToken = Read-Host 'Token di registrazione (incolla e premi Invio)' -AsSecureString
+            $tokenPointer = [IntPtr]::Zero
+            $plainToken = $null
+            try {
+                $tokenPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureToken)
+                $plainToken = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($tokenPointer).Trim()
+                if ($plainToken -notmatch '^[A-Fa-f0-9]{64}$') { throw 'Token non valido: incolla il token di 64 caratteri generato dalla console.' }
+                [IO.File]::WriteAllText($stagedToken, $plainToken)
+            } finally {
+                $plainToken = $null
+                if ($tokenPointer -ne [IntPtr]::Zero) { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($tokenPointer) }
+                if ($secureToken) { $secureToken.Dispose() }
+            }
+        }
         $token = [IO.File]::ReadAllText($stagedToken).Trim()
         if ($token -notmatch '^[A-Fa-f0-9]{64}$') { throw 'Invalid enrollment token file.' }
         $token = $null
@@ -91,7 +107,8 @@ try {
     $service = Get-Service -Name OmniDeskAgent
     if ($service.Status -ne 'Running') { Start-Service -Name OmniDeskAgent }
     Write-Output 'Agent installed/configured. Verify a real heartbeat and inventory in the dashboard; collection may take about a minute.'
-    Write-Output 'Remove the original enrollment token file after successful enrollment. Temporary staging files are deleted; deletion is not a guarantee of secure disk erasure.'
+    if ($EnrollmentTokenFile) { Write-Output 'Remove the original enrollment token file after successful enrollment.' }
+    Write-Output 'Temporary staging files are deleted; deletion is not a guarantee of secure disk erasure.'
 } finally {
     foreach ($path in @($stagedToken, $stagedMsi, $stagedCa)) { if ([IO.File]::Exists($path)) { [IO.File]::Delete($path) } }
     if ([IO.Directory]::Exists($root)) { [IO.Directory]::Delete($root, $false) }
