@@ -143,6 +143,10 @@ public static class SupportScenario
         Assert.Equal(HttpStatusCode.BadRequest,(await admin.PutAsJsonAsync($"/api/support/{ticket.Id}",new {expectedVersion=1,state="open",resolution=(string?)null,assigneeId="new-user-without-scope",updateAssignment=true})).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest,(await admin.PutAsJsonAsync($"/api/support/{ticket.Id}",new {expectedVersion=1,state="open",resolution=(string?)null,queueId=Guid.NewGuid(),updateQueue=true})).StatusCode);
         Assert.Contains((await admin.GetFromJsonAsync<SupportTicketView[]>("/api/support"))!,t=>t.Id==ticket.Id);
+        var scopedSummary=await scoped.GetFromJsonAsync<System.Text.Json.JsonElement>($"/api/support/summary?deviceId={device}");
+        Assert.Equal(1,scopedSummary.GetProperty("total").GetInt32());
+        Assert.Equal(1,scopedSummary.GetProperty("open").GetInt32());
+        Assert.Equal(0,scopedSummary.GetProperty("urgent").GetInt32());
         Assert.Single((await admin.GetFromJsonAsync<SupportTicketView[]>($"/api/support?deviceId={device}"))!);
         Assert.Contains((await scoped.GetFromJsonAsync<SupportTicketView[]>($"/api/support?deviceId={device}"))!,t=>t.Id==ticket.Id);
         var names=(await admin.GetFromJsonAsync<System.Text.Json.JsonElement>("/api/support")).EnumerateArray();

@@ -170,6 +170,8 @@ public sealed class SecurityTests : IClassFixture<ApiFactory>, IAsyncLifetime
         Assert.Contains(events!, x => x.Action == "grant.revoke");
         Assert.Contains(events!, x => x.Action == "auth.login" && x.Outcome == "denied");
         await DownloadScenario.Run(factory, admin, viewer);
+        var viewerSummary=await viewer.GetFromJsonAsync<System.Text.Json.JsonElement>("/api/support/summary");
+        Assert.Equal(0,viewerSummary.GetProperty("total").GetInt32());
         Assert.Equal(HttpStatusCode.BadRequest, (await scoped.PutAsJsonAsync("/api/auth/profile", new { displayName = new string('x', 81) })).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await scoped.PutAsJsonAsync("/api/auth/profile", new { displayName = "Federico Operatore" })).StatusCode);
         await RemoteScenario.Run(admin, viewer, scoped, device, factory.Mesh);

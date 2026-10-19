@@ -101,6 +101,8 @@ try {
  const intake=await context.request.post('https://omnidesk.test/api/agent/support',{headers:{Authorization:'Bearer '+agentAssertion()},data:{requesterKey:'A'.repeat(64),ticket:{requestId:crypto.randomUUID(),subject:ticketSubject,description:'Isolated fixture, no live user data',screenshotBase64:screenshot,screenshotConsent:true}}});
  assert.equal(intake.status(),201,'Authenticated isolated ticket intake');
  await page.getByRole('button',{name:'Assistenza',exact:true}).click();
+ await page.waitForFunction(()=>document.querySelector('.ticket-summary article strong')?.textContent==='1');
+ assert.equal(await page.locator('.ticket-summary article').nth(0).locator('strong').textContent(),'1','Scoped ticket summary count');
  await page.getByRole('button',{name:fixtureName,exact:true}).waitFor();
  assert.equal(await page.getByRole('table').innerText().then(text=>text.includes(fixtureDevice)),false,'Ticket table shows computer name, not enrollment device UUID');
  await page.getByLabel('Cerca richieste',{exact:true}).fill(fixtureName.toUpperCase());
