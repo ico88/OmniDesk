@@ -42,6 +42,8 @@ public static class RemoteEndpoints
             if (!await db.Devices.AnyAsync(x => x.Id == id)) return Results.NotFound();
             if (await db.DeviceCredentials.AnyAsync(x => x.DeviceId == id && x.RevokedAt != null)) return Results.Forbid();
             if (await db.RemoteProvisionings.AnyAsync(x => x.DeviceId == id && !x.Enabled)) return Results.Forbid();
+            if (await db.RemoteSessions.AnyAsync(x => x.DeviceId == id && x.State == "revocation_pending"))
+                return Results.Conflict(new { code = "remote_revocation_pending", message = "La chiusura della sessione precedente è ancora in verifica. Attendi la conferma del motore remoto prima di riconnetterti." });
             var mapping = await db.MeshDeviceMappings.AsNoTracking().SingleOrDefaultAsync(x => x.DeviceId == id);
             if (!mesh.Configured || mapping is null) return Results.Problem("MeshCentral or device mapping unavailable", statusCode:503);
             var policy=await db.RemoteProvisionings.AsNoTracking().SingleOrDefaultAsync(x=>x.DeviceId==id);

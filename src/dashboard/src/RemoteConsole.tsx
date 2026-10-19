@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Expand, ExternalLink, LoaderCircle, MonitorPlay, RotateCcw, ShieldCheck, Square, UserRoundX, Wifi, X } from 'lucide-react';
+import { Expand, ExternalLink, LoaderCircle, MonitorPlay, RotateCcw, ShieldCheck, UserRoundX, Wifi, X } from 'lucide-react';
 import { api } from './api';
 
 type RemoteSession = { id: string; url: string; expiresAt: string };
-type ViewState = 'idle' | 'creating' | 'renewing' | 'disconnecting' | 'loading' | 'page-loaded' | 'disconnect-requested' | 'error' | 'expired';
+type ViewState = 'idle' | 'creating' | 'renewing' | 'revoking' | 'revocation-pending' | 'loading' | 'page-loaded' | 'error' | 'expired';
 
 function remaining(expiresAt: string, now: number) {
   const seconds = Math.max(0, Math.floor((new Date(expiresAt).getTime() - now) / 1000));
@@ -28,7 +28,6 @@ export function RemoteConsole({ deviceId, deviceName, capability, allowed, ready
   const [error, setError] = useState('');
   const [now, setNow] = useState(Date.now());
   const [frameElement, setFrameElement] = useState<HTMLIFrameElement | null>(null);
-  const [frameKey, setFrameKey] = useState(0);
   const isDesktop = capability === 'remote.control';
   const title = isDesktop ? 'Desktop remoto' : capability === 'terminal' ? 'Terminale e PowerShell' : 'Trasferimento file';
   const timeLeft = useMemo(() => session ? remaining(session.expiresAt, now) : null, [session, now]);
@@ -50,8 +49,25 @@ export function RemoteConsole({ deviceId, deviceName, capability, allowed, ready
   }, [session, viewState]);
 
   useEffect(() => {
-    if (expired) setViewState('expired');
-  }, [expired]);
+    if (expired && viewState !== 'revocation-pending') setViewState('expired');
+  }, [expired, viewState]);
+
+  useEffect(() => {
+    if (!session || viewState !== 'revocation-pending') return;
+    let active = true;
+    const check = async () => {
+      try {
+        const rows = await api<{id:string;state:string}[]>(`/devices/${deviceId}/remote-sessions`);
+        if (active && ['revoked','failed'].includes(rows.find(row=>row.id===session.id)?.state ?? '')) {
+          setSession(null);
+          setViewState('idle');
+        }
+      } catch { /* Keep new sessions disabled until the server confirms revocation. */ }
+    };
+    void check();
+    const timer = window.setInterval(() => void check(), 4000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [deviceId, session, viewState]);
 
   async function start() {
     const previous = session;
@@ -102,39 +118,20 @@ export function RemoteConsole({ deviceId, deviceName, capability, allowed, ready
 
   async function stop() {
     if (!session) return;
-    setViewState('creating');
+    if (!window.confirm('Disconnettere l’operatore e revocare questo collegamento? Il link non sarà riutilizzabile. Un nuovo accesso richiederà una nuova sessione e i permessi previsti per il dispositivo.')) return;
+    setViewState('revoking');
     try {
       const result = await api<{ state: string } | undefined>(`/devices/${deviceId}/remote-sessions/${session.id}`, 'DELETE');
-      onMessage(result?.state === 'revocation_pending'
-        ? 'Chiusura richiesta; il server continuerà a verificare la revoca.'
-        : 'Sessione remota revocata.');
-      setSession(null);
-      setViewState('idle');
+      const pending = result?.state === 'revocation_pending';
+      onMessage(pending
+        ? 'Revoca richiesta; il server continuerà a riprovare. La disconnessione completa attende la conferma del motore remoto.'
+        : 'Collegamento revocato. Per riconnettersi servirà una nuova sessione autorizzata.');
+      if (pending) setViewState('revocation-pending');
+      else { setSession(null); setViewState('idle'); }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Non è stato possibile revocare la sessione.');
-      setViewState('error');
-    }
-  }
-
-  async function disconnectOperator() {
-    if (!session || !window.confirm('Disconnettere l’operatore dal desktop? Il collegamento resterà valido fino alla scadenza e potrà essere riutilizzato.')) return;
-    setError('');
-    setViewState('disconnecting');
-    try {
-      await api(`/devices/${deviceId}/remote-sessions/${session.id}/disconnect`, 'POST');
-      setViewState('disconnect-requested');
-      onMessage('Comando di disconnessione inviato. MeshCentral non restituisce una conferma dello stato dello stream.');
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Non è stato possibile disconnettere l’operatore.');
       setViewState('page-loaded');
     }
-  }
-
-  function reconnect() {
-    if (!session || expired) return;
-    setError('');
-    setViewState('loading');
-    setFrameKey(value => value + 1);
   }
 
   async function fullscreen() {
@@ -158,11 +155,10 @@ export function RemoteConsole({ deviceId, deviceName, capability, allowed, ready
         {active && session && secondsRemaining(session.expiresAt, now) <= 300 && <button type="button" className="secondary compact" disabled={viewState === 'renewing'} onClick={() => void start()} title="Rinnova il collegamento mantenendo aperta questa console">
           {viewState === 'renewing' ? <LoaderCircle className="spin" size={15}/> : <RotateCcw size={15}/>}Rinnova sessione
         </button>}
-        {active && <button type="button" className="secondary compact" onClick={() => window.open(session.url, '_blank', 'noopener,noreferrer')} title="Apri la sessione in una nuova scheda"><ExternalLink size={16}/>Apri scheda</button>}
-        {active && <button type="button" className="secondary compact" onClick={() => void fullscreen()} title="Schermo intero"><Expand size={16}/><span className="sr-only">Schermo intero</span></button>}
-        {active && isDesktop && <button type="button" className="secondary compact" disabled={viewState === 'disconnecting'} onClick={() => void disconnectOperator()} title="Disconnette gli operatori attivi ma mantiene valido il collegamento"><UserRoundX size={15}/>{viewState === 'disconnecting' ? 'Disconnessione…' : 'Disconnetti operatore'}</button>}
-        {active && <button type="button" className="danger-button compact" onClick={() => void stop()}><Square size={15}/>Termina</button>}
-        {!active && <button type="button" disabled={!allowed || !ready || revoked || viewState === 'creating'} onClick={() => void start()}>
+        {active && viewState !== 'revocation-pending' && <button type="button" className="secondary compact" onClick={() => window.open(session.url, '_blank', 'noopener,noreferrer')} title="Apri la sessione in una nuova scheda"><ExternalLink size={16}/>Apri scheda</button>}
+        {active && viewState !== 'revocation-pending' && <button type="button" className="secondary compact" onClick={() => void fullscreen()} title="Schermo intero"><Expand size={16}/><span className="sr-only">Schermo intero</span></button>}
+        {active && <button type="button" className="danger-button compact" disabled={viewState === 'revoking' || viewState === 'revocation-pending'} onClick={() => void stop()} title="Chiude il collegamento e ne revoca il link"><UserRoundX size={15}/>{viewState === 'revoking' ? 'Revoca…' : viewState === 'revocation-pending' ? 'Revoca in attesa…' : 'Disconnetti e revoca'}</button>}
+        {!active && viewState !== 'revocation-pending' && <button type="button" disabled={!allowed || !ready || revoked || viewState === 'creating'} onClick={() => void start()}>
           {viewState === 'creating' ? <LoaderCircle className="spin" size={16}/> : viewState === 'error' || viewState === 'expired' ? <RotateCcw size={16}/> : <MonitorPlay size={16}/>}
           {viewState === 'creating' ? 'Attendere…' : viewState === 'error' || viewState === 'expired' ? 'Riprova' : 'Avvia sessione'}
         </button>}
@@ -172,10 +168,12 @@ export function RemoteConsole({ deviceId, deviceName, capability, allowed, ready
     {revoked && <p className="remote-empty-state"><ShieldCheck size={20}/>Dispositivo revocato: l’apertura di sessioni remote è disabilitata.</p>}
     {!revoked && !allowed && <p className="remote-empty-state"><ShieldCheck size={20}/>Il tuo account non ha il permesso necessario per questa sessione.</p>}
     {!revoked && allowed && !ready && <p className="remote-empty-state"><ShieldCheck size={20}/>Motore remoto disattivato o non ancora associato. In Desktop remoto un amministratore può verificare la configurazione.</p>}
-    {active && session && viewState !== 'disconnect-requested' ? <div className="remote-frame-shell">
+    {active && session && viewState === 'revocation-pending' ? <div className="remote-empty-state">
+      <UserRoundX size={28}/><strong>Revoca in attesa di conferma</strong>
+      <span>Il server impedisce nuove sessioni per questo dispositivo finché il motore remoto non conferma la chiusura.</span>
+    </div> : active && session ? <div className="remote-frame-shell">
       {viewState === 'loading' && <div className="frame-loading"><LoaderCircle className="spin" size={20}/>Apertura della sessione autorizzata…</div>}
       <iframe
-        key={frameKey}
         ref={setFrameElement}
         src={session.url}
         title={`${title}: ${deviceName}`}
@@ -185,10 +183,6 @@ export function RemoteConsole({ deviceId, deviceName, capability, allowed, ready
         onLoad={() => { setError(''); setViewState(current => current === 'loading' || current === 'error' ? 'page-loaded' : current); }}
       />
       <div className="remote-frame-footnote">La pagina MeshCentral è incorporata in modo isolato. Lo stato di caricamento non conferma da solo che il flusso video sia attivo.</div>
-    </div> : active && viewState === 'disconnect-requested' ? <div className="remote-empty-state">
-      <UserRoundX size={28}/><strong>Disconnessione richiesta</strong>
-      <span>MeshCentral non conferma l’esito. Se lo stream è stato chiuso, il link resta riutilizzabile fino alle {new Date(session!.expiresAt).toLocaleTimeString('it-IT')}.</span>
-      <button type="button" className="secondary compact" onClick={reconnect}><RotateCcw size={15}/>Ricollega</button>
     </div> : !revoked && allowed && ready && <div className="remote-empty-state">
       <MonitorPlay size={28}/>
       <strong>{viewState === 'expired' ? 'Il collegamento è scaduto' : viewState === 'error' ? 'Sessione non disponibile' : 'Pronto per collegarsi'}</strong>
