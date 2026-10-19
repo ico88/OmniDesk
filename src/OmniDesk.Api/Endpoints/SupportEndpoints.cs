@@ -183,7 +183,7 @@ public static class SupportEndpoints
             var global = (await p.Global(userId)).Contains("tickets.manage");
             var grants = from g in db.ScopeGrants join permission in db.RolePermissions on g.RoleId equals permission.RoleId
                 where g.UserId == userId && permission.Permission == "tickets.manage" select g;
-            var rows = await db.Devices.AsNoTracking().Where(d => db.Users.Any(u => u.Id == userId && !u.IsDisabled) &&
+            var rows = await db.Devices.AsNoTracking().Where(d => d.SiteId == ticket.SiteId && db.Users.Any(u => u.Id == userId && !u.IsDisabled) &&
                     (global || grants.Any(g => g.DeviceId == d.Id || g.SiteId == d.SiteId ||
                         (d.GroupId != null && g.GroupId == d.GroupId))) &&
                     !db.SupportTicketDevices.Any(link => link.TicketId == id && link.DeviceId == d.Id))
@@ -203,13 +203,18 @@ public static class SupportEndpoints
             var target = await (from d in db.Devices.AsNoTracking() join site in db.Sites.AsNoTracking() on d.SiteId equals site.Id
                 where d.Id == r.DeviceId select new { d.Id, d.Name, d.SiteId, SiteName = site.Name }).SingleOrDefaultAsync();
             if (target is null) return Results.NotFound();
+            if (target.SiteId != ticket.SiteId) return Results.BadRequest(new { error = "Tutti i dispositivi del ticket devono appartenere alla stessa sede." });
             if (!await p.Allows(userId, "tickets.manage", target.Id)) return Results.Forbid();
             await using var tx = await db.Database.BeginTransactionAsync();
             foreach (var lockId in new[] { ticket.DeviceId, target.Id }.Distinct().Order())
                 await DeviceOperationLock.Acquire(db, lockId);
+            var currentTarget = await (from d in db.Devices.AsNoTracking() join site in db.Sites.AsNoTracking() on d.SiteId equals site.Id
+                where d.Id == target.Id select new { d.Id, d.Name, d.SiteId, SiteName = site.Name }).SingleOrDefaultAsync();
+            if (currentTarget is null) return Results.NotFound();
+            if (currentTarget.SiteId != ticket.SiteId) return Results.Conflict(new { error = "La sede del dispositivo è cambiata. Ricarica il ticket." });
             if (!await p.Allows(userId, "tickets.manage", ticket.DeviceId, siteId: ticket.SiteId) ||
-                !await p.Allows(userId, "tickets.manage", target.Id)) return Results.Forbid();
-            if (await db.SupportTicketDevices.AnyAsync(x => x.TicketId == id && x.DeviceId == target.Id))
+                !await p.Allows(userId, "tickets.manage", currentTarget.Id)) return Results.Forbid();
+            if (await db.SupportTicketDevices.AnyAsync(x => x.TicketId == id && x.DeviceId == currentTarget.Id))
                 return Results.NoContent();
             if (await db.SupportTicketDevices.CountAsync(x => x.TicketId == id) >= 10)
                 return Results.Conflict(new { error = "Un ticket può essere collegato al massimo a 10 dispositivi." });
@@ -217,11 +222,11 @@ public static class SupportEndpoints
             var updated = await db.SupportTickets.Where(t => t.Id == id && t.Version == r.ExpectedVersion)
                 .ExecuteUpdateAsync(s => s.SetProperty(t => t.Version, t => t.Version + 1).SetProperty(t => t.UpdatedAt, now));
             if (updated == 0) return Results.Conflict(new { error = "Il ticket è stato aggiornato. Ricarica i dettagli." });
-            db.SupportTicketDevices.Add(new SupportTicketDevice { TicketId = id, DeviceId = target.Id, LinkedAt = now,
-                LinkedBy = userId, DeviceNameSnapshot = target.Name, SiteIdSnapshot = target.SiteId, SiteNameSnapshot = target.SiteName });
+            db.SupportTicketDevices.Add(new SupportTicketDevice { TicketId = id, DeviceId = currentTarget.Id, LinkedAt = now,
+                LinkedBy = userId, DeviceNameSnapshot = currentTarget.Name, SiteIdSnapshot = currentTarget.SiteId, SiteNameSnapshot = currentTarget.SiteName });
             db.AuditEvents.Add(new AuditEvent { ActorId = userId, Action = "ticket.device.link", Target = id.ToString() });
             CoreOutbox.Add(db, "ticket.devices.updated", "ticket", id,
-                new { ticketId = id, deviceId = target.Id, siteId = target.SiteId, version = r.ExpectedVersion + 1 }, c.TraceIdentifier);
+                new { ticketId = id, deviceId = currentTarget.Id, siteId = currentTarget.SiteId, version = r.ExpectedVersion + 1 }, c.TraceIdentifier);
             await db.SaveChangesAsync();
             await tx.CommitAsync();
             return Results.NoContent();

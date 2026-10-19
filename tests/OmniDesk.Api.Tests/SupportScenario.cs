@@ -288,24 +288,28 @@ public static class SupportScenario
         Assert.Equal(HttpStatusCode.BadRequest, (await admin.PostAsJsonAsync("/api/support/manual", manual with { Priority = "emergency" })).StatusCode);
         Assert.Contains((await admin.GetFromJsonAsync<System.Text.Json.JsonElement[]>($"/api/support?deviceId={device}"))!, row => row.GetProperty("id").GetGuid() == manualTicket.Id && row.GetProperty("origin").GetString() == "operator");
         var unrelatedDevice = Guid.NewGuid();
+        var sameSiteUnmanagedDevice = Guid.NewGuid();
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             db.Devices.Add(new Device { Id = unrelatedDevice, Name = "Dispositivo non autorizzato", SiteId = otherSiteId });
+            db.Devices.Add(new Device { Id = sameSiteUnmanagedDevice, Name = "Dispositivo non gestibile", SiteId = siteId });
             await db.SaveChangesAsync();
         }
         var primaryLinks = await admin.GetFromJsonAsync<System.Text.Json.JsonElement[]>($"/api/support/{manualTicket.Id}/devices");
         Assert.Single(primaryLinks!);
         Assert.True(primaryLinks![0].GetProperty("isPrimary").GetBoolean());
-        Assert.Equal(HttpStatusCode.Forbidden, (await scoped.PostAsJsonAsync($"/api/support/{manualTicket.Id}/devices", new { expectedVersion = 1L, deviceId = unrelatedDevice })).StatusCode);
-        var linked = new { expectedVersion = 1L, deviceId = unrelatedDevice };
+        Assert.DoesNotContain(await admin.GetFromJsonAsync<System.Text.Json.JsonElement[]>($"/api/support/{manualTicket.Id}/linkable-devices"), row => row.GetProperty("deviceId").GetGuid() == unrelatedDevice);
+        Assert.Equal(HttpStatusCode.BadRequest, (await admin.PostAsJsonAsync($"/api/support/{manualTicket.Id}/devices", new { expectedVersion = 1L, deviceId = unrelatedDevice })).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await scoped.PostAsJsonAsync($"/api/support/{manualTicket.Id}/devices", new { expectedVersion = 1L, deviceId = sameSiteUnmanagedDevice })).StatusCode);
+        var linked = new { expectedVersion = 1L, deviceId = sameSiteUnmanagedDevice };
         Assert.Equal(HttpStatusCode.NoContent, (await admin.PostAsJsonAsync($"/api/support/{manualTicket.Id}/devices", linked)).StatusCode);
         Assert.Equal(HttpStatusCode.NoContent, (await admin.PostAsJsonAsync($"/api/support/{manualTicket.Id}/devices", linked)).StatusCode);
         var allLinks = await admin.GetFromJsonAsync<System.Text.Json.JsonElement[]>($"/api/support/{manualTicket.Id}/devices");
         Assert.Equal(2, allLinks!.Length);
-        Assert.Contains(allLinks, row => row.GetProperty("deviceId").GetGuid() == unrelatedDevice && !row.GetProperty("isPrimary").GetBoolean());
+        Assert.Contains(allLinks, row => row.GetProperty("deviceId").GetGuid() == sameSiteUnmanagedDevice && !row.GetProperty("isPrimary").GetBoolean());
         Assert.Equal(HttpStatusCode.BadRequest, (await admin.DeleteAsync($"/api/support/{manualTicket.Id}/devices/{device}?expectedVersion=2")).StatusCode);
-        Assert.Equal(HttpStatusCode.NoContent, (await admin.DeleteAsync($"/api/support/{manualTicket.Id}/devices/{unrelatedDevice}?expectedVersion=2")).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await admin.DeleteAsync($"/api/support/{manualTicket.Id}/devices/{sameSiteUnmanagedDevice}?expectedVersion=2")).StatusCode);
         Assert.Single(await admin.GetFromJsonAsync<System.Text.Json.JsonElement[]>($"/api/support/{manualTicket.Id}/devices"));
     }
 }
