@@ -395,3 +395,16 @@ Dossier di revisione preparato in remote-engine-defender-review.md, nessun invio
 Windows run 39215503901 e Linux 39215503914 passati: include cleanup persistente
 MSI, upgrade da 0.6/0.7 e repair payload/servizio mancanti sul runner isolato.
 Questi esiti non superano il blocco antivirus del PC pilota.
+
+### Correzione mapping dopo avvio reale del motore
+
+Dopo autorizzazione manuale Defender sul PC di test: motore Running e POST
+/api/agent/remote/node ricevute dall'API ma rifiutate 409. Verifica del sorgente
+upstream meshuser.js realmente eseguito nel container mostra che la risposta
+nodes raggruppa per meshid e cancella docs[i].meshid. Il nostro ContainsNode
+richiedeva quel campo dentro il nodo, causando un rifiuto sistematico.
+Corretto controllo su chiave esatta del gruppo, nodo unico, ID esatto e conn
+bit1; eventuale meshid esplicito discordante resta rifiutato. Test regressione
+con risposta reale compressa, gruppo/nodo diversi, offline e duplicati.
+Nessuna associazione manuale o modifica SQL; il worker deve completare il POST
+autenticato al prossimo retry. Attendere test/deploy/mapping runtime.
