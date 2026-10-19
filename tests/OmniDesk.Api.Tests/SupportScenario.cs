@@ -5,8 +5,10 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using OmniDesk.Api.Data;
 using OmniDesk.Api.Endpoints;
+using OmniDesk.Api.Security;
 using OmniDesk.Contracts;
 using Xunit;
 
@@ -151,6 +153,46 @@ public static class SupportScenario
         Assert.Equal(HttpStatusCode.Conflict,(await admin.PutAsJsonAsync($"/api/admin/support-queues/{siteQueueId}/members",new {expectedVersion=1,userIds=Array.Empty<string>()})).StatusCode);
         scopedAssignees=await scoped.GetFromJsonAsync<System.Text.Json.JsonElement[]>($"/api/support/{ticket.Id}/assignees");
         Assert.Contains(scopedAssignees!,x=>x.GetProperty("id").GetString()==scopedId);
+        var notificationWorker = new TicketNotificationWorker(factory.Services.GetRequiredService<IServiceScopeFactory>(), NullLogger<TicketNotificationWorker>.Instance);
+        while (await notificationWorker.ProcessNext(CancellationToken.None)) { }
+        var inbox = await scoped.GetFromJsonAsync<System.Text.Json.JsonElement>("/api/notifications");
+        var ticketNotices = inbox.GetProperty("notifications").EnumerateArray().Where(x => x.GetProperty("ticketId").GetGuid() == ticket.Id).ToArray();
+        var newTicketNotice = ticketNotices.Single(x => x.GetProperty("kind").GetString() == "ticket.new");
+        var replyNotice = ticketNotices.Single(x => x.GetProperty("kind").GetString() == "ticket.reply");
+        Assert.Equal(2, inbox.GetProperty("unreadCount").GetInt32());
+        Assert.Equal(HttpStatusCode.NotFound, (await admin.PostAsync($"/api/notifications/{newTicketNotice.GetProperty("id").GetGuid()}/read", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await scoped.PostAsync($"/api/notifications/{newTicketNotice.GetProperty("id").GetGuid()}/read", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await scoped.PostAsync($"/api/notifications/{replyNotice.GetProperty("id").GetGuid()}/read", null)).StatusCode);
+        inbox = await scoped.GetFromJsonAsync<System.Text.Json.JsonElement>("/api/notifications");
+        Assert.Equal(0, inbox.GetProperty("unreadCount").GetInt32());
+        Assert.False(await notificationWorker.ProcessNext(CancellationToken.None));
+        var brokenOutboxId = Guid.NewGuid();
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            db.CoreOutboxEvents.Add(new CoreOutboxEvent { Id=brokenOutboxId, EventType="ticket.created", AggregateType="ticket", AggregateId=ticket.Id, Payload="[]" });
+            await db.SaveChangesAsync();
+        }
+        for (var attempt=1;attempt<=10;attempt++)
+        {
+            Assert.True(await notificationWorker.ProcessNext(CancellationToken.None));
+            using var scope = factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var delivery = await db.CoreOutboxDeliveries.SingleAsync(x=>x.EventId==brokenOutboxId);
+            Assert.Equal(attempt,delivery.AttemptCount);
+            if(attempt<10)
+            {
+                Assert.Null(delivery.DeadLetteredAt);
+                delivery.NextAttemptAt=DateTimeOffset.UtcNow.AddSeconds(-1);
+                await db.SaveChangesAsync();
+            }
+            else
+            {
+                Assert.NotNull(delivery.DeadLetteredAt);
+                Assert.Equal("JsonException",delivery.LastErrorType);
+            }
+        }
+        Assert.False(await notificationWorker.ProcessNext(CancellationToken.None));
         var adminUser=(await admin.GetFromJsonAsync<System.Text.Json.JsonElement[]>("/api/admin/users"))!.Single(x=>x.GetProperty("email").GetString()=="admin@example.test").GetProperty("id").GetString();
         Assert.Equal(HttpStatusCode.BadRequest,(await admin.PutAsJsonAsync($"/api/support/{ticket.Id}",new {expectedVersion=2,state="open",resolution=(string?)null,queueId=otherSiteQueueId,updateQueue=true})).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest,(await admin.PutAsJsonAsync($"/api/support/{ticket.Id}",new {expectedVersion=2,state="open",resolution=(string?)null,queueId=siteQueueId,updateQueue=true,assigneeId=adminUser,updateAssignment=true})).StatusCode);
@@ -205,7 +247,7 @@ public static class SupportScenario
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            var events = await db.CoreOutboxEvents.Where(x => x.EventType == "ticket.updated" && x.AggregateId == ticket.Id).ToArrayAsync();
+            var events = await db.CoreOutboxEvents.Where(x => (x.EventType == "ticket.updated" || x.EventType == "ticket.requester_replied") && x.AggregateId == ticket.Id).ToArrayAsync();
             Assert.Equal(2, events.Length);
             Assert.Contains(events, x => x.Payload.Contains("resolved", StringComparison.Ordinal));
             Assert.All(events, x => Assert.DoesNotContain("Risolto fixture", x.Payload));
