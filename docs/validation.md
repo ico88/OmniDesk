@@ -1466,6 +1466,26 @@ migrazione; i workflow personalizzabili e versionati restano da sviluppare.
 verificano la matrice di transizione, API default-deny per transizioni vietate,
 risoluzione, riapertura, chiusura terminale e risposta pubblica preservata.
 `docker compose build api dashboard`, configurazione Compose standard/test,
-`git diff --check` e `./scripts/smoke.sh --browser` passati; Chromium verifica
-che la UI mostri solo le transizioni autorizzate dal server. Stack smoke
-temporaneo rimosso; nessuna migrazione, deploy o modifica all'istanza LAN.
+`git diff --check` e test API/dashboard passati. La pipeline Linux sul commit
+`f2cfb05` ha invece rilevato che lo smoke browser leggeva le opzioni di stato
+prima del completamento della richiesta thread; non è una regressione API. La
+correzione dell'attesa è verificata nel successivo incremento sotto. Nessuna
+migrazione, deploy o modifica all'istanza LAN per questo incremento.
+
+### SD1/RMM — timestamp verificato di chiusura sessione remota — 2026-10-19
+
+Migrazione `RemoteSessionEndTime` aggiunge `RemoteSessions.EndedAt` nullable,
+senza backfill: i record storici non dichiarano un orario che il sistema non ha
+registrato. Il valore viene scritto solo quando la revoca MeshCentral è
+confermata, incluso il retry del guard, oppure quando la creazione fallisce e
+non resta una revoca pendente. L'API sessioni lo espone e la timeline ticket lo
+usa per completamento/durata, rivalidando stato e timestamp correnti. Permessi
+ticket e capability RMM rimangono richiesti; nessun URL, credenziale o risultato
+diagnostico viene aggiunto.
+
+`./scripts/test.sh` passato con 77 test API/PostgreSQL e 5 Vitest; copre la
+migrazione da schema vuoto, revoca sincrona/ritentata e timestamp nella timeline.
+Il primo smoke browser ha rivelato una race nel test che non attendeva il thread;
+aggiunta attesa sul controllo popolato. `./scripts/smoke.sh --browser` poi passato
+su stack isolato con Chromium. La build API è inclusa nei test Docker; Compose e
+diff verranno registrati con la verifica finale del commit. Nessun deploy LAN.
