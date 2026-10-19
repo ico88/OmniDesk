@@ -1251,3 +1251,31 @@ un selettore test troppo rigido; corretto il selettore e il flusso è passato.
 Lo smoke usa PostgreSQL e container effimeri isolati; `docker compose config
 --quiet` per test e `git diff --check` passati. Nessun container, schema o dato
 LAN è stato aggiornato.
+
+### KB — ambiti di lettura per sede e gruppo — 2026-10-19
+
+Gli articoli supportano scope globale, singola sede o singolo gruppo; una
+constraint PostgreSQL vieta di impostare entrambi gli scope. La migrazione
+`20261019172727_KnowledgeArticleScopes` lascia globali gli articoli esistenti,
+aggiunge FK restrittive e conserva SiteId/GroupId in ogni snapshot. La lettura
+richiede `knowledge.view` globale o un grant corrispondente alla sede/gruppo;
+la modifica richiede `knowledge.manage` globale. I gestori selezionano lo scope
+nell'editor e vedono gli articoli autorizzati nella lista; i tentativi fuori
+ambito sono indistinguibili da un articolo assente. Gli scope archiviati non
+sono proposti e nuove scritture su scope inesistenti/archiviati sono rifiutate.
+Gli aggiornamenti da client precedenti che non inviano scope mantengono quello
+esistente; la UI corrente dichiara esplicitamente quando cambia ambito, evitando
+che un edit da sessione web obsoleta pubblichi involontariamente una guida.
+
+`./scripts/test.sh` passato con 64/64 test xUnit/PostgreSQL e 5/5 Vitest.
+`KnowledgeScenario` copre lettura isolata fra scope, rifiuto Viewer, rifiuto di
+scope doppio, spostamento sede→gruppo e conservazione dell'ambito nella revisione
+storica; `MigrationTests` inserisce un articolo prima delle migrazioni finali e
+verifica il backfill globale. Un update nel formato precedente mantiene il sito,
+mentre la richiesta esplicita sposta l'articolo e genera la revisione di gruppo.
+`docker compose build api dashboard` passato con
+`dotnet publish` e TypeScript/Vite. `./scripts/smoke.sh --browser` passato su
+Compose isolato: Chromium crea un gruppo fixture e una guida associata al gruppo,
+quindi verifica modifica e consultazione della versione precedente. Compose
+standard/test validato e `git diff --check` passato. Nessun dato, container o
+schema LAN è stato modificato.

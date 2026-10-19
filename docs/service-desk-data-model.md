@@ -37,7 +37,7 @@
 | AutomationRules / AutomationVersions / AutomationRuns | Eventi/condizioni/azioni allowlist, versione immutabile, origine/correlazione, esito e limiti; chiave evento/regola/versione per deduplica |
 | NotificationOutbox / NotificationDeliveries | Ticket/evento, destinatario verificato, template/versione/visibilità, stato, tentativi, NextAttemptAt, LeaseUntil, errore minimizzato; idempotenza evento/destinatario/canale |
 | Outbox / Inbox / WorkerJobs | EventId univoco, tipo/versione, payload, stato/scadenza lease, tentativi e correlazione; inbox univoca per consumer/evento; quarantena errori dopo retry limitati |
-| KnowledgeArticles / ArticleVersions / ArticleScopes / ArticleTicketLinks | Bozza/revisione/pubblicazione, contenuti/versione, ambiti lettura, autore/revisore, collegamenti ticket senza esporre note interne |
+| KnowledgeArticles / KnowledgeArticleRevisions | Implementati: contenuti/versione e snapshot immutabili lato API; SiteId o GroupId esclusivo per scope, entrambi null per globale; autore/data e backfill della versione corrente. `ArticleTicketLinks` e categorie restano proposti, non implementati |
 | AiSuggestions (fase futura) | Ticket, autore richiedente, tipo proposta, contenuto minimizzato, provenienza/versione modello, stato accepted/rejected, scadenza; nessun comando eseguibile |
 | ActionApprovals (solo futura estensione) | Richiedente/approvatore, ticket/device, azione, hash parametri, scadenza, stato e uso singolo; non è una coda di shell e non concede permessi |
 

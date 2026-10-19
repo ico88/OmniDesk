@@ -34,7 +34,7 @@ Commenti pubblici e note interne hanno visibilità esplicita. Il portale, le ema
 
 Allegati: metadati PostgreSQL e contenuto in volume privato iniziale; storage S3 compatibile solo come adapter futuro. Quote e limiti, nomi storage opachi, verifica MIME/hash, quarantena e scansione antivirus prima della distribuzione; autorizzazione a ogni download, Content-Disposition attachment e nosniff. Visibilità ereditata dal commento, nessun percorso pubblico prevedibile. HTML/email sanitizzati; nessun download automatico di URL esterni. Provider antivirus, retention e backup coerente DB/blob sono decisioni preliminari, non servizi già disponibili.
 
-Il portale consente apertura, consultazione e risposta alle proprie richieste e accesso alla Knowledge Base autorizzata. La KB ha bozze, revisione, pubblicazione, versioni, categorie e ambiti di lettura; ticket risolti possono proporre articoli senza pubblicazione automatica. Gli interventi conservano operatore, dispositivo, tempi, esito, riepilogo e riferimenti a sessioni/job; non affermano che un comando sia riuscito senza risultato del relativo servizio.
+Il portale personale resta pianificato; l'Agent/Tray consente intake e conversazione del richiedente associato al dispositivo. La Knowledge Base interna implementa bozze, pubblicazione, versioni consultabili e lettura globale o per sede/gruppo; la gestione contenuti è globale. Categorie, allegati e proposte di articoli da ticket risolti restano pianificati e non pubblicano contenuti automaticamente. Gli interventi conservano operatore, dispositivo, tempi, esito, riepilogo e riferimenti a sessioni/job; non affermano che un comando sia riuscito senza risultato del relativo servizio.
 
 ## Permessi e audit
 
