@@ -1557,3 +1557,24 @@ temporaneo; CI Linux `39322836205` passata su `c410f48`. Il gate Windows
 `39319355926` è ancora impegnato nella verifica upgrade/repair/rollback; il
 workflow Windows per `c410f48` è in coda. I test non attestano tempi reali di
 lavoro umano né runtime Windows/LAN.
+
+## SD1 — priorità ticket P1–P4 — 2026-10-19
+
+`SupportTickets.Priority` usa ora `p1` critica, `p2` alta, `p3` normale e `p4`
+bassa, con default `p3`. La migrazione `TicketPrioritiesP1P4` converte i valori
+legacy esistenti. Per consentire un aggiornamento progressivo dei client,
+creazione, modifica e filtro API accettano ancora `urgent/high/normal/low`, ma
+le risposte e i nuovi record usano sempre il codice canonico. La dashboard mostra
+etichette P1–P4 e il contatore urgente ora corrisponde a P1.
+
+La suite `./scripts/test.sh` è passata: 79 test xUnit/PostgreSQL e 5 Vitest.
+`MigrationTests` crea ticket con ciascuno dei quattro valori legacy prima di
+applicare le migrazioni restanti e verifica la conversione; gli scenari API
+verificano valori canonici, alias compatibili e filtri. `docker compose build api
+dashboard` e `./scripts/smoke.sh --browser` sono passati, incluso il controllo dei
+filtri P1–P4 nella UI. `git diff --check` è passato.
+
+Questa modifica è ancora locale e non pubblicata sulla LAN. La CI precedente
+copre `c410f48`, prima delle priorità; dopo il push va verificata la CI di questo
+incremento. Il job Windows precedente è tuttora in corso sul test upgrade MSI e
+non è stato interrotto.
