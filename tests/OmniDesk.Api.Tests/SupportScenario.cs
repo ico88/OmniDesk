@@ -94,12 +94,16 @@ public static class SupportScenario
         Assert.Equal(2, requesterThread.GetProperty("version").GetInt64());
         Assert.Contains(requesterThread.GetProperty("messages").EnumerateArray(), m => m.GetProperty("body").GetString() == "Il problema è ancora presente.");
         Guid remoteSessionId = Guid.NewGuid(), updateJobId = Guid.NewGuid();
+        var utcNow = DateTimeOffset.UtcNow;
+        var jobStartedAt = new DateTimeOffset(utcNow.Ticks - utcNow.Ticks % 10, TimeSpan.Zero).AddMinutes(-2);
+        var jobCompletedAt = jobStartedAt.AddSeconds(45);
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             db.RemoteSessions.Add(new RemoteSession { Id = remoteSessionId, DeviceId = device, Capability = "remote.control", State = "closed", ActorId = "fixture" });
             db.UpdateJobs.Add(new UpdateJob { Id = updateJobId, DeviceId = device, RequestId = Guid.NewGuid(), RequestedBy = "fixture",
-                Kind = "diagnostics.processes", State = "succeeded", Result = "{\"output\":\"sensitive diagnostic output must not be exposed\"}" });
+                Kind = "diagnostics.processes", State = "succeeded", CreatedAt = jobStartedAt, CompletedAt = jobCompletedAt,
+                Result = "{\"output\":\"sensitive diagnostic output must not be exposed\"}" });
             await db.SaveChangesAsync();
         }
         var interventionUrl = $"/api/support/{ticket.Id}/interventions";
@@ -107,6 +111,7 @@ public static class SupportScenario
         var rmmCandidates = await admin.GetFromJsonAsync<System.Text.Json.JsonElement[]>(candidateUrl);
         Assert.Contains(rmmCandidates!, x => x.GetProperty("id").GetGuid() == remoteSessionId);
         Assert.Contains(rmmCandidates!, x => x.GetProperty("id").GetGuid() == updateJobId);
+        Assert.Equal(jobCompletedAt, rmmCandidates!.Single(x => x.GetProperty("id").GetGuid() == updateJobId).GetProperty("completedAt").GetDateTimeOffset());
         var remoteLink = new { expectedVersion = 2L, deviceId = device, artifactType = "remote_session", artifactId = remoteSessionId };
         Assert.Equal(HttpStatusCode.Forbidden, (await scoped.PostAsJsonAsync(interventionUrl, remoteLink)).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await admin.PostAsJsonAsync(interventionUrl, new { expectedVersion = 2L, deviceId = Guid.NewGuid(), artifactType = remoteLink.artifactType, artifactId = remoteSessionId })).StatusCode);
@@ -115,6 +120,10 @@ public static class SupportScenario
         Assert.Equal(HttpStatusCode.NoContent, (await admin.PostAsJsonAsync(interventionUrl, remoteLink)).StatusCode);
         var jobLink = new { expectedVersion = 3L, deviceId = device, artifactType = "update_job", artifactId = updateJobId };
         Assert.Equal(HttpStatusCode.NoContent, (await admin.PostAsJsonAsync(interventionUrl, jobLink)).StatusCode);
+        var linkedJobSnapshot = (await admin.GetFromJsonAsync<System.Text.Json.JsonElement[]>($"/api/support/{ticket.Id}/interventions"))!
+            .Single(x => x.GetProperty("artifactId").GetGuid() == updateJobId);
+        Assert.Equal(jobStartedAt, linkedJobSnapshot.GetProperty("occurredAt").GetDateTimeOffset());
+        Assert.Equal(jobCompletedAt, linkedJobSnapshot.GetProperty("completedAt").GetDateTimeOffset());
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();

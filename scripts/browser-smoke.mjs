@@ -221,7 +221,9 @@ try {
  await interventionPicker.waitFor();
  await interventionPicker.selectOption(`update_job:${diagnosticJobId}`);
  await page.locator('.ticket-intervention-link').getByRole('button',{name:'Collega',exact:true}).click();
- await page.getByRole('region',{name:'Interventi RMM associati'}).getByText('Operazione diagnostics.processes',{exact:true}).waitFor();
+ const linkedIntervention=page.getByRole('region',{name:'Interventi RMM associati'}).locator('li').filter({hasText:'Operazione diagnostics.processes'});
+ await linkedIntervention.getByText('Operazione diagnostics.processes',{exact:true}).waitFor();
+ await linkedIntervention.getByText(/Avvio:/).waitFor();
  const correlatedInterventions=await context.request.get(`https://omnidesk.test/api/support/${smokeTicketId}/interventions`);
  assert.equal(correlatedInterventions.status(),200);
  assert.equal((await correlatedInterventions.json()).length,1,'RMM job is linked to the ticket');
