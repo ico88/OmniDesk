@@ -1489,6 +1489,8 @@ Il primo smoke browser ha rivelato una race nel test che non attendeva il thread
 aggiunta attesa sul controllo popolato. `./scripts/smoke.sh --browser` poi passato
 su stack isolato con Chromium. `docker compose build api dashboard`, Compose
 standard/test/backup-check (con `BACKUP_CHECK_FILE` esplicito) e `git diff
---check` passati. Nessun deploy LAN. CI sul commit `3446a70` ancora in corso al
-momento della registrazione: run Linux `39316014360`, Windows
-`39316014371`.
+--check` passati. Nessun deploy LAN. Sul commit di codice `3446a70` sono
+riusciti [build-and-test 39316014360](https://github.com/ico88/OmniDesk/actions/runs/39316014360)
+e [windows-agent-package 39316014371](https://github.com/ico88/OmniDesk/actions/runs/39316014371),
+inclusi lifecycle MSI e baseline upgrade/repair/rollback. Il successivo commit
+`562bfe7` aggiorna solo questa documentazione.
