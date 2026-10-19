@@ -1059,8 +1059,15 @@ sessione corrente resta aperta. Non c'è rinnovo automatico né estensione nasco
 la console può mostrare nuovamente la richiesta di consenso del PC assistito.
 
 Verifiche: `docker compose build dashboard` e Vitest 5/5 passati; API/PostgreSQL
-64/64 con database Compose isolato. Il workflow Linux del commit precedente è
-passato; CI Linux 39272031185 e Windows 39272031245 sono completate con successo
-sul commit immediatamente precedente, che non include questo componente React.
-Il deploy LAN, la riconnessione MeshCentral e il consenso reale sul PC pilota non
-sono ancora verificati.
+64/64 con database Compose isolato. CI Linux 39273108094 è passata sul commit
+`8f785bf`; il workflow Windows 39273108228 era ancora in esecuzione durante il
+deploy e non compila la dashboard né include modifiche Windows.
+
+Pubblicazione LAN: ricreato solo il container `dashboard`, dopo aver verificato
+zero sessioni remote e zero job attivi. API, DB, Caddy e MeshCentral non sono
+stati ricreati. `verify-lan.py --server https://192.168.1.233:8085 --ca
+omnidesk-local-ca.crt` ha passato HTTPS/CA, readiness, dashboard e rifiuto
+anonimo; il bundle HTTPS contiene «Rinnova sessione». Dopo il deploy i servizi
+sono running e sessioni/job attivi restano zero. Il test interattivo di
+riconnessione MeshCentral e la ripetizione del consenso sul PC pilota restano
+aperti.
