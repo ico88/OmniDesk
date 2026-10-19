@@ -72,7 +72,8 @@ Le code possono essere globali o associate a una sede alla creazione; il nome è
 univoco nell'ambito e tale ambito non è modificabile dopo la creazione. `GET
 /api/support/queues` espone solo code globali; `GET /api/support/{id}/queues`
 richiede `tickets.manage` sul ticket e restituisce code globali e code della sua
-sede. Assegnazioni singole o massive rifiutano code di altre sedi; l'operazione
+sede. `GET /api/support/queues?siteId=...` richiede `tickets.view` sulla sede o
+un ticket visibile nell'ambito della sede. Assegnazioni singole o massive rifiutano code di altre sedi; l'operazione
 massiva può associare una coda site-scoped solo a ticket della stessa sede.
 Le regole di routing sono amministrate sotto `/api/admin/support-routing`, una
 per categoria globale o per sede. Le regole globali puntano a code globali; quelle
