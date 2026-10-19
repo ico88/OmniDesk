@@ -312,6 +312,14 @@ ridurre le riaperture durante interventi ordinari. Restano conto alla rovescia,
 scadenza server-side e revoca esplicita; il server continua a controllare permessi
 e policy tramite il guard di sessione.
 
+La console ora offre «Rinnova sessione» negli ultimi cinque minuti del grant:
+crea un nuovo collegamento nella stessa pagina, ripete i controlli server e
+revoca quello precedente prima di sostituire l'iframe. Se la revoca resta in
+verifica, il guard server continua i tentativi. Per le sessioni presidiate
+MeshCentral può richiedere di nuovo il consenso locale; la funzione non aggira
+questa policy e non rinnova in background. Build dashboard e test Vitest passati;
+test API/PostgreSQL 64/64. Pubblicazione LAN e prova interattiva ancora da fare.
+
 ### Diagnostica Windows — code indipendenti — sorgenti e test verificati
 
 Le raccolte Processi/Servizi/Eventi possono accodarsi mentre un’altra raccolta

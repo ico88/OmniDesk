@@ -1046,3 +1046,21 @@ ritenta senza modificare i campi; ogni modifica al payload genera una nuova chia
 di richiesta. Build TypeScript/Vite e Vitest 5/5 passati. La dashboard è stata aggiornata
 soltanto dopo CI Linux; il bundle pubblico mostra il form, readiness HTTPS/CA e
 rifiuto anonimo sono passati. Nessun login o invio ticket runtime è stato eseguito.
+
+
+### Rinnovo sessione remoto nella stessa console — sorgenti verificati
+
+Con grant in scadenza entro cinque minuti, la barra remota propone «Rinnova
+sessione». L'operatore resta nella pagina; OmniDesk richiede un grant nuovo
+attraverso l'endpoint esistente, che rivalida capability, dispositivo, policy e
+consenso MeshCentral. Il link precedente viene revocato prima di sostituire
+l'iframe; in caso di errore il nuovo link viene revocato come compensazione e la
+sessione corrente resta aperta. Non c'è rinnovo automatico né estensione nascosta;
+la console può mostrare nuovamente la richiesta di consenso del PC assistito.
+
+Verifiche: `docker compose build dashboard` e Vitest 5/5 passati; API/PostgreSQL
+64/64 con database Compose isolato. Il workflow Linux del commit precedente è
+passato; CI Linux 39272031185 e Windows 39272031245 sono completate con successo
+sul commit immediatamente precedente, che non include questo componente React.
+Il deploy LAN, la riconnessione MeshCentral e il consenso reale sul PC pilota non
+sono ancora verificati.
