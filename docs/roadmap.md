@@ -136,3 +136,6 @@ messaggi distinti. La risposta HTTP 200 osservata sul server non dimostra la
 consegna IPC sul PC: causa specifica e collaudo interattivo ancora da confermare.
 Le notifiche remote sono richieste anche in non presidiato (flag 1/2/4): da
 verificare visivamente sul pilota, separatamente dalla richiesta di consenso.
+Avviso remoto: aggiunta richiesta barra desktop persistente (flag64) alle nuove
+sessioni, indipendente dal consenso. Toast iniziale gia richiesto. Verifica
+interattiva di apparizione/rimozione sul PC pilota ancora necessaria.

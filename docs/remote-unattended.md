@@ -24,3 +24,10 @@ macchina pilota, avviare una nuova sessione e verificare notifica senza richiest
 provare poi schermata bloccata, riavvio senza logon e accessi terminale/file
 separati. Disabilitare la policy e verificare revoca e ritorno della richiesta
 sulla sessione successiva. I test CI non attestano questi casi interattivi.
+
+Le nuove sessioni desktop richiedono anche la barra di connessione del motore
+(flag64), oltre al toast iniziale: mask73 con consenso, mask65 senza richiesta.
+Terminale/file conservano notifiche separate. La barra dipende dalla sessione
+interattiva e dal supporto Windows del motore; non promette un popup su desktop
+bloccato o senza utente. Verificare comparsa all'apertura e rimozione alla chiusura
+sul PC pilota; i link gia emessi non acquisiscono retroattivamente il flag.

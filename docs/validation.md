@@ -563,3 +563,15 @@ Windows 2/231, cancellabile) e messaggi diagnostici. Test dedicati coprono
 contesa/assenza transitorie, nessun retry su access denied e cancellazione.
 Notifiche remoto gia presenti per sessioni non presidiate; comparsa effettiva
 sul desktop Windows non verificabile da questo server.
+
+Tray: ./scripts/test.sh riuscito (47 xUnit, 4 Vitest), build Tray cross-target
+net10.0-windows riuscita senza warning/errori. Log /tmp/omnidesk-tray-retry-tests.log
+e /tmp/omnidesk-tray-073-cross-build.log. MSI 0.7.3 in verifica su runner Windows
+39223715334, sorgente ac674b69ccb8d0f49e7262b73919382e97a8539b.
+
+Avviso remoto: esaminato il meshcore.js del motore installato: flag1 richiama
+Toast, flag64 notifybar-desktop; createDeviceShareLink accetta tali flag.
+Aggiunta barra per desktop (73 presidiato, 65 non presidiato), terminale/file
+invariati. ./scripts/test.sh riuscito (47 xUnit, 4 Vitest), build API Docker
+riuscita. Log /tmp/omnidesk-remote-notification-{tests,build}.log.
+La presenza visiva del toast/barra sul PC rimane un collaudo interattivo separato.
