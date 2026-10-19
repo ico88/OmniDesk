@@ -41,7 +41,7 @@ public static class AgentEndpoints
             await db.SaveChangesAsync(); return Results.NoContent();
         });
         var machine = app.MapGroup("/api/agent").WithMetadata(new MachineRequest());
-        machine.MapPost("/enroll", async (EnrollmentRequest r, AppDbContext db) => {
+        machine.MapPost("/enroll", async (EnrollmentRequest r, HttpContext c, AppDbContext db) => {
             if (r.Token is null || r.Token.Length != 64 || !r.Token.All(Uri.IsHexDigit) || string.IsNullOrWhiteSpace(r.Name) || r.Name.Length > 200 || r.PublicKeyPem is null || r.PublicKeyPem.Length > 4096) return Results.BadRequest();
             try { using var rsa = RSA.Create(); rsa.ImportFromPem(r.PublicKeyPem); if (rsa.KeySize is < 2048 or > 4096 || r.PublicKeyPem.Contains("PRIVATE", StringComparison.Ordinal)) return Results.BadRequest(); }
             catch (Exception e) when (e is CryptographicException or ArgumentException) { return Results.BadRequest(); }
@@ -54,6 +54,8 @@ public static class AgentEndpoints
             if (consumed != 1) return Results.Unauthorized();
             var device = new Device { Id = Guid.NewGuid(), Name = r.Name.Trim(), GroupId = enrollment.GroupId, SiteId = enrollment.SiteId };
             db.Devices.Add(device); db.DeviceCredentials.Add(new DeviceCredential { DeviceId = device.Id, PublicKeyPem = r.PublicKeyPem });
+            CoreOutbox.Add(db, "device.enrolled", "device", device.Id,
+                new { deviceId = device.Id, device.Name, device.GroupId, device.SiteId }, c.TraceIdentifier);
             db.AuditEvents.Add(Audit(null, "device.enroll", device.Id)); await db.SaveChangesAsync(); await tx.CommitAsync();
             return Results.Created($"/api/devices/{device.Id}", new EnrollmentResponse(device.Id));
         }).RequireRateLimiting("enrollment");

@@ -57,6 +57,8 @@ public static class SupportEndpoints
             var ticket = new SupportTicket { DeviceId = id, SiteId = siteId, RequesterKey = r.RequesterKey, RequestId = r.Ticket.RequestId,
                 Subject = r.Ticket.Subject.Trim(), Description = r.Ticket.Description.Trim(), Screenshot = screenshot };
             db.SupportTickets.Add(ticket);
+            CoreOutbox.Add(db, "ticket.created", "ticket", ticket.Id,
+                new { ticketId = ticket.Id, deviceId = ticket.DeviceId, siteId = ticket.SiteId, state = ticket.State }, c.TraceIdentifier);
             db.AuditEvents.Add(new AuditEvent { Action = "ticket.create", Target = ticket.Id.ToString() });
             if (screenshot != null) db.AuditEvents.Add(new AuditEvent { Action = "ticket.screenshot.consent", Target = ticket.Id.ToString() });
             await db.SaveChangesAsync(); await tx.CommitAsync();
@@ -104,6 +106,8 @@ public static class SupportEndpoints
             }
             if(ticket.State!=r.State)db.SupportMessages.Add(new SupportMessage {TicketId=id,ActorId=c.User.UserId(),Kind="state_change",FromState=ticket.State,ToState=r.State});
             db.AuditEvents.Add(new AuditEvent { ActorId = c.User.UserId(), Action = "ticket.update", Target = id.ToString() });
+            CoreOutbox.Add(db, "ticket.updated", "ticket", id,
+                new { ticketId = id, deviceId = ticket.DeviceId, siteId = ticket.SiteId, oldState = ticket.State, state = r.State, version = r.ExpectedVersion + 1 }, c.TraceIdentifier);
             await db.SaveChangesAsync(); await tx.CommitAsync(); return Results.NoContent();
         });
         staff.MapGet("/{id:guid}/messages",async(Guid id,long? before,HttpContext c,AppDbContext db,PermissionService p)=>{

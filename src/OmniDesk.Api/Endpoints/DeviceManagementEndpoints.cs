@@ -28,6 +28,16 @@ public static class DeviceManagementEndpoints
             if (device.Name == name && device.GroupId == r.GroupId && device.SiteId == newSiteId) return Results.NoContent();
             await db.Devices.Where(x => x.Id == id).ExecuteUpdateAsync(s => s.SetProperty(x => x.Name, name).SetProperty(x => x.GroupId, r.GroupId).SetProperty(x => x.SiteId, newSiteId));
             db.AuditEvents.Add(Event(c, "device.metadata.change", id));
+            CoreOutbox.Add(db, "device.updated", "device", id, new
+            {
+                deviceId = id,
+                oldName = device.Name,
+                name,
+                oldGroupId = device.GroupId,
+                groupId = r.GroupId,
+                oldSiteId = device.SiteId,
+                siteId = newSiteId
+            }, c.TraceIdentifier);
             if (device.GroupId != r.GroupId || device.SiteId != newSiteId)
             {
                 // Close existing shares when moving an endpoint across an authorization boundary.

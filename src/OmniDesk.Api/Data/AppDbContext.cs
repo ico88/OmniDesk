@@ -56,6 +56,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
     public DbSet<RemoteSession> RemoteSessions => Set<RemoteSession>();
     public DbSet<UpdateJob> UpdateJobs => Set<UpdateJob>();
     public DbSet<DashboardLayout> DashboardLayouts => Set<DashboardLayout>();
+    public DbSet<CoreOutboxEvent> CoreOutboxEvents => Set<CoreOutboxEvent>();
     protected override void OnModelCreating(ModelBuilder b)
     {
         base.OnModelCreating(b);
@@ -125,6 +126,12 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
         b.Entity<Branding>().Property(x => x.LogoUrl).HasMaxLength(2048);
         b.Entity<Branding>().HasData(new Branding());
         b.Entity<AuditEvent>().HasIndex(x => x.At);
+        b.Entity<CoreOutboxEvent>().Property(x => x.EventType).HasMaxLength(100);
+        b.Entity<CoreOutboxEvent>().Property(x => x.AggregateType).HasMaxLength(50);
+        b.Entity<CoreOutboxEvent>().Property(x => x.CorrelationId).HasMaxLength(64);
+        b.Entity<CoreOutboxEvent>().Property(x => x.Payload).HasColumnType("jsonb");
+        b.Entity<CoreOutboxEvent>().HasIndex(x => new { x.NextAttemptAt, x.OccurredAt })
+            .HasFilter("\"PublishedAt\" IS NULL");
         foreach (var role in Security.Permissions.Roles)
         {
             b.Entity<IdentityRole>().HasData(new IdentityRole { Id = role, Name = role, NormalizedName = role.ToUpperInvariant(), ConcurrencyStamp = role });

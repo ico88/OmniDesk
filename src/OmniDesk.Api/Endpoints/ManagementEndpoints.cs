@@ -41,6 +41,7 @@ public static class ManagementEndpoints
             if (await db.Sites.AnyAsync(x => x.Name == name)) return Results.Conflict();
             var site = new Site { Name = name };
             db.Sites.Add(site); db.AuditEvents.Add(Event(c, "site.create", site.Id.ToString()));
+            CoreOutbox.Add(db, "site.created", "site", site.Id, new { siteId = site.Id, site.Name }, c.TraceIdentifier);
             try { await db.SaveChangesAsync(); } catch (DbUpdateException e) when (e.InnerException is Npgsql.PostgresException { SqlState: "23505" }) { return Results.Conflict(); }
             return Results.Created($"/api/admin/sites/{site.Id}", new { site.Id, site.Name, site.IsArchived });
         });
@@ -55,6 +56,8 @@ public static class ManagementEndpoints
             if (site.Name == name && site.IsArchived == r.IsArchived) return Results.NoContent();
             site.Name = name; site.IsArchived = r.IsArchived;
             db.AuditEvents.Add(Event(c, r.IsArchived ? "site.archive" : "site.update", id.ToString()));
+            CoreOutbox.Add(db, r.IsArchived ? "site.archived" : "site.updated", "site", id,
+                new { siteId = id, site.Name, site.IsArchived }, c.TraceIdentifier);
             try { await db.SaveChangesAsync(); } catch (DbUpdateException e) when (e.InnerException is Npgsql.PostgresException { SqlState: "23505" }) { return Results.Conflict(); }
             return Results.NoContent();
         });
