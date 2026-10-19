@@ -65,7 +65,7 @@ public sealed class SupportTicket
     public string Subject { get; set; } = "";
     public string Description { get; set; } = "";
     public string State { get; set; } = "open";
-    public string Priority { get; set; } = "normal";
+    public string Priority { get; set; } = "p3";
     public string Category { get; set; } = "general";
     public Guid? QueueId { get; set; }
     public string? AssigneeId { get; set; }

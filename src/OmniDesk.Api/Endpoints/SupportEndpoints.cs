@@ -32,10 +32,15 @@ public sealed record PortalTicketView(Guid Id, long Number, Guid DeviceId, strin
 public sealed record PortalMessageView(long Id, string Kind, string Body, string? FromState, string? ToState, DateTimeOffset CreatedAt);
 public static class SupportEndpoints
 {
-    private static readonly string[] Priorities = ["low", "normal", "high", "urgent"];
+    private static readonly Dictionary<string, string> PriorityAliases = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["p1"] = "p1", ["p2"] = "p2", ["p3"] = "p3", ["p4"] = "p4",
+        ["urgent"] = "p1", ["high"] = "p2", ["normal"] = "p3", ["low"] = "p4"
+    };
     private static readonly string[] Categories = ["general", "hardware", "software", "network", "account", "other"];
     private static readonly string[] InterventionOutcomes = ["completed", "partial", "not_completed", "no_change", "follow_up"];
     public static bool ValidCategory(string? category) => category is not null && Categories.Contains(category);
+    private static string? CanonicalPriority(string? priority) => priority is not null && PriorityAliases.TryGetValue(priority.Trim(), out var value) ? value : null;
     private static bool ValidKey(string? key) => key is { Length: 64 } && key.All(Uri.IsHexDigit);
     private static SupportTicketView View(SupportTicket t) => new(t.Id, t.Number, t.DeviceId, t.Subject, t.Description, t.State,
         t.Resolution, t.Version, t.CreatedAt, t.UpdatedAt, t.Screenshot != null, t.Category, t.Origin);
@@ -261,7 +266,7 @@ public static class SupportEndpoints
             var ticket = new SupportTicket {
                 DeviceId = device.Id, SiteId = device.SiteId, RequesterUserId = userId, RequesterKey = requesterKey,
                 RequestId = r.RequestId, Origin = "portal", Subject = subject, Description = description,
-                Category = category, Priority = "normal", QueueId = queueId, WorkflowId = workflowBinding.WorkflowId,
+                Category = category, Priority = "p3", QueueId = queueId, WorkflowId = workflowBinding.WorkflowId,
                 WorkflowVersion = workflowBinding.WorkflowVersion, CreatedAt = now, UpdatedAt = now, Screenshot = screenshot
             };
             db.SupportTickets.Add(ticket);
@@ -330,8 +335,9 @@ public static class SupportEndpoints
         });
         var staff = app.MapGroup("/api/support").RequireAuthorization();
         staff.MapPost("/manual", async (ManualSupportCreate r, HttpContext c, AppDbContext db, PermissionService p) => {
+            var priority = CanonicalPriority(r.Priority);
             if (r.RequestId == Guid.Empty || r.DeviceId == Guid.Empty || string.IsNullOrWhiteSpace(r.Subject) || r.Subject.Trim().Length > 200 ||
-                string.IsNullOrWhiteSpace(r.Description) || r.Description.Trim().Length > 8000 || !ValidCategory(r.Category) || !Priorities.Contains(r.Priority)) return Results.BadRequest();
+                string.IsNullOrWhiteSpace(r.Description) || r.Description.Trim().Length > 8000 || !ValidCategory(r.Category) || priority is null) return Results.BadRequest();
             var userId = c.User.UserId();
             await using var tx = await db.Database.BeginTransactionAsync();
             await DeviceOperationLock.Acquire(db, r.DeviceId);
@@ -341,7 +347,7 @@ public static class SupportEndpoints
             var requesterKey = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes("operator:" + userId))).ToLowerInvariant();
             var existing = await db.SupportTickets.AsNoTracking().SingleOrDefaultAsync(t => t.DeviceId == r.DeviceId && t.RequesterKey == requesterKey && t.RequestId == r.RequestId);
             if (existing is not null)
-                return existing.Origin == "operator" && existing.Subject == r.Subject.Trim() && existing.Description == r.Description.Trim() && existing.Category == r.Category && existing.Priority == r.Priority
+                return existing.Origin == "operator" && existing.Subject == r.Subject.Trim() && existing.Description == r.Description.Trim() && existing.Category == r.Category && existing.Priority == priority
                     ? Results.Ok(View(existing)) : Results.Conflict();
             var queueId = await db.SupportQueueRoutingRules.AsNoTracking()
                 .Where(rule => rule.Category == r.Category && (rule.SiteId == device.SiteId || rule.SiteId == null) &&
@@ -349,7 +355,7 @@ public static class SupportEndpoints
                 .OrderByDescending(rule => rule.SiteId != null).Select(rule => (Guid?)rule.QueueId).FirstOrDefaultAsync();
             var workflowBinding = await TicketWorkflowResolver.BindForNewTicket(db, device.SiteId);
             var ticket = new SupportTicket { DeviceId = device.Id, SiteId = device.SiteId, RequesterKey = requesterKey, RequestId = r.RequestId,
-                Origin = "operator", Subject = r.Subject.Trim(), Description = r.Description.Trim(), Category = r.Category, Priority = r.Priority,
+                Origin = "operator", Subject = r.Subject.Trim(), Description = r.Description.Trim(), Category = r.Category, Priority = priority,
                 QueueId = queueId, WorkflowId = workflowBinding.WorkflowId, WorkflowVersion = workflowBinding.WorkflowVersion };
             db.SupportTickets.Add(ticket);
             var deviceName = await db.Devices.Where(x => x.Id == device.Id).Select(x => x.Name).SingleAsync();
@@ -515,13 +521,14 @@ public static class SupportEndpoints
                 total = g.Count(),
                 open = g.Count(t => t.State == "open"),
                 inProgress = g.Count(t => t.State == "in_progress"),
-                urgent = g.Count(t => t.Priority == "urgent" && t.State != "resolved" && t.State != "closed")
+                urgent = g.Count(t => t.Priority == "p1" && t.State != "resolved" && t.State != "closed")
             }).SingleOrDefaultAsync();
             return Results.Ok(summary ?? new { total = 0, open = 0, inProgress = 0, urgent = 0 });
         });
         staff.MapGet("", async (string? state, string? search, Guid? deviceId, Guid? siteId, string? priority, string? assignee, string? category, string? queue, Guid? ticketId, HttpContext c, AppDbContext db, PermissionService p) => {
+            var canonicalPriority = string.IsNullOrEmpty(priority) ? "" : CanonicalPriority(priority);
             if((!string.IsNullOrEmpty(state) && !TicketWorkflowPolicy.IsValidStateCode(state)) || search?.Length > 200 ||
-                priority is not (null or "" or "low" or "normal" or "high" or "urgent") || assignee?.Length > 320 ||
+                (!string.IsNullOrEmpty(priority) && canonicalPriority is null) || assignee?.Length > 320 ||
                 (!string.IsNullOrEmpty(category) && !Categories.Contains(category)) ||
                 (!string.IsNullOrEmpty(queue) && queue != "unassigned" && !Guid.TryParse(queue, out _))) return Results.BadRequest();
             if (!string.IsNullOrEmpty(state))
@@ -550,7 +557,7 @@ public static class SupportEndpoints
             if(siteId.HasValue)query=query.Where(t=>t.SiteId==siteId.Value);
             if(!string.IsNullOrEmpty(state))query=query.Where(t=>t.State==state);
             if(!string.IsNullOrEmpty(term))query=query.Where(t=>t.Subject.ToLower().Contains(term)||db.Devices.Any(d=>d.Id==t.DeviceId&&d.Name.ToLower().Contains(term)));
-            if(!string.IsNullOrEmpty(priority))query=query.Where(t=>t.Priority==priority);
+            if(!string.IsNullOrEmpty(canonicalPriority))query=query.Where(t=>t.Priority==canonicalPriority);
             if(!string.IsNullOrEmpty(category))query=query.Where(t=>t.Category==category);
             if(queue == "unassigned")query=query.Where(t=>t.QueueId==null);
             else if(Guid.TryParse(queue, out var queueId))query=query.Where(t=>t.QueueId==queueId);
@@ -644,7 +651,8 @@ public static class SupportEndpoints
             if (ticket is null) return Results.NotFound();
             if (!await p.Allows(c.User.UserId(), "tickets.manage", ticket.DeviceId, siteId: ticket.SiteId)) return Results.Forbid();
             if (string.IsNullOrWhiteSpace(r.State) || r.State.Length > 20) return Results.BadRequest(new {error="Seleziona uno stato del ticket valido."});
-            if (r.UpdatePriority && !Priorities.Contains(r.Priority)) return Results.BadRequest(new { error = "Seleziona una priorità valida." });
+            var updatedPriority = r.UpdatePriority ? CanonicalPriority(r.Priority) : null;
+            if (r.UpdatePriority && updatedPriority is null) return Results.BadRequest(new { error = "Seleziona una priorità valida." });
             if (r.UpdateAssignment && r.AssigneeId?.Length > 450) return Results.BadRequest();
             if(r.Resolution?.Length>8000)return Results.BadRequest(new {error="La risposta puo contenere al massimo 8000 caratteri."});
             await using var tx = await db.Database.BeginTransactionAsync();
@@ -677,7 +685,7 @@ public static class SupportEndpoints
             }
             if ((r.UpdateQueue || r.UpdateAssignment) && queueId is not null && assigneeId is not null && !await db.SupportQueueMembers.AnyAsync(m => m.QueueId == queueId && m.UserId == assigneeId))
                 return Results.BadRequest(new { error = "L’assegnatario deve appartenere alla coda selezionata." });
-            var priority = r.UpdatePriority ? r.Priority! : ticket.Priority;
+            var priority = r.UpdatePriority ? updatedPriority! : ticket.Priority;
             var updated = await db.SupportTickets.Where(t => t.Id == id && t.Version == r.ExpectedVersion)
                 .ExecuteUpdateAsync(s => s.SetProperty(t => t.State, r.State).SetProperty(t => t.Resolution, resolution)
                     .SetProperty(t => t.Priority, priority).SetProperty(t => t.AssigneeId, assigneeId).SetProperty(t => t.QueueId, queueId)
