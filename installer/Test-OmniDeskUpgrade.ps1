@@ -27,7 +27,9 @@ function Get-ProductCode([string]$path) {
 }
 function Install-Package([string]$path,[string]$operation,[string]$name) {
     $log=Join-Path (Get-Location) "artifacts/msi-$name.log"
-    $p=Start-Process msiexec.exe -ArgumentList @($operation,('"'+$path+'"'),'/qn','/norestart','/l*v',('"'+$log+'"')) -Wait -PassThru
+    $p=Start-Process msiexec.exe -ArgumentList @($operation,('"'+$path+'"'),'/qn','/norestart','/l*v',('"'+$log+'"')) -PassThru
+    if (!$p.WaitForExit(180000)) { $p.Kill(); throw ('MSI test timeout: ' + $name) }
+    $p.Refresh()
     return $p.ExitCode
 }
 function Assert-Installed {
@@ -67,7 +69,7 @@ try {
     $fault=Join-Path $env:RUNNER_TEMP 'OmniDesk.rollback-fixture.msi'
     Copy-Item $current $fault
     $db=$installer.OpenDatabase($fault,1)
-    function Sql([string]$text) {$v=$db.OpenView($text);$v.Execute();$v.Close()}
+    function Sql([string]$text) {$v=$db.OpenView($text);try {$null=$v.Execute()} finally {$null=$v.Close();[Runtime.InteropServices.Marshal]::FinalReleaseComObject($v) | Out-Null}}
     $command=(Join-Path ([Environment]::SystemDirectory) 'cmd.exe').Replace("'","''")
     Sql "INSERT INTO ``Property`` (``Property``,``Value``) VALUES ('OmniDeskTestExe','$command')"
     Sql "INSERT INTO ``CustomAction`` (``Action``,``Type``,``Source``,``Target``) VALUES ('OmniDeskTestRollback',3122,'OmniDeskTestExe','/d /c exit 1')"
