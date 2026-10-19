@@ -175,7 +175,7 @@ public sealed class SecurityTests : IClassFixture<ApiFactory>, IAsyncLifetime
         Assert.Equal(0,viewerSummary.GetProperty("total").GetInt32());
         Assert.Equal(HttpStatusCode.BadRequest, (await scoped.PutAsJsonAsync("/api/auth/profile", new { displayName = new string('x', 81) })).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await scoped.PutAsJsonAsync("/api/auth/profile", new { displayName = "Federico Operatore" })).StatusCode);
-        await RemoteScenario.Run(admin, viewer, scoped, device, factory.Mesh);
+        await RemoteScenario.Run(factory, admin, viewer, scoped, device, factory.Mesh);
         await AgentScenario.Run(factory, admin, scoped, scopedId);
         await UserLifecycleScenario.Run(factory, admin, viewer, Password, device);
         await AccountScenario.Run(factory, admin, viewer, Password);

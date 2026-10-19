@@ -191,7 +191,7 @@ try {
  page.once('dialog',dialog=>dialog.accept());
  await page.getByRole('button',{name:'Disconnetti e revoca',exact:true}).click();
  await page.getByRole('button',{name:'Avvia sessione',exact:true}).waitFor();
- await page.getByText('Collegamento revocato. Per riconnettersi servirà una nuova sessione autorizzata.',{exact:true}).waitFor();
+ await page.getByText('Link revocato e comando di chiusura inviato. Per riconnettersi servirà una nuova sessione autorizzata.',{exact:true}).waitFor();
  await page.screenshot({path:'/previews/devices-admin-desktop.png',fullPage:true});
  await page.locator('summary').filter({hasText:'Gestione dispositivo'}).click();
  assert.equal(await page.getByLabel('Gruppo dispositivo',{exact:true}).inputValue(),'','Group change persisted');

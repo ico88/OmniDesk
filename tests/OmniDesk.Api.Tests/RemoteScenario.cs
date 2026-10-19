@@ -1,6 +1,9 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
+using OmniDesk.Api.Security;
 using OmniDesk.Remote.MeshCentral;
 using Xunit;
 namespace OmniDesk.Api.Tests;
@@ -24,14 +27,15 @@ public sealed class FakeMesh : IMeshCentralClient, IMeshProvisioningClient
     public Task<bool> ContainsNode(string meshId,string nodeId,CancellationToken ct) => Task.FromResult(ValidNode);
     public Func<Task>? DuringCreate {get;set;}
     public bool FailRevocation { get; set; }
+    public bool FailDisconnect { get; set; }
     public async Task<MeshSession> Create(string node, string capability, string actor, bool consentRequired, CancellationToken ct)
     { ConsentRequests.Add(consentRequired); OperatorNames.Add(actor); Calls.Add(capability); var callback=DuringCreate;DuringCreate=null;if(callback is not null)await callback();return new MeshSession(Guid.NewGuid().ToString(), "https://mesh.example.test/sharing?c=fixture", DateTimeOffset.UtcNow.AddMinutes(5)); }
     public Task Revoke(string node, string publicId, CancellationToken ct) { if (FailRevocation) throw new InvalidOperationException("Fixture revocation failure"); Calls.Add("revoke"); RevokedNodes.Add(node); return Task.CompletedTask; }
-    public Task Disconnect(string node, string publicId, CancellationToken ct) { Calls.Add("disconnect"); DisconnectedShares.Add(publicId); return Task.CompletedTask; }
+    public Task Disconnect(string node, string publicId, CancellationToken ct) { if (FailDisconnect) throw new InvalidOperationException("Fixture disconnect failure"); Calls.Add("disconnect"); DisconnectedShares.Add(publicId); return Task.CompletedTask; }
 }
 public static class RemoteScenario
 {
-    public static async Task Run(HttpClient admin, HttpClient viewer, HttpClient scoped, Guid device, FakeMesh mesh)
+    public static async Task Run(ApiFactory factory, HttpClient admin, HttpClient viewer, HttpClient scoped, Guid device, FakeMesh mesh)
     {
         Assert.Equal(HttpStatusCode.NoContent, (await admin.PutAsJsonAsync($"/api/admin/devices/{device}/mesh", new { nodeId = "node//abcdefghijk" })).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await viewer.PostAsJsonAsync($"/api/devices/{device}/remote-sessions", new { capability = "remote.control" })).StatusCode);
@@ -54,24 +58,35 @@ public static class RemoteScenario
         var disconnectSession = (await disconnectResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
         Assert.Equal(HttpStatusCode.Forbidden, (await viewer.PostAsync($"/api/devices/{device}/remote-sessions/{disconnectSession}/disconnect", null)).StatusCode);
         Assert.Equal(HttpStatusCode.Accepted, (await scoped.PostAsync($"/api/devices/{device}/remote-sessions/{disconnectSession}/disconnect", null)).StatusCode);
-        Assert.Single(mesh.DisconnectedShares);
+        Assert.Equal(2, mesh.DisconnectedShares.Count);
         var stillActive = await scoped.GetFromJsonAsync<JsonElement>($"/api/devices/{device}/remote-sessions");
         Assert.Equal("active", stillActive.EnumerateArray().Single(x => x.GetProperty("id").GetGuid() == disconnectSession).GetProperty("state").GetString());
+        var disconnectCount = mesh.Calls.Count(x => x == "disconnect");
         Assert.Equal(HttpStatusCode.NoContent, (await scoped.DeleteAsync($"/api/devices/{device}/remote-sessions/{disconnectSession}")).StatusCode);
+        Assert.Equal(disconnectCount + 1, mesh.Calls.Count(x => x == "disconnect"));
+        Assert.Equal(new[] { "disconnect", "revoke" }, mesh.Calls.TakeLast(2));
         var pendingResponse = await scoped.PostAsJsonAsync($"/api/devices/{device}/remote-sessions", new { capability = "remote.control" });
         Assert.Equal(HttpStatusCode.Created, pendingResponse.StatusCode);
         var pending = (await pendingResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+        mesh.FailDisconnect = true;
+        Assert.Equal(HttpStatusCode.Accepted, (await scoped.DeleteAsync($"/api/devices/{device}/remote-sessions/{pending}")).StatusCode);
+        var sessions = await scoped.GetFromJsonAsync<JsonElement>($"/api/devices/{device}/remote-sessions");
+        Assert.Equal("revocation_pending", sessions.EnumerateArray().Single(x => x.GetProperty("id").GetGuid() == pending).GetProperty("state").GetString());
+        var blockedReconnect = await scoped.PostAsJsonAsync($"/api/devices/{device}/remote-sessions", new { capability = "remote.control" });
+        Assert.Equal(HttpStatusCode.Conflict, blockedReconnect.StatusCode);
+        Assert.Equal("remote_revocation_pending", (await blockedReconnect.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
+
+        var guard = new RemoteSessionGuard(factory.Services.GetRequiredService<IServiceScopeFactory>(), NullLogger<RemoteSessionGuard>.Instance);
+        await guard.Sweep(CancellationToken.None);
+        mesh.FailDisconnect = false;
         mesh.FailRevocation = true;
-        try
-        {
-            Assert.Equal(HttpStatusCode.Accepted, (await scoped.DeleteAsync($"/api/devices/{device}/remote-sessions/{pending}")).StatusCode);
-            var sessions = await scoped.GetFromJsonAsync<JsonElement>($"/api/devices/{device}/remote-sessions");
-            Assert.Equal("revocation_pending", sessions.EnumerateArray().Single(x => x.GetProperty("id").GetGuid() == pending).GetProperty("state").GetString());
-            var blockedReconnect = await scoped.PostAsJsonAsync($"/api/devices/{device}/remote-sessions", new { capability = "remote.control" });
-            Assert.Equal(HttpStatusCode.Conflict, blockedReconnect.StatusCode);
-            Assert.Equal("remote_revocation_pending", (await blockedReconnect.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
-        }
-        finally { mesh.FailRevocation = false; }
+        await guard.Sweep(CancellationToken.None);
+        sessions = await scoped.GetFromJsonAsync<JsonElement>($"/api/devices/{device}/remote-sessions");
+        Assert.Equal("revocation_pending", sessions.EnumerateArray().Single(x => x.GetProperty("id").GetGuid() == pending).GetProperty("state").GetString());
+        mesh.FailRevocation = false;
+        var successfulRetryIndex = mesh.Calls.Count;
+        await guard.Sweep(CancellationToken.None);
+        Assert.Equal(new[] { "disconnect", "revoke" }, mesh.Calls.Skip(successfulRetryIndex).TakeLast(2));
         Assert.Equal(HttpStatusCode.NoContent, (await scoped.DeleteAsync($"/api/devices/{device}/remote-sessions/{pending}")).StatusCode);
         Assert.Equal(HttpStatusCode.NoContent, (await scoped.DeleteAsync($"/api/devices/{device}/remote-sessions/{pending}")).StatusCode);
         var afterRevocation = await scoped.PostAsJsonAsync($"/api/devices/{device}/remote-sessions", new { capability = "remote.control" });
