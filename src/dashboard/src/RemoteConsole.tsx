@@ -36,6 +36,15 @@ export function RemoteConsole({ deviceId, deviceName, capability, allowed, ready
   }, [session]);
 
   useEffect(() => {
+    if (!session || viewState !== 'loading') return;
+    const timer = window.setTimeout(() => {
+      setViewState(current => current === 'loading' ? 'error' : current);
+      setError('La sessione è autorizzata, ma MeshCentral non ha completato il caricamento. Verifica il motore remoto sul dispositivo o apri la sessione in una nuova scheda.');
+    }, 20000);
+    return () => window.clearTimeout(timer);
+  }, [session, viewState]);
+
+  useEffect(() => {
     if (expired) setViewState('expired');
   }, [expired]);
 
@@ -121,7 +130,7 @@ export function RemoteConsole({ deviceId, deviceName, capability, allowed, ready
         referrerPolicy="no-referrer"
         allow="clipboard-read; clipboard-write; fullscreen; display-capture"
         sandbox="allow-forms allow-scripts allow-same-origin allow-downloads allow-popups allow-popups-to-escape-sandbox allow-modals allow-pointer-lock"
-        onLoad={() => setViewState(current => current === 'loading' ? 'page-loaded' : current)}
+        onLoad={() => { setError(''); setViewState(current => current === 'loading' || current === 'error' ? 'page-loaded' : current); }}
       />
       <div className="remote-frame-footnote">La pagina MeshCentral è incorporata in modo isolato. Lo stato di caricamento non conferma da solo che il flusso video sia attivo.</div>
     </div> : !revoked && allowed && ready && <div className="remote-empty-state">
