@@ -1671,3 +1671,21 @@ Modifica non pubblicata e non inclusa nei job CI Windows attivi/in coda.
 I gruppi di concorrenza GitHub Actions sono stati differenziati per SHA commit,
 così un push successivo non sostituisce un job precedente ancora in attesa. I run
 Windows in corso e in coda non sono stati cancellati.
+
+### Allegati self-service nel portale — 2026-10-19
+
+Esteso `PortalScenario` per coprire consenso obbligatorio, upload multipart,
+visibilità limitata al richiedente, quarantena con download negato, e revoca
+dell'accesso al dispositivo. Esteso lo smoke Chromium sul portale reale dello
+stack isolato: carica un file innocuo, richiede consenso esplicito, attende il
+verdetto ClamAV pulito e verifica il link di download prima di proseguire con
+chat e revoca.
+
+Verifiche: `./scripts/test.sh` passato dopo aver isolato l'installazione npm in
+una copia temporanea: 82/82 test API, build dashboard e 6/6 Vitest. Anche
+`./scripts/smoke.sh --browser` è passato con migrazioni, login, ClamAV
+clean/EICAR e scenario Chromium completo, incluse le nuove verifiche degli
+allegati portale. `bash -n scripts/test.sh scripts/smoke.sh` e
+`git diff --check` passati. I run GitHub `39330690025` (Linux) e `39330689863`
+(Windows) sono passati sul commit precedente `fab9e73`; i nuovi controlli
+devono girare sul prossimo SHA. Nessun servizio LAN è stato modificato.
