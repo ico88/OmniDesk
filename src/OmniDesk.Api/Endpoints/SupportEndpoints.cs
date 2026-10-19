@@ -17,7 +17,7 @@ public sealed record ManualSupportCreate(Guid RequestId, Guid DeviceId, string S
 public sealed record SupportTicketDeviceChange(long ExpectedVersion, Guid DeviceId);
 public sealed record SupportInterventionLink(long ExpectedVersion, Guid DeviceId, string ArtifactType, Guid ArtifactId);
 public sealed record SupportInterventionCandidate(Guid Id, Guid DeviceId, string DeviceName, string ArtifactType,
-    string Label, string Capability, string State, DateTimeOffset OccurredAt);
+    string Label, string Capability, string State, DateTimeOffset OccurredAt, DateTimeOffset? CompletedAt);
 public sealed record SupportTicketDeviceView(Guid DeviceId, string Name, Guid SiteId, string SiteName, bool IsPrimary);
 public sealed record SupportTicketVersion(Guid TicketId, long ExpectedVersion);
 public sealed record BulkQueueAssignment(SupportTicketVersion[] Tickets, Guid? QueueId);
@@ -687,6 +687,7 @@ public static class SupportEndpoints
 
             string capability, label, state;
             DateTimeOffset occurredAt;
+            DateTimeOffset? completedAt = null;
             if (r.ArtifactType == "remote_session")
             {
                 var session = await db.RemoteSessions.AsNoTracking().SingleOrDefaultAsync(x => x.Id == r.ArtifactId && x.DeviceId == r.DeviceId);
@@ -713,12 +714,13 @@ public static class SupportEndpoints
                 label = "Operazione " + job.Kind;
                 state = job.State;
                 occurredAt = job.CreatedAt;
+                completedAt = job.CompletedAt;
             }
             if (!await p.Allows(userId, capability, r.DeviceId)) return Results.Forbid();
             var deviceName = await db.SupportTicketDevices.AsNoTracking().Where(x => x.TicketId == id && x.DeviceId == r.DeviceId)
                 .Select(x => x.DeviceNameSnapshot).SingleAsync();
             var payload = JsonSerializer.Serialize(new { deviceId = r.DeviceId, deviceName, artifactType = r.ArtifactType,
-                artifactId = r.ArtifactId, capability, label, state, occurredAt });
+                artifactId = r.ArtifactId, capability, label, state, occurredAt, completedAt });
             var artifactIdentity = $"\"artifactType\":\"{r.ArtifactType}\",\"artifactId\":\"{r.ArtifactId}\"";
             if (await db.SupportMessages.AnyAsync(x => x.TicketId == id && x.Kind == "rmm_intervention" && x.Body.Contains(artifactIdentity)))
             { await tx.CommitAsync(); return Results.NoContent(); }
@@ -750,14 +752,14 @@ public static class SupportEndpoints
                 .Select(x => new { x.Id, x.DeviceId, x.Capability, x.State, x.CreatedAt }).ToArrayAsync();
             var jobs = await db.UpdateJobs.AsNoTracking().Where(x => deviceIds.Contains(x.DeviceId))
                 .OrderByDescending(x => x.CreatedAt).Take(25)
-                .Select(x => new { x.Id, x.DeviceId, x.Kind, x.State, x.CreatedAt }).ToArrayAsync();
+                .Select(x => new { x.Id, x.DeviceId, x.Kind, x.State, x.CreatedAt, x.CompletedAt }).ToArrayAsync();
             var candidates = new List<SupportInterventionCandidate>();
             foreach (var session in sessions)
                 if (await p.Allows(userId, "tickets.manage", session.DeviceId) &&
                     (session.Capability is "remote.control" or "terminal" or "files") &&
                     await p.Allows(userId, session.Capability, session.DeviceId))
                     candidates.Add(new(session.Id, session.DeviceId, deviceNames[session.DeviceId],
-                        "remote_session", "Sessione " + session.Capability, session.Capability, session.State, session.CreatedAt));
+                        "remote_session", "Sessione " + session.Capability, session.Capability, session.State, session.CreatedAt, null));
             foreach (var job in jobs)
             {
                 var capability = job.Kind switch
@@ -770,7 +772,7 @@ public static class SupportEndpoints
                 };
                 if (capability.Length > 0 && await p.Allows(userId, "tickets.manage", job.DeviceId) && await p.Allows(userId, capability, job.DeviceId))
                     candidates.Add(new(job.Id, job.DeviceId, deviceNames[job.DeviceId], "update_job",
-                        "Operazione " + job.Kind, capability, job.State, job.CreatedAt));
+                        "Operazione " + job.Kind, capability, job.State, job.CreatedAt, job.CompletedAt));
             }
             var linked = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var linkedBodies = await db.SupportMessages.AsNoTracking().Where(x => x.TicketId == id && x.Kind == "rmm_intervention")
