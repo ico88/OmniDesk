@@ -49,7 +49,8 @@ public static class UpdateScenario
         Assert.Equal(HttpStatusCode.OK, diagnosticClaim.StatusCode);
         var diagnosticLease = (await diagnosticClaim.Content.ReadFromJsonAsync<UpdateLease>())!;
         Assert.Equal("diagnostics.processes", diagnosticLease.Kind);
-        var diagnosticResult = new UpdateResultRequest(diagnosticLease.LeaseId, true, false, [], DiagnosticJson: "{\"Kind\":\"diagnostics.processes\",\"CollectedAt\":\"2026-10-19T00:00:00+00:00\",\"Processes\":[]}");
+        var diagnosticResult = new UpdateResultRequest(diagnosticLease.LeaseId, true, false, [], DiagnosticJson: System.Text.Json.JsonSerializer.Serialize(new DiagnosticResult(
+            "diagnostics.processes", DateTimeOffset.UtcNow, Processes: [new ProcessDiagnostic(12345, "notepad.exe", DateTimeOffset.UtcNow.AddSeconds(-10), true)])));
         agent.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", assertion());
         Assert.Equal(HttpStatusCode.NoContent, (await agent.PostAsJsonAsync($"/api/agent/jobs/{diagnosticLease.Id}/result", diagnosticResult)).StatusCode);
         var diagnostics = await admin.GetFromJsonAsync<JsonElement[]>($"/api/devices/{device}/diagnostics");
@@ -87,6 +88,11 @@ public static class UpdateScenario
         var queuedProcess = await scoped.PostAsJsonAsync($"/api/devices/{device}/processes/actions", processAction);
         Assert.Equal(HttpStatusCode.Created, queuedProcess.StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await scoped.PostAsJsonAsync($"/api/devices/{device}/processes/actions", processAction)).StatusCode);
+        var queuedProcessId = (await queuedProcess.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+        Assert.Equal(HttpStatusCode.NoContent, (await scoped.DeleteAsync($"/api/devices/{device}/processes/jobs/{queuedProcessId}")).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await scoped.DeleteAsync($"/api/devices/{device}/processes/jobs/{queuedProcessId}")).StatusCode);
+        processAction = processAction with { RequestId = Guid.NewGuid() };
+        Assert.Equal(HttpStatusCode.Created, (await scoped.PostAsJsonAsync($"/api/devices/{device}/processes/actions", processAction)).StatusCode);
         agent.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", assertion());
         var processClaim = await agent.PostAsync("/api/agent/jobs/claim", null);
         Assert.Equal(HttpStatusCode.OK, processClaim.StatusCode);
@@ -96,6 +102,7 @@ public static class UpdateScenario
         Assert.Equal(startedAt, processLease.ProcessControl.StartedAt);
         agent.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", assertion());
         Assert.Equal(HttpStatusCode.NoContent, (await agent.PostAsJsonAsync($"/api/agent/jobs/{processLease.Id}/result", new UpdateResultRequest(processLease.LeaseId, true, false, []))).StatusCode);
-        Assert.Single(await scoped.GetFromJsonAsync<JsonElement[]>($"/api/devices/{device}/processes/jobs"));
+        var processJobs = await scoped.GetFromJsonAsync<JsonElement[]>($"/api/devices/{device}/processes/jobs");
+        Assert.Equal(2, processJobs!.Length);
     }
 }
