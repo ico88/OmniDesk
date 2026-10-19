@@ -1,0 +1,120 @@
+name: omnidesk-restore-check
+services:
+  db:
+    image: postgres:17-alpine
+    pull_policy: never
+    environment:
+      POSTGRES_DB: omnidesk
+      POSTGRES_USER: omnidesk
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    secrets: [db_password]
+    tmpfs: [/var/lib/postgresql/data]
+    volumes:
+      - ${RESTORE_BACKUP_PATH:?Set backup path}/database.dump:/backup/database.dump:ro
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U omnidesk -d omnidesk]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    networks: [restore]
+
+  restore-seed:
+    image: alpine:3.22
+    pull_policy: never
+    user: root
+    network_mode: none
+    command:
+      - sh
+      - -ec
+      - |
+        test -d /source/identity_keys
+        test -d /source/caddy_data
+        cp -a /source/identity_keys/. /keys/
+        if [ -d /source/attachments ]; then cp -a /source/attachments/. /attachments/; fi
+        cp -a /source/caddy_data/. /caddy-data/
+        chown -R 1654:1654 /keys /attachments
+        chmod 700 /keys /attachments
+        chown -R 1000:1000 /caddy-data
+        chmod 700 /caddy-data
+    volumes:
+      - ${RESTORE_BACKUP_PATH:?Set backup path}:/source:ro
+      - identity_keys:/keys
+      - attachments_data:/attachments
+      - caddy_data:/caddy-data
+
+  migrate:
+    image: ${RESTORE_API_IMAGE:-omnidesk-api:local}
+    pull_policy: never
+    command: [--migrate]
+    environment:
+      Database__Host: db
+      Database__PasswordFile: /run/secrets/db_password
+      DataProtection__Path: /keys
+      Attachments__RootPath: /attachments
+    secrets: [db_password]
+    volumes:
+      - identity_keys:/keys
+      - attachments_data:/attachments
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [restore]
+
+  api:
+    image: ${RESTORE_API_IMAGE:-omnidesk-api:local}
+    pull_policy: never
+    environment:
+      Database__Host: db
+      Database__PasswordFile: /run/secrets/db_password
+      DataProtection__Path: /keys
+      Proxy__Network: 172.29.86.0/24
+      Attachments__RootPath: /attachments
+      Attachments__ClamAvHost: clamav-not-configured
+    secrets: [db_password]
+    volumes:
+      - identity_keys:/keys
+      - attachments_data:/attachments
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [restore]
+
+  caddy:
+    image: caddy:2-alpine
+    pull_policy: never
+    volumes:
+      - ./scripts/restore-check.Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [api]
+    networks: [restore]
+
+  probe:
+    image: node:22-alpine
+    pull_policy: never
+    command: [node, /probe/restore-runtime-smoke.mjs]
+    environment:
+      RESTORE_CA_PATH: /restored-caddy/caddy/pki/authorities/local/root.crt
+      RESTORE_PROBE_HOST: caddy
+    volumes:
+      - ./scripts/restore-runtime-smoke.mjs:/probe/restore-runtime-smoke.mjs:ro
+      - caddy_data:/restored-caddy:ro
+    depends_on: [caddy]
+    networks: [restore]
+
+secrets:
+  db_password:
+    file: ${RESTORE_CHECK_DIR:?Set temporary restore check directory}/db_password
+
+volumes:
+  identity_keys:
+  attachments_data:
+  caddy_data:
+  caddy_config:
+
+networks:
+  restore:
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.29.86.0/24

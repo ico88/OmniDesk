@@ -35,5 +35,15 @@ docker compose images --format json > "$backup_path/images.json"
 git rev-parse HEAD > "$backup_path/source-revision.txt"
 printf 'Source revision records HEAD only; preserve working changes separately.\n' > "$backup_path/README.txt"
 (cd "$backup_path" && sha256sum database.dump > database.sha256)
+# Hash every regular file after collection. Checksums detect accidental damage,
+# but the manifest is not signed and does not authenticate the archive.
+if find "$backup_path" -type l -print -quit | rg -q .; then
+  echo 'Backup contains an unsupported symbolic link' >&2
+  exit 1
+fi
+(
+  cd "$backup_path"
+  find . -type f ! -name files.sha256 ! -name READY -print0 | sort -z | xargs -0 -r sha256sum > files.sha256
+)
 touch "$backup_path/READY"
 printf 'Backup completed: %s\n' "$backup_path"

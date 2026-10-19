@@ -4,6 +4,12 @@ cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.."
 if [[ $# != 1 ]]; then echo 'Usage: bash scripts/verify-backup.sh .backups/<backup-directory>' >&2; exit 1; fi
 backup_path=$(realpath -- "$1")
 [[ -f "$backup_path/READY" && -f "$backup_path/database.dump" ]] || { echo 'Incomplete backup' >&2; exit 1; }
+if [[ -f "$backup_path/files.sha256" ]]; then
+  (cd "$backup_path" && sha256sum --check --quiet files.sha256)
+  echo 'Full-file checksum manifest verified.'
+else
+  echo 'Legacy backup: full-file checksum manifest unavailable.' >&2
+fi
 (cd "$backup_path" && sha256sum --check database.sha256)
 if [[ -d "$backup_path/attachments" && -f "$backup_path/attachments.sha256" ]]; then
   (cd "$backup_path" && sha256sum --check attachments.sha256)
@@ -11,13 +17,19 @@ elif [[ -d "$backup_path/attachments" || -f "$backup_path/attachments.sha256" ]]
   echo 'Incomplete attachment backup or checksum manifest' >&2
   exit 1
 else
-  echo 'Legacy database-only backup: attachment restore is not covered.' >&2
+  echo 'Attachment backup missing: blob restore is not covered.' >&2
 fi
-export BACKUP_CHECK_FILE="$backup_path/database.dump"
 # Unique Compose project prevents simultaneous verifications from sharing a database.
 check_project="omnidesk-backup-check-$(date -u +%s)-$$"
-cleanup() { docker compose -p "$check_project" -f compose.backup-check.yaml down; }
+restore_project="omnidesk-restore-check-$(date -u +%s)-$$"
+restore_dir=''
+cleanup() {
+  docker compose -p "$restore_project" -f compose.restore-check.yaml down --volumes --remove-orphans >/dev/null 2>&1 || true
+  docker compose -p "$check_project" -f compose.backup-check.yaml down >/dev/null 2>&1 || true
+  [[ -z "$restore_dir" ]] || rm -rf -- "$restore_dir"
+}
 trap cleanup EXIT
+export BACKUP_CHECK_FILE="$backup_path/database.dump"
 docker compose -p "$check_project" -f compose.backup-check.yaml up -d --wait
 docker compose -p "$check_project" -f compose.backup-check.yaml exec -T db pg_restore --exit-on-error --no-owner --no-privileges -U postgres -d omnidesk_verify /backup/database.dump
 docker compose -p "$check_project" -f compose.backup-check.yaml exec -T db psql -v ON_ERROR_STOP=1 -U postgres -d omnidesk_verify -c 'SELECT COUNT(*) AS applied_migrations FROM "__EFMigrationsHistory"; SELECT COUNT(*) AS accounts FROM "AspNetUsers"; SELECT COUNT(*) AS devices FROM "Devices";'
@@ -32,3 +44,33 @@ if [[ -d "$backup_path/attachments" ]]; then
   echo 'Every restored attachment row references a checksum-verified blob.'
 fi
 echo 'Database restore verified in an isolated temporary PostgreSQL instance. Production unchanged.'
+
+if [[ -d "$backup_path/identity_keys" && -d "$backup_path/caddy_data" && -f "$backup_path/db_password" ]]; then
+  restore_dir=$(mktemp -d)
+  chmod 700 "$restore_dir"
+  # Compose file-backed secrets are bind-mounted; the API runs as UID 1654.
+  # The containing directory stays private (0700), while the mounted file is read-only.
+  install -m 444 -- "$backup_path/db_password" "$restore_dir/db_password"
+  export RESTORE_BACKUP_PATH="$backup_path"
+  export RESTORE_CHECK_DIR="$restore_dir"
+  docker compose -p "$restore_project" -f compose.restore-check.yaml config --quiet
+  docker compose -p "$restore_project" -f compose.restore-check.yaml up -d --wait db
+  docker compose -p "$restore_project" -f compose.restore-check.yaml run --rm --no-deps restore-seed
+  docker compose -p "$restore_project" -f compose.restore-check.yaml exec -T db sh -ec \
+    'PGPASSWORD="$(cat /run/secrets/db_password)" pg_restore --exit-on-error --no-owner --no-privileges -U omnidesk -d omnidesk /backup/database.dump'
+  docker compose -p "$restore_project" -f compose.restore-check.yaml run --rm migrate
+  docker compose -p "$restore_project" -f compose.restore-check.yaml up -d --wait api caddy
+  if ! docker compose -p "$restore_project" -f compose.restore-check.yaml run --rm probe; then
+    # Inspect logs only in memory and report exception class names, never messages or values.
+    api_logs=$(docker compose -p "$restore_project" -f compose.restore-check.yaml logs --no-color api 2>/dev/null || true)
+    exception_types=$(printf '%s' "$api_logs" | grep -Eo '(System\.)?[[:alnum:].]+Exception' | sort -u | tr '\n' ' ')
+    [[ -z "$exception_types" ]] || printf 'Sanitized API diagnostic exception types: %s\n' "$exception_types" >&2
+    exit 1
+  fi
+  docker compose -p "$restore_project" -f compose.restore-check.yaml exec -T db \
+    psql -v ON_ERROR_STOP=1 -U omnidesk -d omnidesk \
+    -c 'SELECT COUNT(*) AS applied_migrations FROM "__EFMigrationsHistory"; SELECT COUNT(*) AS accounts FROM "AspNetUsers"; SELECT COUNT(*) AS devices FROM "Devices";' >/dev/null
+  echo 'Full restore verified: database, migrations, Identity keys, HTTPS API and restored Caddy CA. Production unchanged.'
+else
+  echo 'Full application restore skipped: this backup lacks identity_keys, caddy_data, or db_password.' >&2
+fi
