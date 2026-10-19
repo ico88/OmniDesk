@@ -146,3 +146,13 @@ nello storico e non viene rieseguita automaticamente. Nessun install/reboot
 viene autorizzato da una sola scansione. Il collaudo reale va registrato a parte.
 L'accesso non presidiato dipende dalla policy server e non richiede questa
 versione per essere selezionato sulla console.
+
+### Tray e consultazione ticket 0.7.3
+
+La Tray attende la pipe locale se momentaneamente occupata dal controllo stato;
+non ritenta violazioni ACL o identita servizio. I messaggi distinguono timeout,
+identita non verificata, formato risposta ed errore Windows. Aggiornare tramite
+kit verificato quando pubblicato, chiudendo prima l'icona Tray; enrollment
+esistente conservato. Il collaudo richiede aprire e aggiornare I miei ticket
+ripetutamente mentre il polling stato rimane attivo. La correzione della
+contesa non dimostra che fosse l'unica causa dell'errore generico sul pilota.

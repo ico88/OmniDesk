@@ -128,3 +128,11 @@ Conversazione compilata e verificata con 43 xUnit, 4 Vitest e Chromium isolato;
 collaudo su ticket reale a cura dell'operatore dopo pubblicazione LAN.
 Conversazione pubblicata su LAN con migrazione applicata e verifica HTTPS/runtime
 riuscita; utente finale ancora su stato/ultima risposta nella Tray esistente.
+
+Correzione Windows 0.7.3: Tray attende la disponibilita della pipe condivisa con
+il polling invece di fallire immediatamente per ERROR_PIPE_BUSY/FILE_NOT_FOUND.
+Errori identita/ACL restano bloccanti; timeout, formato e disconnessione hanno
+messaggi distinti. La risposta HTTP 200 osservata sul server non dimostra la
+consegna IPC sul PC: causa specifica e collaudo interattivo ancora da confermare.
+Le notifiche remote sono richieste anche in non presidiato (flag 1/2/4): da
+verificare visivamente sul pilota, separatamente dalla richiesta di consenso.

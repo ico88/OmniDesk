@@ -554,3 +554,12 @@ Pubblicazione LAN riuscita: backup .backups/20261019T082343Z.4wgbTE (Mesh copiat
 python3 scripts/verify-lan.py: HTTPS/CA, readiness, pagina/asset e rifiuto anonimo
 passati. Nessuna modifica di stato su ticket reali durante il collaudo; nessun
 nuovo test client Windows o chat bidirezionale in tempo reale dichiarato.
+
+## Tray IPC 0.7.3
+
+Osservata richiesta elenco ticket HTTP 200 sul server; errore generico della
+Tray non identifica da solo la causa. Corretta contesa pipe (retry esclusivamente
+Windows 2/231, cancellabile) e messaggi diagnostici. Test dedicati coprono
+contesa/assenza transitorie, nessun retry su access denied e cancellazione.
+Notifiche remoto gia presenti per sessioni non presidiate; comparsa effettiva
+sul desktop Windows non verificabile da questo server.
