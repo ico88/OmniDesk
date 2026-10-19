@@ -1652,3 +1652,18 @@ backup verifier testato con PostgreSQL 17 temporaneo; `bash -n`, Compose standar
 Compose smoke, Compose test e Compose backup-check config, `git diff --check`
 passati. Il codice follow-up non è ancora stato pubblicato né verificato in CI;
 nessun test o servizio LAN è stato interrotto.
+
+### SD1 follow-up — notifica allegato pulito — 2026-10-19
+
+Il worker di scansione emette `ticket.attachment.ready` nell'outbox solo per un
+verdetto pulito. Il consumer crea notifiche per coda/assegnatario e collaboratori,
+ricontrolla account attivo e `tickets.view`, ed esige `tickets.note.internal` per
+notifiche relative ad allegati interni. Il payload non contiene filename, hash o
+contenuto; la dashboard distingue la notifica con icona graffetta.
+
+Lo scenario PostgreSQL verifica che un lettore scoped riceva la notifica per il
+file pubblico pulito ma non per gli allegati interni, e copre insieme il retry
+autorizzato della scansione fallita. Suite API 82/82, build dashboard e 6/6
+Vitest passati; `docker build` API e dashboard riusciti. Configurazioni Compose,
+`bash -n` e `git diff --check` passati. Modifica non pubblicata e non inclusa nei
+job CI Windows attivi/in coda.
