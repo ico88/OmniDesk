@@ -33,6 +33,11 @@ public static class LocalStatusPipe
         finally { Marshal.FreeHGlobal(memory); }
     }
 
+    // One server instance per logon also serves the status poll. Retry only transient
+    // absence/contention; ownership, identity and access failures remain fail-closed.
+    public static Task<NamedPipeClientStream> OpenVerifiedAsync(int sessionId, CancellationToken ct)
+        => PipeConnectionRetry.Open(() => OpenVerified(sessionId), ct);
+
     public static NamedPipeClientStream OpenVerified(int sessionId)
     {
         var handle = CreateFile(@"\\.\pipe\" + TrayProtocol.PipeName(sessionId), ClientRights, 0, IntPtr.Zero, 3, 0x40110000, IntPtr.Zero);

@@ -52,7 +52,7 @@ internal sealed class TrayContext : ApplicationContext
         {
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(stop.Token); timeout.CancelAfter(TimeSpan.FromSeconds(3));
             var response = await Task.Run(async () => {
-                using var pipe = LocalStatusPipe.OpenVerified(Process.GetCurrentProcess().SessionId);
+                using var pipe = await LocalStatusPipe.OpenVerifiedAsync(Process.GetCurrentProcess().SessionId, timeout.Token);
                 var request = new TrayRequest(TrayProtocol.Version, Guid.NewGuid(), TrayProtocol.StatusMethod);
                 await TrayProtocol.Write(pipe, request, timeout.Token);
                 var reply = await TrayProtocol.Read<TrayStatus>(pipe, timeout.Token);

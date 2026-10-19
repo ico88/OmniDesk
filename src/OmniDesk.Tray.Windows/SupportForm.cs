@@ -76,7 +76,7 @@ internal sealed class SupportForm : Form
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(stop.Token); timeout.CancelAfter(TimeSpan.FromSeconds(25));
         return await Task.Run(async () => {
-            using var pipe = LocalStatusPipe.OpenVerified(Process.GetCurrentProcess().SessionId);
+            using var pipe = await LocalStatusPipe.OpenVerifiedAsync(Process.GetCurrentProcess().SessionId, timeout.Token);
             await TrayProtocol.Write(pipe,request,timeout.Token,TrayProtocol.MaxSupportPayload);
             var response = await TrayProtocol.Read<TraySupportResponse>(pipe,timeout.Token,TrayProtocol.MaxSupportPayload);
             if (response.Version != TrayProtocol.Version || response.RequestId != request.RequestId) throw new InvalidDataException();
@@ -88,7 +88,18 @@ internal sealed class SupportForm : Form
         if (busy) return; busy = true;
         send.Enabled = refresh.Enabled = capture.Enabled = remove.Enabled = subject.Enabled = description.Enabled = consent.Enabled = false;
         try { await action(); }
-        catch (Exception) when (!stop.IsCancellationRequested) { result.Text = "Servizio non disponibile. Riprova tra qualche secondo."; }
+        catch (Exception e) when (!stop.IsCancellationRequested)
+        {
+            result.Text = e switch {
+                OperationCanceledException => "Il servizio non ha risposto in tempo. Premi Aggiorna ticket per riprovare.",
+                UnauthorizedAccessException => "Connessione al servizio non verificata. Contatta l'assistenza IT (IPC identita).",
+                System.ComponentModel.Win32Exception w => $"Connessione locale al servizio non riuscita (IPC Windows {w.NativeErrorCode}).",
+                System.Text.Json.JsonException => "Risposta ticket non compatibile. Contatta l'assistenza IT (IPC formato).",
+                InvalidDataException => "Risposta ticket non valida. Contatta l'assistenza IT (IPC dati).",
+                IOException => "Connessione locale interrotta. Premi Aggiorna ticket (IPC interrotta).",
+                _ => "Impossibile leggere i ticket. Contatta l'assistenza IT (" + e.GetType().Name + ")."
+            };
+        }
         catch (Exception) when (stop.IsCancellationRequested) { }
         finally
         {
