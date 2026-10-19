@@ -4,6 +4,7 @@ public sealed class EnrollmentToken
     public Guid Id { get; set; } = Guid.NewGuid();
     public string TokenHash { get; set; } = "";
     public Guid? GroupId { get; set; }
+    public Guid SiteId { get; set; }
     public string CreatedBy { get; set; } = "";
     public DateTimeOffset ExpiresAt { get; set; }
     public DateTimeOffset? UsedAt { get; set; }

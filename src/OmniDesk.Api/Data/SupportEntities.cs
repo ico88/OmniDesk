@@ -5,6 +5,7 @@ public sealed class SupportTicket
     public Guid Id { get; set; } = Guid.NewGuid();
     public Guid RequestId { get; set; }
     public Guid DeviceId { get; set; }
+    public Guid SiteId { get; set; }
     public string RequesterKey { get; set; } = "";
     public string Subject { get; set; } = "";
     public string Description { get; set; } = "";

@@ -10,7 +10,7 @@ import { Icon } from './Icon';
 
 type MetricDisk = { name: string; totalBytes: number; freeBytes: number };
 export type DeviceStatus = {
-  id: string; name: string; groupId: string | null; capabilities: string[]; online: boolean; revoked: boolean; lastSeen: string | null;
+  id: string; name: string; groupId: string | null; siteId: string | null; capabilities: string[]; online: boolean; revoked: boolean; lastSeen: string | null;
   metrics: { cpuPercent: number | null; totalMemoryBytes: number; availableMemoryBytes: number; networkReceivedBytes: number; networkSentBytes: number; uptimeSeconds: number; disks: MetricDisk[]; agentVersion?: string | null } | null;
   inventory: { operatingSystem: string; architecture: string; manufacturer: string | null; model: string | null; processor: string | null; logicalProcessors: number; software: { name: string; version: string | null; publisher: string | null }[]; warnings: string[] } | null;
 };
@@ -31,10 +31,11 @@ const versionAtLeast = (value: string | null | undefined, minimum: string) => {
   return true;
 };
 
-export function DeviceWorkspace({ device, admin, groups, onDeviceChanged, onMessage }: {
+export function DeviceWorkspace({ device, admin, groups, sites, onDeviceChanged, onMessage }: {
   device: DeviceStatus;
   admin: boolean;
   groups: Group[];
+  sites: { id: string; name: string; isArchived?: boolean }[];
   onDeviceChanged: (message: string) => Promise<void>;
   onMessage: (message: string) => void;
 }) {
@@ -108,7 +109,7 @@ export function DeviceWorkspace({ device, admin, groups, onDeviceChanged, onMess
       <div><span className="eyebrow">DISPOSITIVO</span><h2><Monitor size={22}/>{device.name}</h2><small>{inventory?.operatingSystem ?? 'Sistema operativo non disponibile'} · Ultimo contatto {device.lastSeen ? new Date(device.lastSeen).toLocaleString('it-IT') : 'mai'}</small></div>
       <span className={`status-pill ${device.revoked ? 'danger' : device.online ? 'online' : 'offline'}`}>{device.revoked ? 'Revocato' : device.online ? 'Online' : 'Offline'}</span>
     </div>
-    {admin && <details className="advanced device-management"><summary><Icon name="settings"/>Gestione dispositivo</summary><DeviceManagement key={`${device.id}:${device.name}:${device.groupId}:${device.revoked}`} device={device} groups={groups} onChanged={onDeviceChanged}/></details>}
+    {admin && <details className="advanced device-management"><summary><Icon name="settings"/>Gestione dispositivo</summary><DeviceManagement key={`${device.id}:${device.name}:${device.groupId}:${device.siteId}:${device.revoked}`} device={device} groups={groups} sites={sites} onChanged={onDeviceChanged}/></details>}
     <DeviceTabs active={activeTab} onChange={tab => { setActiveTab(tab); setError(''); }}/>
     {error && <p className="error" role="alert">{error}</p>}
 
@@ -163,7 +164,7 @@ export function DeviceWorkspace({ device, admin, groups, onDeviceChanged, onMess
       </>}
     </DevicePanel>}
 
-    {activeTab === 'tickets' && <DevicePanel id="tickets">{count('tickets.view') ? <SupportDesk key={device.id} deviceId={device.id} visibleDeviceIds={[]} onOpenDevice={async () => undefined}/> : <p>Non hai il permesso tickets.view su questo dispositivo.</p>}</DevicePanel>}
+    {activeTab === 'tickets' && <DevicePanel id="tickets">{count('tickets.view') ? <SupportDesk key={device.id} sites={sites} deviceId={device.id} visibleDeviceIds={[]} onOpenDevice={async () => undefined}/> : <p>Non hai il permesso tickets.view su questo dispositivo.</p>}</DevicePanel>}
 
     {(['processes', 'services', 'events'] as const).includes(activeTab as 'processes' | 'services' | 'events') && <DevicePanel id={activeTab}>
       {(() => {

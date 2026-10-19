@@ -349,9 +349,14 @@ namespace OmniDesk.Api.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
+                    b.Property<Guid>("SiteId")
+                        .HasColumnType("uuid");
+
                     b.HasKey("Id");
 
                     b.HasIndex("GroupId");
+
+                    b.HasIndex("SiteId");
 
                     b.ToTable("Devices");
                 });
@@ -458,6 +463,9 @@ namespace OmniDesk.Api.Migrations
                     b.Property<DateTimeOffset?>("RevokedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid>("SiteId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("TokenHash")
                         .IsRequired()
                         .HasColumnType("text");
@@ -468,6 +476,8 @@ namespace OmniDesk.Api.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("GroupId");
+
+                    b.HasIndex("SiteId");
 
                     b.HasIndex("TokenHash")
                         .IsUnique();
@@ -696,6 +706,9 @@ namespace OmniDesk.Api.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<Guid?>("SiteId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("UserId")
                         .IsRequired()
                         .HasColumnType("text");
@@ -708,16 +721,46 @@ namespace OmniDesk.Api.Migrations
 
                     b.HasIndex("RoleId");
 
+                    b.HasIndex("SiteId");
+
                     b.HasIndex("UserId", "RoleId", "DeviceId")
                         .IsUnique();
 
                     b.HasIndex("UserId", "RoleId", "GroupId")
                         .IsUnique();
 
+                    b.HasIndex("UserId", "RoleId", "SiteId")
+                        .IsUnique();
+
                     b.ToTable("ScopeGrants", t =>
                         {
-                            t.HasCheckConstraint("CK_ScopeGrant_OneScope", "(\"GroupId\" IS NOT NULL) <> (\"DeviceId\" IS NOT NULL)");
+                            t.HasCheckConstraint("CK_ScopeGrant_OneScope", "num_nonnulls(\"GroupId\", \"DeviceId\", \"SiteId\") = 1");
                         });
+                });
+
+            modelBuilder.Entity("OmniDesk.Api.Data.Site", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsArchived")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("Sites");
                 });
 
             modelBuilder.Entity("OmniDesk.Api.Data.SupportMessage", b =>
@@ -797,6 +840,9 @@ namespace OmniDesk.Api.Migrations
                     b.Property<byte[]>("Screenshot")
                         .HasColumnType("bytea");
 
+                    b.Property<Guid>("SiteId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("State")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -814,6 +860,8 @@ namespace OmniDesk.Api.Migrations
                         .HasColumnType("bigint");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("SiteId");
 
                     b.HasIndex("DeviceId", "CreatedAt");
 
@@ -944,6 +992,12 @@ namespace OmniDesk.Api.Migrations
                         .WithMany()
                         .HasForeignKey("GroupId")
                         .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OmniDesk.Api.Data.Site", null)
+                        .WithMany()
+                        .HasForeignKey("SiteId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("OmniDesk.Api.Data.DeviceCredential", b =>
@@ -979,6 +1033,12 @@ namespace OmniDesk.Api.Migrations
                         .WithMany()
                         .HasForeignKey("GroupId")
                         .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OmniDesk.Api.Data.Site", null)
+                        .WithMany()
+                        .HasForeignKey("SiteId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("OmniDesk.Api.Data.MeshDeviceMapping", b =>
@@ -1035,6 +1095,11 @@ namespace OmniDesk.Api.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("OmniDesk.Api.Data.Site", null)
+                        .WithMany()
+                        .HasForeignKey("SiteId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("OmniDesk.Api.Data.AppUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")
@@ -1056,6 +1121,12 @@ namespace OmniDesk.Api.Migrations
                     b.HasOne("OmniDesk.Api.Data.Device", null)
                         .WithMany()
                         .HasForeignKey("DeviceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OmniDesk.Api.Data.Site", null)
+                        .WithMany()
+                        .HasForeignKey("SiteId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

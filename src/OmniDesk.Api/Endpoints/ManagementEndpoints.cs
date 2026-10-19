@@ -8,14 +8,16 @@ namespace OmniDesk.Api.Endpoints;
 public sealed record BrandingRequest(string Name, string LogoUrl, string PrimaryColor, string Theme);
 public sealed record CreateUserRequest(string Email, string Password, string? Role);
 public sealed record CreateRoleRequest(string Name, string[] Permissions);
-public sealed record GrantRequest(string UserId, string Role, Guid? GroupId, Guid? DeviceId);
+public sealed record GrantRequest(string UserId, string Role, Guid? GroupId, Guid? DeviceId, Guid? SiteId = null);
+public sealed record SiteRequest(string Name);
+public sealed record SiteEditRequest(string Name, string ExpectedName, bool IsArchived);
 public static class ManagementEndpoints
 {
     public static void MapManagementEndpoints(this WebApplication app)
     {
         var api = app.MapGroup("/api").RequireAuthorization();
         api.MapGet("/devices", async (HttpContext c, PermissionService p) =>
-            Results.Ok(await p.VisibleDevices(c.User.UserId()).AsNoTracking().Select(x => new { x.Id, x.Name, x.GroupId }).ToListAsync()));
+            Results.Ok(await p.VisibleDevices(c.User.UserId()).AsNoTracking().Select(x => new { x.Id, x.Name, x.GroupId, x.SiteId }).ToListAsync()));
         api.MapGet("/branding", async (AppDbContext db) => Results.Ok(await db.Branding.AsNoTracking().SingleAsync()));
         api.MapPut("/branding", async (BrandingRequest r, HttpContext c, AppDbContext db, PermissionService p) => {
             if (!await p.Allows(c.User.UserId(), "administration")) return Results.Forbid();
@@ -31,6 +33,30 @@ public static class ManagementEndpoints
         var admin = api.MapGroup("/admin").AddEndpointFilter(async (ctx, next) => {
             var p = ctx.HttpContext.RequestServices.GetRequiredService<PermissionService>();
             return await p.Allows(ctx.HttpContext.User.UserId(), "administration") ? await next(ctx) : Results.Forbid();
+        });
+        admin.MapGet("/sites", async (AppDbContext db) => Results.Ok(await db.Sites.AsNoTracking().OrderBy(x => x.Name).Select(x => new { x.Id, x.Name, x.IsArchived, deviceCount = db.Devices.Count(d => d.SiteId == x.Id), ticketCount = db.SupportTickets.Count(t => t.SiteId == x.Id) }).ToListAsync()));
+        admin.MapPost("/sites", async (SiteRequest r, HttpContext c, AppDbContext db) => {
+            var name = r.Name?.Trim();
+            if (string.IsNullOrWhiteSpace(name) || name.Length > 200) return Results.BadRequest();
+            if (await db.Sites.AnyAsync(x => x.Name == name)) return Results.Conflict();
+            var site = new Site { Name = name };
+            db.Sites.Add(site); db.AuditEvents.Add(Event(c, "site.create", site.Id.ToString()));
+            try { await db.SaveChangesAsync(); } catch (DbUpdateException e) when (e.InnerException is Npgsql.PostgresException { SqlState: "23505" }) { return Results.Conflict(); }
+            return Results.Created($"/api/admin/sites/{site.Id}", new { site.Id, site.Name, site.IsArchived });
+        });
+        admin.MapPut("/sites/{id:guid}", async (Guid id, SiteEditRequest r, HttpContext c, AppDbContext db) => {
+            var name = r.Name?.Trim();
+            if (string.IsNullOrWhiteSpace(name) || name.Length > 200 || string.IsNullOrWhiteSpace(r.ExpectedName)) return Results.BadRequest();
+            var site = await db.Sites.SingleOrDefaultAsync(x => x.Id == id);
+            if (site is null) return Results.NotFound();
+            if (site.Name != r.ExpectedName) return Results.Conflict();
+            if (r.IsArchived && !site.IsArchived && await db.Devices.AnyAsync(x => x.SiteId == id)) return Results.Conflict(new { error = "Sposta prima tutti i dispositivi assegnati alla sede." });
+            if (await db.Sites.AnyAsync(x => x.Id != id && x.Name == name)) return Results.Conflict();
+            if (site.Name == name && site.IsArchived == r.IsArchived) return Results.NoContent();
+            site.Name = name; site.IsArchived = r.IsArchived;
+            db.AuditEvents.Add(Event(c, r.IsArchived ? "site.archive" : "site.update", id.ToString()));
+            try { await db.SaveChangesAsync(); } catch (DbUpdateException e) when (e.InnerException is Npgsql.PostgresException { SqlState: "23505" }) { return Results.Conflict(); }
+            return Results.NoContent();
         });
         admin.MapGet("/roles", async (AppDbContext db) => {
             var roles = await db.Roles.AsNoTracking().ToListAsync();
@@ -72,12 +98,13 @@ public static class ManagementEndpoints
         admin.MapGet("/grants", async (AppDbContext db) => Results.Ok(await db.ScopeGrants.AsNoTracking().ToListAsync()));
         admin.MapPost("/grants", async (GrantRequest r, HttpContext c, AppDbContext db) => {
             var role = await db.Roles.SingleOrDefaultAsync(x => x.Name == r.Role);
-            if (role is null || (r.GroupId is null) == (r.DeviceId is null)) return Results.BadRequest();
+            if (role is null || new[] { r.GroupId is not null, r.DeviceId is not null, r.SiteId is not null }.Count(x => x) != 1) return Results.BadRequest();
             if (!await db.Users.AnyAsync(x => x.Id == r.UserId) ||
                 (r.GroupId is not null && !await db.DeviceGroups.AnyAsync(x => x.Id == r.GroupId)) ||
-                (r.DeviceId is not null && !await db.Devices.AnyAsync(x => x.Id == r.DeviceId))) return Results.BadRequest();
-            if (await db.ScopeGrants.AnyAsync(x => x.UserId == r.UserId && x.RoleId == role.Id && x.GroupId == r.GroupId && x.DeviceId == r.DeviceId)) return Results.Conflict();
-            var grant = new ScopeGrant { UserId = r.UserId, RoleId = role.Id, GroupId = r.GroupId, DeviceId = r.DeviceId };
+                (r.DeviceId is not null && !await db.Devices.AnyAsync(x => x.Id == r.DeviceId)) ||
+                (r.SiteId is not null && !await db.Sites.AnyAsync(x => x.Id == r.SiteId && !x.IsArchived))) return Results.BadRequest();
+            if (await db.ScopeGrants.AnyAsync(x => x.UserId == r.UserId && x.RoleId == role.Id && x.GroupId == r.GroupId && x.DeviceId == r.DeviceId && x.SiteId == r.SiteId)) return Results.Conflict();
+            var grant = new ScopeGrant { UserId = r.UserId, RoleId = role.Id, GroupId = r.GroupId, DeviceId = r.DeviceId, SiteId = r.SiteId };
             db.ScopeGrants.Add(grant); db.AuditEvents.Add(Event(c, "grant.create", grant.Id.ToString()));
             try { await db.SaveChangesAsync(); }
             catch (DbUpdateException e) when (e.InnerException is Npgsql.PostgresException { SqlState: "23505" }) { return Results.Conflict(); }

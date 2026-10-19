@@ -24,7 +24,7 @@ public sealed class PermissionService(AppDbContext db)
         where ur.UserId == userId && !u.IsDisabled
         select rp.Permission).Distinct().ToArrayAsync();
 
-    public async Task<bool> Allows(string userId, string permission, Guid? deviceId = null, Guid? groupId = null)
+    public async Task<bool> Allows(string userId, string permission, Guid? deviceId = null, Guid? groupId = null, Guid? siteId = null)
     {
         if (!await db.Users.AnyAsync(u => u.Id == userId && !u.IsDisabled)) return false;
         if ((await Global(userId)).Contains(permission)) return true;
@@ -32,13 +32,14 @@ public sealed class PermissionService(AppDbContext db)
         {
             var device = await db.Devices.AsNoTracking().SingleOrDefaultAsync(x => x.Id == deviceId);
             if (device is null) return false;
-            groupId = device.GroupId;
+            groupId ??= device.GroupId;
+            siteId ??= device.SiteId;
         }
-        if (deviceId is null && groupId is null) return false;
+        if (deviceId is null && groupId is null && siteId is null) return false;
         return await (from g in db.ScopeGrants
                       join p in db.RolePermissions on g.RoleId equals p.RoleId
                       where g.UserId == userId && p.Permission == permission &&
-                      ((deviceId != null && g.DeviceId == deviceId) || (groupId != null && g.GroupId == groupId))
+                      ((deviceId != null && g.DeviceId == deviceId) || (groupId != null && g.GroupId == groupId) || (siteId != null && g.SiteId == siteId))
                       select g.Id).AnyAsync();
     }
     public IQueryable<Device> VisibleDevices(string userId) => db.Devices.Where(d => db.Users.Any(u => u.Id == userId && !u.IsDisabled) && (
@@ -46,7 +47,7 @@ public sealed class PermissionService(AppDbContext db)
          where ur.UserId == userId && rp.Permission == "view" select ur.RoleId).Any() ||
         (from g in db.ScopeGrants join rp in db.RolePermissions on g.RoleId equals rp.RoleId
          where g.UserId == userId && rp.Permission == "view" &&
-         (g.DeviceId == d.Id || (d.GroupId != null && g.GroupId == d.GroupId)) select g.Id).Any()));
+         (g.DeviceId == d.Id || (d.GroupId != null && g.GroupId == d.GroupId) || g.SiteId == d.SiteId) select g.Id).Any()));
 }
 public static class UserIdentity
 {

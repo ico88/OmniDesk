@@ -42,6 +42,8 @@ public static class SupportEndpoints
             await using var tx = await db.Database.BeginTransactionAsync();
             await DeviceOperationLock.Acquire(db, id);
             if (!await db.DeviceCredentials.AnyAsync(x => x.DeviceId == id && x.RevokedAt == null)) return Results.Unauthorized();
+            var siteId = await db.Devices.Where(x => x.Id == id).Select(x => x.SiteId).SingleOrDefaultAsync();
+            if (siteId == Guid.Empty) return Results.Conflict();
             var previous = await db.SupportTickets.AsNoTracking().SingleOrDefaultAsync(t => t.DeviceId == id && t.RequesterKey == r.RequesterKey && t.RequestId == r.Ticket.RequestId);
             if (previous != null)
             {
@@ -52,7 +54,7 @@ public static class SupportEndpoints
             var cutoff = DateTimeOffset.UtcNow.AddMinutes(-5);
             if (await db.SupportTickets.CountAsync(t => t.DeviceId == id && t.CreatedAt > cutoff) >= 10)
                 return Results.StatusCode(429);
-            var ticket = new SupportTicket { DeviceId = id, RequesterKey = r.RequesterKey, RequestId = r.Ticket.RequestId,
+            var ticket = new SupportTicket { DeviceId = id, SiteId = siteId, RequesterKey = r.RequesterKey, RequestId = r.Ticket.RequestId,
                 Subject = r.Ticket.Subject.Trim(), Description = r.Ticket.Description.Trim(), Screenshot = screenshot };
             db.SupportTickets.Add(ticket);
             db.AuditEvents.Add(new AuditEvent { Action = "ticket.create", Target = ticket.Id.ToString() });
@@ -61,20 +63,22 @@ public static class SupportEndpoints
             return Results.Created($"/api/support/{ticket.Id}", View(ticket));
         });
         var staff = app.MapGroup("/api/support").RequireAuthorization();
-        staff.MapGet("", async (string? state, string? search, Guid? deviceId, HttpContext c, AppDbContext db, PermissionService p) => {
+        staff.MapGet("", async (string? state, string? search, Guid? deviceId, Guid? siteId, HttpContext c, AppDbContext db, PermissionService p) => {
             if(state is not (null or "" or "open" or "in_progress" or "resolved" or "closed") || search?.Length > 200) return Results.BadRequest();
             if(deviceId.HasValue && !await p.Allows(c.User.UserId(), "tickets.view", deviceId)) return Results.Forbid();
+            if(siteId.HasValue && !await p.Allows(c.User.UserId(), "tickets.view", siteId: siteId)) return Results.Forbid();
             var term=search?.Trim().ToLowerInvariant();
             var global = (await p.Global(c.User.UserId())).Contains("tickets.view");
             var grants = from g in db.ScopeGrants join permission in db.RolePermissions on g.RoleId equals permission.RoleId
                          where g.UserId == c.User.UserId() && permission.Permission == "tickets.view" select g;
-            var query = db.SupportTickets.AsNoTracking().Where(t => db.Users.Any(u => u.Id == c.User.UserId() && !u.IsDisabled) && (global || db.Devices.Any(d => d.Id == t.DeviceId &&
-                grants.Any(g => g.DeviceId == d.Id || (d.GroupId != null && g.GroupId == d.GroupId)))));
+            var query = db.SupportTickets.AsNoTracking().Where(t => db.Users.Any(u => u.Id == c.User.UserId() && !u.IsDisabled) && (global ||
+                grants.Any(g => g.SiteId == t.SiteId) || db.Devices.Any(d => d.Id == t.DeviceId && grants.Any(g => g.DeviceId == d.Id || (d.GroupId != null && g.GroupId == d.GroupId)))));
             if(deviceId.HasValue)query=query.Where(t=>t.DeviceId==deviceId.Value);
+            if(siteId.HasValue)query=query.Where(t=>t.SiteId==siteId.Value);
             if(!string.IsNullOrEmpty(state))query=query.Where(t=>t.State==state);
             if(!string.IsNullOrEmpty(term))query=query.Where(t=>t.Subject.ToLower().Contains(term)||db.Devices.Any(d=>d.Id==t.DeviceId&&d.Name.ToLower().Contains(term)));
             return Results.Ok(await query.OrderByDescending(t => t.CreatedAt).Take(100)
-                .Select(t => new {t.Id,t.DeviceId,deviceName=db.Devices.Where(d=>d.Id==t.DeviceId).Select(d=>d.Name).FirstOrDefault(),t.Subject,t.Description,t.State,t.Resolution,t.Version,t.CreatedAt,t.UpdatedAt,hasScreenshot=t.Screenshot != null}).ToArrayAsync());
+                .Select(t => new {t.Id,t.DeviceId,t.SiteId,deviceName=db.Devices.Where(d=>d.Id==t.DeviceId).Select(d=>d.Name).FirstOrDefault(),siteName=db.Sites.Where(s=>s.Id==t.SiteId).Select(s=>s.Name).FirstOrDefault(),t.Subject,t.Description,t.State,t.Resolution,t.Version,t.CreatedAt,t.UpdatedAt,hasScreenshot=t.Screenshot != null}).ToArrayAsync());
         });
         staff.MapPut("/{id:guid}", async (Guid id, SupportStaffEdit r, HttpContext c, AppDbContext db, PermissionService p) => {
             var ticket = await db.SupportTickets.AsNoTracking().SingleOrDefaultAsync(t => t.Id == id);
@@ -106,7 +110,7 @@ public static class SupportEndpoints
             if(before is <=0)return Results.BadRequest();
             var ticket=await db.SupportTickets.AsNoTracking().SingleOrDefaultAsync(t=>t.Id==id);
             if(ticket is null)return Results.NotFound();
-            if(!await p.Allows(c.User.UserId(),"tickets.view",ticket.DeviceId))return Results.Forbid();
+            if(!await p.Allows(c.User.UserId(),"tickets.view",ticket.DeviceId,siteId:ticket.SiteId))return Results.Forbid();
             var query=db.SupportMessages.AsNoTracking().Where(m=>m.TicketId==id);
             if(before.HasValue)query=query.Where(m=>m.Id<before.Value);
             var rows=await query.OrderByDescending(m=>m.Id).Take(100)
@@ -119,7 +123,7 @@ public static class SupportEndpoints
         staff.MapGet("/{id:guid}/screenshot", async (Guid id, bool? inline, HttpContext c, AppDbContext db, PermissionService p) => {
             var ticket = await db.SupportTickets.AsNoTracking().SingleOrDefaultAsync(t => t.Id == id);
             if (ticket is null) return Results.NotFound();
-            if (!await p.Allows(c.User.UserId(), "tickets.view", ticket.DeviceId)) return Results.Forbid();
+            if (!await p.Allows(c.User.UserId(), "tickets.view", ticket.DeviceId, siteId: ticket.SiteId)) return Results.Forbid();
             if (ticket.Screenshot is null) return Results.NotFound();
             db.AuditEvents.Add(new AuditEvent { ActorId = c.User.UserId(), Action = inline is true ? "ticket.screenshot.view" : "ticket.screenshot.download", Target = id.ToString() });
             await db.SaveChangesAsync();

@@ -8,7 +8,7 @@ using OmniDesk.Api.Security;
 using OmniDesk.Contracts;
 
 namespace OmniDesk.Api.Endpoints;
-public sealed record TokenRequest(Guid? GroupId, int ExpiresInMinutes = 30);
+public sealed record TokenRequest(Guid? GroupId, int ExpiresInMinutes = 30, Guid? SiteId = null);
 public sealed record GroupRequest(string Name);
 public static class AgentEndpoints
 {
@@ -25,15 +25,16 @@ public static class AgentEndpoints
             await db.SaveChangesAsync(); return Results.Created($"/api/admin/groups/{group.Id}", group);
         });
         admin.MapPost("/enrollment-tokens", async (TokenRequest r, HttpContext c, AppDbContext db) => {
-            if (r.ExpiresInMinutes is < 1 or > 1440 || (r.GroupId is not null && !await db.DeviceGroups.AnyAsync(x => x.Id == r.GroupId))) return Results.BadRequest();
+            var selectedSite = r.SiteId ?? await db.Sites.Where(x => !x.IsArchived).OrderBy(x => x.CreatedAt).Select(x => x.Id).FirstOrDefaultAsync();
+            if (r.ExpiresInMinutes is < 1 or > 1440 || selectedSite == Guid.Empty || !await db.Sites.AnyAsync(x => x.Id == selectedSite && !x.IsArchived) || (r.GroupId is not null && !await db.DeviceGroups.AnyAsync(x => x.Id == r.GroupId))) return Results.BadRequest();
             var secret = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
-            var token = new EnrollmentToken { TokenHash = Hash(secret), GroupId = r.GroupId, CreatedBy = c.User.UserId(), ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(r.ExpiresInMinutes) };
+            var token = new EnrollmentToken { TokenHash = Hash(secret), GroupId = r.GroupId, SiteId = selectedSite, CreatedBy = c.User.UserId(), ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(r.ExpiresInMinutes) };
             db.EnrollmentTokens.Add(token); db.AuditEvents.Add(Audit(c.User.UserId(), "enrollment.issue", token.Id));
             await db.SaveChangesAsync();
             return Results.Created($"/api/admin/enrollment-tokens/{token.Id}", new { token.Id, token.ExpiresAt, token = secret });
         });
         admin.MapGet("/enrollment-tokens", async (AppDbContext db) => Results.Ok(await db.EnrollmentTokens.AsNoTracking().OrderByDescending(x => x.ExpiresAt)
-            .Take(100).Select(x => new { x.Id, x.GroupId, x.ExpiresAt, x.UsedAt, x.RevokedAt }).ToListAsync()));
+            .Take(100).Select(x => new { x.Id, x.GroupId, x.SiteId, x.ExpiresAt, x.UsedAt, x.RevokedAt }).ToListAsync()));
         admin.MapDelete("/enrollment-tokens/{id:guid}", async (Guid id, HttpContext c, AppDbContext db) => {
             var token = await db.EnrollmentTokens.FindAsync(id); if (token is null) return Results.NotFound();
             token.RevokedAt = DateTimeOffset.UtcNow; db.AuditEvents.Add(Audit(c.User.UserId(), "enrollment.revoke", id));
@@ -47,11 +48,11 @@ public static class AgentEndpoints
             var hash = Hash(r.Token); var now = DateTimeOffset.UtcNow;
             await using var tx = await db.Database.BeginTransactionAsync();
             var enrollment = await db.EnrollmentTokens.AsNoTracking().SingleOrDefaultAsync(x => x.TokenHash == hash);
-            if (enrollment is null) return Results.Unauthorized();
+            if (enrollment is null || !await db.Sites.AnyAsync(x => x.Id == enrollment.SiteId && !x.IsArchived)) return Results.Unauthorized();
             var consumed = await db.EnrollmentTokens.Where(x => x.Id == enrollment.Id && x.UsedAt == null && x.RevokedAt == null && x.ExpiresAt > now)
                 .ExecuteUpdateAsync(s => s.SetProperty(x => x.UsedAt, now));
             if (consumed != 1) return Results.Unauthorized();
-            var device = new Device { Id = Guid.NewGuid(), Name = r.Name.Trim(), GroupId = enrollment.GroupId };
+            var device = new Device { Id = Guid.NewGuid(), Name = r.Name.Trim(), GroupId = enrollment.GroupId, SiteId = enrollment.SiteId };
             db.Devices.Add(device); db.DeviceCredentials.Add(new DeviceCredential { DeviceId = device.Id, PublicKeyPem = r.PublicKeyPem });
             db.AuditEvents.Add(Audit(null, "device.enroll", device.Id)); await db.SaveChangesAsync(); await tx.CommitAsync();
             return Results.Created($"/api/devices/{device.Id}", new EnrollmentResponse(device.Id));
@@ -106,7 +107,7 @@ public static class AgentEndpoints
             var revoked = await db.DeviceCredentials.AnyAsync(x => x.DeviceId == id && x.RevokedAt != null);
             var capabilities = new List<string>();
             foreach (var capability in Permissions.All) if (await p.Allows(c.User.UserId(), capability, id)) capabilities.Add(capability);
-            return Results.Ok(new { device.Id, device.Name, device.GroupId, revoked, capabilities,
+            return Results.Ok(new { device.Id, device.Name, device.GroupId, device.SiteId, revoked, capabilities,
                 lastSeen = metrics?.ReceivedAt, online = !revoked && metrics?.ReceivedAt > DateTimeOffset.UtcNow.AddMinutes(-3),
                 metrics = metrics is null ? null : JsonSerializer.Deserialize<MetricsRequest>(metrics.Payload),
                 inventoryAt = inventory?.ReceivedAt, inventory = inventory is null ? null : JsonSerializer.Deserialize<InventoryRequest>(inventory.Payload) });

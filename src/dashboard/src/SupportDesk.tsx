@@ -2,12 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from './api';
 import { Icon } from './Icon';
 
-type Ticket = { id:string; deviceId:string; deviceName:string|null; subject:string; description:string; state:string; resolution:string|null; version:number; createdAt:string; hasScreenshot:boolean };
+type Ticket = { id:string; deviceId:string; siteId:string; deviceName:string|null; siteName:string|null; subject:string; description:string; state:string; resolution:string|null; version:number; createdAt:string; hasScreenshot:boolean };
 type Message = {id:number;kind:string;body:string;fromState:string|null;toState:string|null;createdAt:string;isImported:boolean};
 type Thread = {version:number;state:string;resolution:string|null;canReply:boolean;hasMore:boolean;oldestId:number|null;messages:Message[]};
 const labels: Record<string,string> = {open:'Aperto',in_progress:'In lavorazione',resolved:'Risolto',closed:'Chiuso'};
 const date=(value:string)=>new Date(value).toLocaleString('it-IT');
-export function SupportDesk({visibleDeviceIds,onOpenDevice,deviceId}:{visibleDeviceIds:string[];onOpenDevice:(id:string)=>Promise<void>;deviceId?:string}) {
+export function SupportDesk({visibleDeviceIds,onOpenDevice,deviceId,sites=[]}:{visibleDeviceIds:string[];onOpenDevice:(id:string)=>Promise<void>;deviceId?:string;sites?:{id:string;name:string;isArchived?:boolean}[]}) {
   const [tickets,setTickets] = useState<Ticket[]>([]);
   const [error,setError] = useState('');
   const [busy,setBusy] = useState(false);
@@ -15,13 +15,14 @@ export function SupportDesk({visibleDeviceIds,onOpenDevice,deviceId}:{visibleDev
   const [thread,setThread]=useState<Thread|null>(null);
   const [filterState,setFilterState]=useState('');
   const [search,setSearch]=useState('');
+  const [siteFilter,setSiteFilter]=useState('');
   const [state,setState] = useState('open');
   const [resolution,setResolution] = useState('');
   const panel=useRef<HTMLElement>(null);
   const reply=useRef<HTMLTextAreaElement>(null);
   const preview=useRef<HTMLDialogElement>(null);
   const needsReply=(state==='resolved'||state==='closed')&&!selected?.resolution;
-  async function load() { const query=new URLSearchParams();if(filterState)query.set('state',filterState);if(search.trim())query.set('search',search.trim());if(deviceId)query.set('deviceId',deviceId);setTickets(await api<Ticket[]>('/support?'+query.toString())); }
+  async function load() { const query=new URLSearchParams();if(filterState)query.set('state',filterState);if(search.trim())query.set('search',search.trim());if(deviceId)query.set('deviceId',deviceId);if(siteFilter)query.set('siteId',siteFilter);setTickets(await api<Ticket[]>('/support?'+query.toString())); }
   async function loadThread(ticket:Ticket,before?:number) {
     const data=await api<Thread>(`/support/${ticket.id}/messages${before?'?before='+before:''}`);
     if(before){setThread(old=>old?{...old,hasMore:data.hasMore,oldestId:data.oldestId,messages:[...data.messages,...old.messages]}:data);return;}
@@ -40,11 +41,12 @@ export function SupportDesk({visibleDeviceIds,onOpenDevice,deviceId}:{visibleDev
     <form className="support-toolbar" onSubmit={e=>{e.preventDefault();void work(load);}}>
       <label className="search-field"><Icon name="search"/><input aria-label="Cerca richieste" maxLength={200} placeholder="Oggetto o nome del computer…" value={search} onChange={e=>setSearch(e.target.value)}/></label>
       <label className="filter-field">Stato richieste<select aria-label="Filtra stato richieste" value={filterState} onChange={e=>setFilterState(e.target.value)}><option value="">Tutti gli stati</option>{Object.entries(labels).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label>
+      {!deviceId&&sites.length>0&&<label className="filter-field">Sede<select aria-label="Filtra sede ticket" value={siteFilter} onChange={e=>setSiteFilter(e.target.value)}><option value="">Tutte le sedi autorizzate</option>{sites.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label>}
       <button disabled={busy}><Icon name="search"/>Filtra</button>
       <button className="secondary" type="button" disabled={busy} onClick={()=>void work(load)}><Icon name="refresh"/>Aggiorna richieste</button>
     </form>
-    <div className="table-wrap"><table><thead><tr><th>Data</th><th>Oggetto</th><th>Stato</th><th>Dispositivo</th><th>Dettagli</th></tr></thead>
-      <tbody>{tickets.map(t=><tr key={t.id}><td>{date(t.createdAt)}</td><td>{t.subject}</td><td><span className={`status-pill ${t.state==='resolved'||t.state==='closed'?'online':'offline'}`}>{labels[t.state]??t.state}</span></td><td>{visibleDeviceIds.includes(t.deviceId)?<button className="device-link" title="Apri scheda dispositivo" disabled={busy} onClick={()=>void work(()=>onOpenDevice(t.deviceId))}><Icon name="devices" size={17}/>{t.deviceName||'Dispositivo non disponibile'}<Icon name="arrow" size={14}/></button>:<span className="device-name"><Icon name="devices" size={17}/>{t.deviceName||'Dispositivo non disponibile'}</span>}</td><td><button disabled={busy} onClick={()=>{setSelected(t);setThread(null);setState(t.state);setResolution('');void work(()=>loadThread(t));}}>Apri ticket</button></td></tr>)}</tbody></table></div>
+    <div className="table-wrap"><table><thead><tr><th>Data</th><th>Oggetto</th><th>Stato</th><th>Dispositivo</th><th>Sede</th><th>Dettagli</th></tr></thead>
+      <tbody>{tickets.map(t=><tr key={t.id}><td>{date(t.createdAt)}</td><td>{t.subject}</td><td><span className={`status-pill ${t.state==='resolved'||t.state==='closed'?'online':'offline'}`}>{labels[t.state]??t.state}</span></td><td>{visibleDeviceIds.includes(t.deviceId)?<button className="device-link" title="Apri scheda dispositivo" disabled={busy} onClick={()=>void work(()=>onOpenDevice(t.deviceId))}><Icon name="devices" size={17}/>{t.deviceName||'Dispositivo non disponibile'}<Icon name="arrow" size={14}/></button>:<span className="device-name"><Icon name="devices" size={17}/>{t.deviceName||'Dispositivo non disponibile'}</span>}</td><td>{t.siteName||'Sede non disponibile'}</td><td><button disabled={busy} onClick={()=>{setSelected(t);setThread(null);setState(t.state);setResolution('');void work(()=>loadThread(t));}}>Apri ticket</button></td></tr>)}</tbody></table></div>
     {!tickets.length&&<p>Nessuna richiesta corrisponde ai filtri o ai tuoi ambiti.</p>}
     {selected&&<section ref={panel} className="ticket-conversation" aria-label="Conversazione ticket">
       <div className="section-heading"><div><span className="eyebrow">CONVERSAZIONE</span><h3>{selected.subject}</h3><span className="device-name"><Icon name="devices" size={16}/>{selected.deviceName||'Dispositivo non disponibile'}</span></div><button className="secondary compact" type="button" disabled={busy} onClick={()=>{setSelected(null);setThread(null);setError('');}}><Icon name="close" size={15}/>Chiudi dettaglio</button></div>

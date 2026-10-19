@@ -4,7 +4,7 @@ using OmniDesk.Api.Security;
 
 namespace OmniDesk.Api.Endpoints;
 
-public sealed record DeviceEditRequest(string Name, Guid? GroupId, string ExpectedName, Guid? ExpectedGroupId);
+public sealed record DeviceEditRequest(string Name, Guid? GroupId, string ExpectedName, Guid? ExpectedGroupId, Guid? SiteId = null, Guid? ExpectedSiteId = null);
 public static class DeviceManagementEndpoints
 {
     public static void MapDeviceManagementEndpoints(this WebApplication app)
@@ -20,23 +20,31 @@ public static class DeviceManagementEndpoints
             var device = await db.Devices.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id);
             if (device is null) return Results.NotFound();
             if (r.GroupId is not null && !await db.DeviceGroups.AnyAsync(x => x.Id == r.GroupId)) return Results.BadRequest();
-            if (device.Name != r.ExpectedName || device.GroupId != r.ExpectedGroupId)
+            var newSiteId = r.SiteId ?? device.SiteId;
+            if (!await db.Sites.AnyAsync(x => x.Id == newSiteId && !x.IsArchived)) return Results.BadRequest();
+            if (device.Name != r.ExpectedName || device.GroupId != r.ExpectedGroupId || (r.ExpectedSiteId is not null && device.SiteId != r.ExpectedSiteId))
                 return Results.Conflict(new { error = "Dispositivo modificato da un altro operatore. Ricarica i dati prima di salvare." });
             var name = r.Name.Trim();
-            if (device.Name == name && device.GroupId == r.GroupId) return Results.NoContent();
-            await db.Devices.Where(x => x.Id == id).ExecuteUpdateAsync(s => s.SetProperty(x => x.Name, name).SetProperty(x => x.GroupId, r.GroupId));
+            if (device.Name == name && device.GroupId == r.GroupId && device.SiteId == newSiteId) return Results.NoContent();
+            await db.Devices.Where(x => x.Id == id).ExecuteUpdateAsync(s => s.SetProperty(x => x.Name, name).SetProperty(x => x.GroupId, r.GroupId).SetProperty(x => x.SiteId, newSiteId));
             db.AuditEvents.Add(Event(c, "device.metadata.change", id));
-            if (device.GroupId != r.GroupId)
+            if (device.GroupId != r.GroupId || device.SiteId != newSiteId)
             {
                 // Close existing shares when moving an endpoint across an authorization boundary.
                 await db.RemoteSessions.Where(x => x.DeviceId == id && x.State == "active").ExecuteUpdateAsync(s => s.SetProperty(x => x.State, "revocation_pending"));
                 var queued = await db.UpdateJobs.AsNoTracking().Where(x => x.DeviceId == id && x.State == "queued").ToListAsync();
                 foreach (var job in queued)
-                    if (!await permissions.Allows(job.RequestedBy, "updates", id))
+                {
+                    var allowed = job.Kind.StartsWith("diagnostics.")
+                        ? (job.Kind is "diagnostics.processes" or "diagnostics.services" or "diagnostics.events") && await permissions.Allows(job.RequestedBy, "diagnostics.view", id)
+                        : job.Kind == "agent.update" ? (await permissions.Global(job.RequestedBy)).Contains("administration")
+                        : await permissions.Allows(job.RequestedBy, "updates", id);
+                    if (!allowed)
                     {
                         await db.UpdateJobs.Where(x => x.Id == job.Id && x.State == "queued").ExecuteUpdateAsync(s => s.SetProperty(x => x.State, "cancelled").SetProperty(x => x.CompletedAt, DateTimeOffset.UtcNow));
-                        db.AuditEvents.Add(Event(c, "update.cancel.authorization", job.Id));
+                        db.AuditEvents.Add(Event(c, job.Kind.StartsWith("diagnostics.") ? "diagnostics.cancel.authorization" : "update.cancel.authorization", job.Id));
                     }
+                }
                 db.AuditEvents.Add(Event(c, "device.group.change", id));
             }
             await db.SaveChangesAsync(); await tx.CommitAsync();

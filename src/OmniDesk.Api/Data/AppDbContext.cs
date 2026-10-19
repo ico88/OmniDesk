@@ -6,7 +6,8 @@ namespace OmniDesk.Api.Data;
 
 public sealed class AppUser : IdentityUser { public bool IsDisabled { get; set; } }
 public sealed class DeviceGroup { public Guid Id { get; set; } public string Name { get; set; } = ""; }
-public sealed class Device { public Guid Id { get; set; } public string Name { get; set; } = ""; public Guid? GroupId { get; set; } }
+public sealed class Site { public Guid Id { get; set; } = Guid.NewGuid(); public string Name { get; set; } = ""; public bool IsArchived { get; set; } public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow; }
+public sealed class Device { public Guid Id { get; set; } public string Name { get; set; } = ""; public Guid? GroupId { get; set; } public Guid SiteId { get; set; } }
 public sealed class RolePermission { public string RoleId { get; set; } = ""; public string Permission { get; set; } = ""; }
 public sealed class ScopeGrant
 {
@@ -15,6 +16,7 @@ public sealed class ScopeGrant
     public string RoleId { get; set; } = "";
     public Guid? GroupId { get; set; }
     public Guid? DeviceId { get; set; }
+    public Guid? SiteId { get; set; }
 }
 public sealed class Branding
 {
@@ -38,6 +40,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
     public DbSet<SupportMessage> SupportMessages => Set<SupportMessage>();
     public DbSet<SupportTicket> SupportTickets => Set<SupportTicket>();
     public DbSet<DeviceGroup> DeviceGroups => Set<DeviceGroup>();
+    public DbSet<Site> Sites => Set<Site>();
     public DbSet<Device> Devices => Set<Device>();
     public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
     public DbSet<ScopeGrant> ScopeGrants => Set<ScopeGrant>();
@@ -65,6 +68,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
         b.Entity<SupportMessage>().Property(x=>x.FromState).HasMaxLength(20);
         b.Entity<SupportMessage>().Property(x=>x.ToState).HasMaxLength(20);
         b.Entity<SupportTicket>().HasOne<Device>().WithMany().HasForeignKey(x => x.DeviceId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<SupportTicket>().HasOne<Site>().WithMany().HasForeignKey(x => x.SiteId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<SupportTicket>().HasIndex(x => new { x.DeviceId, x.RequesterKey, x.RequestId }).IsUnique();
         b.Entity<SupportTicket>().HasIndex(x => new { x.DeviceId, x.CreatedAt });
         b.Entity<SupportTicket>().Property(x => x.RequesterKey).HasMaxLength(64);
@@ -88,6 +92,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
         b.Entity<RemoteSession>().HasIndex(x => new { x.DeviceId, x.CreatedAt });
         b.Entity<EnrollmentToken>().HasIndex(x => x.TokenHash).IsUnique();
         b.Entity<EnrollmentToken>().HasOne<DeviceGroup>().WithMany().HasForeignKey(x => x.GroupId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<EnrollmentToken>().HasOne<Site>().WithMany().HasForeignKey(x => x.SiteId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<DeviceCredential>().HasKey(x => x.DeviceId);
         b.Entity<DeviceCredential>().HasOne<Device>().WithOne().HasForeignKey<DeviceCredential>(x => x.DeviceId).OnDelete(DeleteBehavior.Cascade);
         b.Entity<DeviceAssertion>().HasIndex(x => x.ExpiresAt);
@@ -100,15 +105,21 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
         b.Entity<DeviceGroup>().Property(x => x.Name).HasMaxLength(200);
         b.Entity<Device>().Property(x => x.Name).HasMaxLength(200);
         b.Entity<Device>().HasOne<DeviceGroup>().WithMany().HasForeignKey(x => x.GroupId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<Device>().HasOne<Site>().WithMany().HasForeignKey(x => x.SiteId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<Device>().HasIndex(x => x.SiteId);
+        b.Entity<Site>().Property(x => x.Name).HasMaxLength(200);
+        b.Entity<Site>().HasIndex(x => x.Name).IsUnique();
         b.Entity<RolePermission>().HasKey(x => new { x.RoleId, x.Permission });
         b.Entity<RolePermission>().HasOne<IdentityRole>().WithMany().HasForeignKey(x => x.RoleId).OnDelete(DeleteBehavior.Cascade);
-        b.Entity<ScopeGrant>().ToTable(t => t.HasCheckConstraint("CK_ScopeGrant_OneScope", "(\"GroupId\" IS NOT NULL) <> (\"DeviceId\" IS NOT NULL)"));
+        b.Entity<ScopeGrant>().ToTable(t => t.HasCheckConstraint("CK_ScopeGrant_OneScope", "num_nonnulls(\"GroupId\", \"DeviceId\", \"SiteId\") = 1"));
         b.Entity<ScopeGrant>().HasOne<AppUser>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
         b.Entity<ScopeGrant>().HasOne<IdentityRole>().WithMany().HasForeignKey(x => x.RoleId).OnDelete(DeleteBehavior.Cascade);
         b.Entity<ScopeGrant>().HasOne<DeviceGroup>().WithMany().HasForeignKey(x => x.GroupId).OnDelete(DeleteBehavior.Cascade);
         b.Entity<ScopeGrant>().HasOne<Device>().WithMany().HasForeignKey(x => x.DeviceId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<ScopeGrant>().HasOne<Site>().WithMany().HasForeignKey(x => x.SiteId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<ScopeGrant>().HasIndex(x => new { x.UserId, x.RoleId, x.GroupId }).IsUnique();
         b.Entity<ScopeGrant>().HasIndex(x => new { x.UserId, x.RoleId, x.DeviceId }).IsUnique();
+        b.Entity<ScopeGrant>().HasIndex(x => new { x.UserId, x.RoleId, x.SiteId }).IsUnique();
         b.Entity<Branding>().ToTable(t => t.HasCheckConstraint("CK_Branding_Singleton", "\"Id\" = 1"));
         b.Entity<Branding>().Property(x => x.Name).HasMaxLength(100);
         b.Entity<Branding>().Property(x => x.LogoUrl).HasMaxLength(2048);

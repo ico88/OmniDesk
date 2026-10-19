@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { api } from './api';
 
-type Device = { id: string; name: string; groupId: string | null; revoked: boolean };
-export function DeviceManagement({ device, groups, onChanged }: { device: Device; groups: { id: string; name: string }[]; onChanged: (message: string) => Promise<void> }) {
+type Device = { id: string; name: string; groupId: string | null; siteId: string | null; revoked: boolean };
+export function DeviceManagement({ device, groups, sites, onChanged }: { device: Device; groups: { id: string; name: string }[]; sites: { id: string; name: string; isArchived?: boolean }[]; onChanged: (message: string) => Promise<void> }) {
   const [name, setName] = useState(device.name);
   const [groupId, setGroupId] = useState(device.groupId ?? '');
+  const [siteId, setSiteId] = useState(device.siteId ?? '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   async function run(work: () => Promise<void>) {
@@ -16,14 +17,15 @@ export function DeviceManagement({ device, groups, onChanged }: { device: Device
     {error && <p role="alert" className="error">{error}</p>}
     <form onSubmit={e => {
       e.preventDefault();
-      if ((groupId || null) !== device.groupId && !window.confirm('Spostare il dispositivo? Le concessioni del nuovo gruppo saranno applicate, sarà richiesta la revoca delle sessioni remote attive e i job in coda non più autorizzati saranno annullati. Le concessioni dirette al dispositivo restano valide.')) return;
+      if (((groupId || null) !== device.groupId || siteId !== device.siteId) && !window.confirm('Spostare il dispositivo? Le concessioni del nuovo ambito saranno applicate, le sessioni remote saranno revocate e i job in coda non più autorizzati saranno annullati. I ticket conservano la sede storica.')) return;
       void run(async () => {
-        await api(`/admin/devices/${device.id}`, 'PUT', { name, groupId: groupId || null, expectedName: device.name, expectedGroupId: device.groupId });
+        await api(`/admin/devices/${device.id}`, 'PUT', { name, groupId: groupId || null, expectedName: device.name, expectedGroupId: device.groupId, siteId, expectedSiteId: device.siteId });
         await onChanged('Dispositivo aggiornato');
       });
     }}><label>Nome dispositivo<input value={name} onChange={e => setName(e.target.value)} required maxLength={200} disabled={busy}/></label>
       <label>Gruppo dispositivo<select aria-label="Gruppo dispositivo" value={groupId} onChange={e => setGroupId(e.target.value)} disabled={busy}><option value="">Senza gruppo</option>{groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}</select></label>
-      <p>Il nome è l’etichetta nella console e non cambia il nome del computer Windows. Il gruppo determina le concessioni ereditate.</p>
+      <label>Sede<select aria-label="Sede dispositivo" value={siteId} onChange={e => setSiteId(e.target.value)} disabled={busy} required>{sites.filter(s => !s.isArchived || s.id === device.siteId).map(s => <option key={s.id} value={s.id}>{s.name}{s.isArchived ? ' (archiviata)' : ''}</option>)}</select></label>
+      <p>Il nome è l’etichetta nella console e non cambia il nome del computer Windows. Gruppo e sede determinano concessioni distinte.</p>
       <button disabled={busy}>Salva dispositivo</button>
     </form>
     <p>La revoca blocca le credenziali dell’agente, annulla i job in coda e richiede la chiusura delle sessioni remote. Non disinstalla il servizio e non interrompe aggiornamenti già avviati.</p>

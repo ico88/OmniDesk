@@ -4,13 +4,15 @@ import { api } from './api';
 type Account = { id: string; email: string; roles: string[]; isDisabled: boolean };
 type Role = { id: string; name: string; permissions: string[] };
 type Target = { id: string; name: string };
-type Grant = { id: string; userId: string; roleId: string; groupId: string | null; deviceId: string | null };
+type Site = Target & { isArchived: boolean; deviceCount: number; ticketCount: number };
+type Grant = { id: string; userId: string; roleId: string; groupId: string | null; deviceId: string | null; siteId: string | null };
 
 export function AccessManagement({ currentUserId }: { currentUserId: string }) {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [groups, setGroups] = useState<Target[]>([]);
   const [devices, setDevices] = useState<Target[]>([]);
+  const [sites, setSites] = useState<Site[]>([]);
   const [grants, setGrants] = useState<Grant[]>([]);
   const [scope, setScope] = useState('group');
   const [busy, setBusy] = useState(true);
@@ -19,11 +21,11 @@ export function AccessManagement({ currentUserId }: { currentUserId: string }) {
   const [selectedId, setSelectedId] = useState('');
   const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
   async function load() {
-    const [a, r, g, d, s] = await Promise.all([
+    const [a, r, g, d, s, locations] = await Promise.all([
       api<Account[]>('/admin/users'), api<Role[]>('/admin/roles'), api<Target[]>('/admin/groups'),
-      api<Target[]>('/devices'), api<Grant[]>('/admin/grants'),
+      api<Target[]>('/devices'), api<Grant[]>('/admin/grants'), api<Site[]>('/admin/sites'),
     ]);
-    setAccounts(a); setRoles(r); setGroups(g); setDevices(d); setGrants(s);
+    setAccounts(a); setRoles(r); setGroups(g); setDevices(d); setGrants(s); setSites(locations);
   }
   async function run(work: () => Promise<void>) {
     setBusy(true); setError(''); setMessage('');
@@ -31,7 +33,7 @@ export function AccessManagement({ currentUserId }: { currentUserId: string }) {
     finally { setBusy(false); }
   }
   useEffect(() => { void run(load); }, []);
-  const targets = scope === 'group' ? groups : devices;
+  const targets = scope === 'group' ? groups : scope === 'device' ? devices : sites.filter(s => !s.isArchived);
   const selected = accounts.find(a => a.id === selectedId);
   return <>
     {error && <p role="alert" className="error">{error}</p>}
@@ -67,6 +69,10 @@ export function AccessManagement({ currentUserId }: { currentUserId: string }) {
       e.preventDefault(); const form = e.currentTarget; const values = new FormData(form);
       void run(async () => { await api('/admin/groups', 'POST', { name: values.get('name') }); form.reset(); await load(); setMessage('Gruppo creato'); });
     }}><h2>Crea un gruppo dispositivi</h2><label>Nome gruppo<input name="name" required maxLength={200}/></label><button disabled={busy}>Crea gruppo</button></form>
+    <section className="panel"><h2>Sedi operative</h2><p>Le sedi sono un ambito distinto dai gruppi; i ticket conservano la sede storica del dispositivo quando vengono aperti.</p>
+      <form className="settings" onSubmit={e => { e.preventDefault(); const form = e.currentTarget; const values = new FormData(form); void run(async () => { await api('/admin/sites', 'POST', { name: values.get('name') }); form.reset(); await load(); setMessage('Sede creata'); }); }}><label>Nuova sede<input name="name" required maxLength={200}/></label><button disabled={busy}>Crea sede</button></form>
+      <div className="table-wrap"><table><thead><tr><th>Sede</th><th>Dispositivi</th><th>Ticket storici</th><th>Stato</th><th></th></tr></thead><tbody>{sites.map(site => <tr key={site.id}><td>{site.name}</td><td>{site.deviceCount}</td><td>{site.ticketCount}</td><td>{site.isArchived ? 'Archiviata' : 'Attiva'}</td><td>{!site.isArchived && <button className="secondary compact" disabled={busy || site.deviceCount > 0} title={site.deviceCount > 0 ? 'Sposta prima tutti i dispositivi' : undefined} onClick={() => void run(async () => { await api(`/admin/sites/${site.id}`, 'PUT', { name: site.name, expectedName: site.name, isArchived: true }); await load(); setMessage('Sede archiviata'); })}>Archivia</button>}</td></tr>)}</tbody></table></div>
+    </section>
     <form className="panel settings" onSubmit={e => {
       e.preventDefault(); const form = e.currentTarget; const values = new FormData(form);
       void run(async () => {
@@ -83,20 +89,20 @@ export function AccessManagement({ currentUserId }: { currentUserId: string }) {
     <form className="panel settings" onSubmit={e => {
       e.preventDefault(); const values = new FormData(e.currentTarget);
       void run(async () => {
-        await api('/admin/grants', 'POST', { userId: values.get('user'), role: values.get('role'), groupId: scope === 'group' ? values.get('target') : null, deviceId: scope === 'device' ? values.get('target') : null });
+        await api('/admin/grants', 'POST', { userId: values.get('user'), role: values.get('role'), groupId: scope === 'group' ? values.get('target') : null, deviceId: scope === 'device' ? values.get('target') : null, siteId: scope === 'site' ? values.get('target') : null });
         await load(); setMessage('Concessione assegnata');
       });
     }}><h2>Assegna una concessione</h2><p>Le concessioni si aggiungono ai ruoli globali. La revoca di una concessione non rimuove gli altri accessi.</p>
       <label>Utente destinatario<select aria-label="Utente destinatario" name="user" required>{accounts.map(a => <option key={a.id} value={a.id}>{a.email}</option>)}</select></label>
       <label>Ruolo della concessione<select aria-label="Ruolo della concessione" name="role" required>{roles.map(r => <option key={r.id} value={r.name}>{r.name} ({r.permissions.join(', ')})</option>)}</select></label>
-      <label>Ambito<select aria-label="Ambito" value={scope} onChange={e => setScope(e.target.value)}><option value="group">Gruppo</option><option value="device">Dispositivo</option></select></label>
+      <label>Ambito<select aria-label="Ambito" value={scope} onChange={e => setScope(e.target.value)}><option value="group">Gruppo</option><option value="device">Dispositivo</option><option value="site">Sede</option></select></label>
       <label>Destinazione<select aria-label="Destinazione" key={scope} name="target" required>{targets.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
-      {targets.length === 0 && <p>{scope === 'group' ? 'Nessun gruppo disponibile.' : 'Nessun dispositivo visibile disponibile.'}</p>}
+      {targets.length === 0 && <p>{scope === 'group' ? 'Nessun gruppo disponibile.' : scope === 'device' ? 'Nessun dispositivo visibile disponibile.' : 'Nessuna sede attiva disponibile.'}</p>}
       <button disabled={busy || !targets.length || !accounts.length || !roles.length}>Assegna concessione</button>
     </form>
     <section className="panel"><h2>Concessioni attive</h2>{grants.length === 0 ? <p>Nessuna concessione locale.</p> : <div className="table-wrap"><table><thead><tr><th>Utente</th><th>Ruolo</th><th>Ambito</th><th>Azioni</th></tr></thead><tbody>{grants.map(g => <tr key={g.id}>
       <td>{accounts.find(a => a.id === g.userId)?.email ?? g.userId}</td><td>{roles.find(r => r.id === g.roleId)?.name ?? g.roleId}</td>
-      <td>{g.groupId ? `Gruppo: ${groups.find(t => t.id === g.groupId)?.name ?? g.groupId}` : `Dispositivo: ${devices.find(t => t.id === g.deviceId)?.name ?? g.deviceId}`}</td>
+      <td>{g.groupId ? `Gruppo: ${groups.find(t => t.id === g.groupId)?.name ?? g.groupId}` : g.deviceId ? `Dispositivo: ${devices.find(t => t.id === g.deviceId)?.name ?? g.deviceId}` : `Sede: ${sites.find(t => t.id === g.siteId)?.name ?? g.siteId}`}</td>
       <td><button disabled={busy} onClick={() => { if (window.confirm('Revocare questa concessione? Gli altri accessi resteranno validi.')) void run(async () => { await api(`/admin/grants/${g.id}`, 'DELETE'); await load(); setMessage('Concessione revocata'); }); }}>Revoca concessione</button></td>
     </tr>)}</tbody></table></div>}</section>
   </>;
