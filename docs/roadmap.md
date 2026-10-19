@@ -257,14 +257,17 @@ e la verifica CI Windows sono ancora aperti.
 
 La console ticket aggiunge filtri server-side per priorità e assegnatario (email),
 senza allargare l’insieme dei ticket restituiti oltre gli ambiti `tickets.view`.
-Test API verificano filtri e rifiuto di priorità non valide; code, categorie,
-contatori/SLA e assegnazione massiva restano da sviluppare.
+Test API verificano filtri e rifiuto di priorità/categorie non valide. Le categorie
+core sono general, hardware, software, network, account e other; la Tray le
+propone in apertura e la console le filtra. Code, contatori/SLA e
+assegnazione massiva restano da sviluppare.
 
 Il numero ticket è ora generato da Identity PostgreSQL e condiviso dalla Tray e
 dalla console nel formato `OD-000123`; non deriva dall’UUID e non promette una
 sequenza senza buchi. La migrazione conserva le richieste già presenti e assegna
 numeri distinti. La candidata Windows passa da 0.8.5 a 0.8.6 per includere il
-numero nella Tray; il workflow precedente non valida questo incremento.
+numero nella Tray; il workflow precedente non valida questo incremento. La tranche
+categorie aggiorna la candidata a 0.8.7 e richiede il proprio workflow Windows.
 
 
 ### SD1 — priorità e assegnazione ticket — sorgenti e test verificati
@@ -278,4 +281,4 @@ auditate e incluse nell’outbox senza descrizioni o contenuti di conversazione.
 `./scripts/test.sh`: 63 test xUnit/PostgreSQL e 4 Vitest passati. Migrazioni
 verificate da schema vuoto e da uno schema isolato con ticket preesistente; upgrade
 del database LAN non eseguito e nessun deploy effettuato. Restano code, SLA,
-categorie, bulk assignment e viste operative.
+bulk assignment e viste operative.

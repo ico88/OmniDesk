@@ -820,6 +820,11 @@ nello schema effimero dei test, non sul DB LAN. Pacchetto Windows aggiornato a 0
 CI completa su questa revisione ancora da attendere.
 
 
+## Categorie ticket core — 19 ottobre 2026
+
+`TicketCategories` introduce `Category` con default `general` e indice sede/categoria/stato/data. API consente solo `general`, `hardware`, `software`, `network`, `account`, `other`; la filtrazione avviene nella query autorizzata. La console filtra la categoria e la Tray la seleziona all'apertura; è immutabile dopo l'invio per conservare la ripetibilità idempotente. L'evento outbox `ticket.created` include la categoria senza contenuti utente. `./scripts/test.sh`: 63 xUnit/PostgreSQL e 4 Vitest passati. Cross-publish Agent, Tray e Setup `win-x64`, `docker compose config -q` e `git diff --check` passati. Nessuna migrazione o pubblicazione sul database LAN effettuata. Pacchetto Windows candidato 0.8.7 e workflow CI da attendere.
+
+
 ## Terminazione processi RMM — 19 ottobre 2026
 
 Nuova capability `processes.manage`, seed solo Administrator predefinito e grant

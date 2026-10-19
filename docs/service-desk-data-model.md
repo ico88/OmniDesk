@@ -15,11 +15,11 @@
 
 | Entità proposta | Campi e vincoli principali |
 | --- | --- |
-| Tickets | **Core implementato:** `SupportTickets` contiene numero Identity univoco, device/sede storica, requester macchina, subject/description, state, priority (`low/normal/high/urgent`, default `normal`), `AssigneeId` Identity nullable, resolution/screenshot, version e date. FK assignee Restrict e indici dedicati. **Proposto:** QueueId, workflow configurabile/versionato, CategoryId e ciclo Received/Resolved/Closed strutturato |
+| Tickets | **Core implementato:** `SupportTickets` contiene numero Identity univoco, device/sede storica, requester macchina, subject/description, state, priority (`low/normal/high/urgent`, default `normal`), category controllata (`general/hardware/software/network/account/other`, default `general`), `AssigneeId` Identity nullable, resolution/screenshot, version e date. FK assignee Restrict e indici dedicati. **Proposto:** QueueId, workflow configurabile/versionato e ciclo Received/Resolved/Closed strutturato |
 | TicketDevices | PK (TicketId, DeviceId), LinkedAt/By, snapshot nome/sede al collegamento. Almeno una riga per ticket effettivo |
 | TicketParticipants | PK ticket/utente/relazione, richiedente o follower; partecipazione non equivale a concessione RMM |
 | Queues / QueueMembers | Code/team e membri Identity; membership soggetta alle policy di ambito |
-| Categories / Priorities | Gerarchia categoria opzionale, priorità P1–P4 e matrice impatto/urgenza versionabile |
+| Categories / Priorities | Categorie core piatte controllate e priorità low/normal/high/urgent implementate; gerarchia, priorità P1–P4 e matrice impatto/urgenza versionabile restano proposte |
 | WorkflowVersions / States / Transitions | Stati, transizioni ammesse, requisiti di motivo/risoluzione e versione pubblicata immutabile |
 | TicketComments | TicketId, AuthorId/origine, Visibility public/internal, Body sanitizzato, CreatedAt, revisione/tombstone; cambi visibilità espliciti e auditati |
 | Attachments | TicketId, CommentId nullable, UploaderId/origine, StorageKey opaco univoco, nome originale, MIME, Size, Hash, ScanState, Visibility, CreatedAt. Nessun contenuto binario o URL pubblico nel DB |
