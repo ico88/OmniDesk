@@ -28,6 +28,8 @@ public sealed record SupportInterventionCandidate(Guid Id, Guid DeviceId, string
     string Label, string Capability, string State, DateTimeOffset OccurredAt, DateTimeOffset? CompletedAt);
 public sealed record SupportTicketDeviceView(Guid DeviceId, string Name, Guid SiteId, string SiteName, bool IsPrimary);
 public sealed record SupportTicketVersion(Guid TicketId, long ExpectedVersion);
+public sealed record SupportSlaTargetView(string TargetType, int PolicyVersion, int Cycle, DateTimeOffset StartedAt,
+    DateTimeOffset DueAt, DateTimeOffset? CompletedAt, DateTimeOffset? BreachedAt, bool IsPastDue);
 public sealed record BulkQueueAssignment(SupportTicketVersion[] Tickets, Guid? QueueId);
 public sealed record PortalTicketCreate(Guid RequestId, Guid DeviceId, string Subject, string Description, string Category,
     string? ScreenshotBase64 = null, bool ScreenshotConsent = false);
@@ -449,6 +451,19 @@ public static class SupportEndpoints
             return Results.NoContent();
         });
         var staff = app.MapGroup("/api/support").RequireAuthorization();
+        staff.MapGet("/{id:guid}/sla", async (Guid id, HttpContext c, AppDbContext db, PermissionService p) => {
+            var ticket = await db.SupportTickets.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id);
+            if (ticket is null) return Results.NotFound();
+            if (!await p.Allows(c.User.UserId(), "tickets.view", ticket.DeviceId, siteId: ticket.SiteId)) return Results.Forbid();
+            var now = DateTimeOffset.UtcNow;
+            var targets = await db.SupportTicketSlaTargets.AsNoTracking().Where(x => x.TicketId == id)
+                .OrderBy(x => x.TargetType).ThenBy(x => x.Cycle)
+                .Select(x => new SupportSlaTargetView(x.TargetType, x.PolicyVersion, x.Cycle, x.StartedAt,
+                    x.DueAt, x.CompletedAt, x.BreachedAt, x.CompletedAt == null && x.BreachedAt == null && x.DueAt < now))
+                .ToArrayAsync();
+            c.Response.Headers.CacheControl = "no-store";
+            return Results.Ok(targets);
+        });
         staff.MapGet("/{id:guid}/participants", async (Guid id, HttpContext c, AppDbContext db, PermissionService p) => {
             var ticket = await db.SupportTickets.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id);
             if (ticket is null) return Results.NotFound();
