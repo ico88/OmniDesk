@@ -610,3 +610,32 @@ Non eseguiti test, compilazione WiX Windows, installazione, enrollment o disinst
 Build-only Windows Actions run 39229033734 (commit sorgente d0d9cce45cec5dbcb2206a8707a5afad8775cf57) riuscita: publish Agent/Tray/Setup, vendor remote hash, WiX MSI build 0 warning/0 error, upload artifact. Job test agent-msi e console erano skipped; nessun MSI installato.
 Kit LAN `artifacts/windows-lan/OmniDesk.Windows.LAN-0.8.0.zip`, SHA256
 b98e174782a6fcf750f9383def93943479cf07fe4d1e3045e3663d871846d109; l'API UID1654 legge ZIP e manifest. API con endpoint self-uninstall pubblicata sul server dopo backup .backups/20261019T092313Z.9SVv40; container API ricreato e avviato. Non è stata eseguita una disinstallazione reale Windows; la revoca resta da verificare sul PC pilota.
+
+## Console RMM React/MeshCentral — 2026-10-19
+
+Interfaccia dispositivo a schede con overview, console Mesh incorporata, ticket
+per dispositivo, inventario software e aggiornamenti. Processi, servizi ed eventi
+sono esplicitamente marcati non disponibili: l'Agent/API non espongono ancora
+contratti autorizzati per questi dati. La console non legge il contenuto
+cross-origin e non dichiara uno stream attivo sulla sola base del load iframe.
+Le opzioni di monitor/qualità/scaling/input/clipboard rimangono nella toolbar
+nativa MeshCentral. Il server mantiene la verifica RBAC; la pagina applica
+validazione HTTPS `/sharing`, `no-referrer` e cleanup/revoca best-effort di un
+grant malformato. La allowlist iframe MeshCentral è configurata solo per gli
+origin OmniDesk LAN e dominio HTTPS configurati in Compose; non è abilitato
+alcun login token.
+
+Verifiche:
+
+- `docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD/src/dashboard:/work" -w /work node:22-alpine sh -c 'npm ci && npm run build && npm test'`: riuscito; TypeScript/Vite e 4 Vitest.
+- `./scripts/test.sh`: 47 xUnit API/PostgreSQL isolati riusciti; include filtro `deviceId` staff e 403 senza `tickets.view`.
+- `docker compose -f compose.yaml -f compose.mesh.yaml -f compose.mesh-lan.yaml config --quiet`: riuscito.
+- `docker compose -f compose.yaml -f compose.mesh.yaml -f compose.mesh-lan.yaml build api dashboard meshcentral`: riuscito; API pubblicata, dashboard Vite e immagine MeshCentral ricostruite.
+- `docker compose -f compose.yaml -f compose.mesh.yaml -f compose.mesh-lan.yaml run --rm --no-deps --entrypoint caddy caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile`: configurazione LAN valida.
+- `node --check entrypoint.mjs` nel container Node 22: riuscito. `npm ci` riporta 0 vulnerabilità.
+- `./scripts/smoke.sh --browser`: riuscito su stack effimero isolato; Chromium verifica le dieci schede dispositivo, i controlli disabilitati dopo revoca, e regressioni account/grant/ticket/download già coperte dallo smoke.
+
+Non eseguiti avvio/deploy live, sessione iframe sul server o stream video remoto,
+né test interattivo sul PC Windows. Il deploy è escluso per
+non interrompere sessioni remote attive. Le build non dimostrano la connessione
+Mesh né la compatibilità visiva con ogni browser.

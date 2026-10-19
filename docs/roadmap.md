@@ -2,6 +2,27 @@
 
 Stato corrente sintetico: [consegna Windows/LAN](completion-status.md). Le sezioni successive conservano lo storico; gli stati iniziali progettato/non compilato sono superati solo dalle verifiche successive esplicitamente registrate.
 
+### Incremento console RMM React e MeshCentral — sorgenti implementati, collaudo live aperto
+
+Interfaccia dedicata nella scheda dispositivo con Panoramica, Desktop remoto,
+Terminale/PowerShell, File, Processi, Servizi Windows, Software, Aggiornamenti,
+Eventi e Ticket. Icone Lucide, layout responsive e tema OmniDesk; build production
+riuscita. La sessione usa
+il grant breve creato dall'API per la capability richiesta; il browser riceve
+soltanto URL HTTPS `/sharing` a scadenza breve, con `no-referrer`, controlli
+origine e revoca tramite API. Il backend rimane autoritativo su RBAC e device;
+MeshCentral è limitato a origini di framing configurate e non usa login token.
+
+Monitor multipli, qualità, scaling, input, clipboard e fullscreen sono affidati
+all'interfaccia nativa MeshCentral effettivamente incorporata; React non tenta
+di controllare il DOM cross-origin. La UI indica che il caricamento iframe non
+dimostra la connessione video. Processi, servizi e log per dispositivo restano
+da sviluppare lato Agent/API con permessi dedicati e audit; le metriche attuali
+sono snapshot/counter e non generano grafici storici. Build e test sono registrati
+in [validation.md](validation.md). Sessione Mesh reale e collaudo interattivo
+Windows restano gate separati. Il deploy live è escluso per non interrompere
+sessioni remote correnti.
+
 - M1: infrastruttura Compose/Caddy/PostgreSQL, setup Ubuntu, schema e migrazioni Identity, bootstrap, autenticazione e CSRF, utenti, permessi globali/gruppo/device, audit, dashboard e branding. Consegna iniziale: vedi validation.md per prove effettive e limiti.
 - M2 (implementazione iniziale compilata; MSI compilato in CI; gate installazione Windows/firma ancora aperto): servizio Windows .NET con enrollment monouso, chiavi dispositivo, revoca, retry/backoff, metriche CPU/RAM/disco/rete/uptime, inventario; MSI unico firmato e aggiornamento sicuro. Test Windows e reti NAT differenti obbligatori.
 - M3 (adapter compilato e permessi testati con fake; gate motore/Windows e audit node-forge aperti): MeshCentral, adapter server con mapping identità e gruppi, sessioni autorizzate e revocabili per remote/terminal/files; MSI coordina i due servizi. Test anti bypass dei permessi e WebSocket/TLS. MeshCentral non viene esposto da M1.

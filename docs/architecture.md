@@ -79,6 +79,25 @@ La versione 0.8.0 include Agent e Tray nello stesso MSI. Stato di build e collau
 
 L'autorizzazione remota è applicata dal backend al rilascio/consumo del grant e durante la sessione: `view`, `remote.control`, `terminal`, `files`, `updates` e `administration` restano separati negli ambiti global/group/device. Accesso unattended ed elevazione mantengono capacità esplicite e separate; la dismissione richiede la revoca server. La [matrice Windows](windows-agent-tray.md#matrice-di-autorizzazione-proposta) distingue permessi IT, consenso del logon destinatario e privilegi locali; nessun ticket o messaggio Tray concede implicitamente controllo remoto.
 
+### Console RMM React e embedding MeshCentral
+
+La scheda dispositivo React espone le sezioni RMM con stati distinti per dati
+disponibili e capacità ancora assenti. Il desktop remoto usa la sessione share
+temporanea emessa da `POST /api/devices/{id}/remote-sessions`; il backend verifica
+capability, scope, mapping, policy e revoca prima di rilasciare il link. Il
+frontend accetta esclusivamente URL HTTPS `/sharing` con scadenza futura e senza
+credenziali nell'URL; per una risposta non valida tenta la revoca immediata.
+
+L'iframe è cross-origin e `no-referrer`. `frame-src` dashboard e
+`allowedFramingOrigins`/CSP MeshCentral ammettono solo gli origin OmniDesk
+configurati. `allowLoginToken` non viene abilitato e token permanenti non entrano
+nel browser. Il sandbox isola i contenuti e abilita le capacità necessarie alla
+UI Mesh. La policy server Mesh continua a gestire consenso e comandi. Per la
+same-origin policy, selezione monitor, qualità, scaling, tastiera e clipboard
+restano i controlli nativi presenti in MeshCentral; React non manipola il DOM
+remoto. Il load della pagina non prova l'attività dello stream. Processi, servizi
+ed eventi Windows non sono simulati: richiedono endpoint Agent autorizzati e audit.
+
 
 ## Hardening account e lifecycle corrente
 
