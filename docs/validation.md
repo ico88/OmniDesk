@@ -733,3 +733,24 @@ Non eseguito deploy né runtime
 sull'Agent Windows. Il server live non è stato riavviato mentre il dispositivo
 pilota aveva un job Windows Update `install` in corso. Queste viste richiedono
 la prossima release MSI dell'Agent.
+
+
+## SD0 core — sedi e permessi per sede — 19 ottobre 2026
+
+Migrazione EF Core `CoreSites` versionata con sito iniziale di backfill,
+associazione di ticket esistenti alla sede del dispositivo, FK/index e rimozione
+dei default dopo la migrazione dati. Non crea concessioni implicite. La API
+amministra sedi, sceglie la sede di enrollment, assegna i dispositivi, filtra i
+ticket e autorizza i grant per sede; la UI fornisce le relative viste e form.
+La sede del ticket è uno snapshot storico e non viene riscritta quando il device
+viene spostato.
+
+`./scripts/test.sh` passato dopo le modifiche: 47 test xUnit su PostgreSQL e 4
+Vitest; compilazione TypeScript/Vite inclusa. Il test integrato verifica che un
+grant site-scoped mostri solo dispositivi di quella sede, che `view` non conceda
+`remote.control` e che la revoca rimuova la visibilità. `git diff --check`
+passato. Build API/Dashboard già riuscite durante l'implementazione; `docker compose config -q`
+e `git diff --check` passati. Non è stato eseguito deploy né test di upgrade con
+righe preesistenti sul database live. La pipeline Windows 0.8.3 run
+39242100048 ha completato con successo build MSI/Setup e prove lifecycle; questo
+run precede il codice SD0 e non valida la migrazione Sites.

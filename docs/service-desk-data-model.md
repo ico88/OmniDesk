@@ -1,15 +1,15 @@
 # Service Desk — schema PostgreSQL proposto
 
-**Solo modello logico: nessuna migrazione o tabella aggiunta.** Il modulo possiederà lo schema `service_desk`; Identity, dispositivi e audit restano nel core. Nomi e campi sono proposte da tradurre in migrazioni solo dopo la fase SD0. UUID per entità, timestamp UTC, versioni per concorrenza ottimistica e FK esplicite; JSONB riservato a snapshot/eventi versionati, non sostituisce relazioni e vincoli.
+**Il modello del modulo Service Desk resta proposto e senza schema dedicato.** Il core ha ora la migrazione `CoreSites` per `Sites`, `Devices.SiteId`, `ScopeGrants.SiteId` e `SupportTickets.SiteId`; Identity, dispositivi e audit restano nel core. Le altre entità elencate sotto sono proposte da implementare nelle fasi successive. UUID per entità, timestamp UTC, versioni per concorrenza ottimistica e FK esplicite; JSONB riservato a snapshot/eventi versionati, non sostituisce relazioni e vincoli.
 
-## Prerequisiti del core, ancora da implementare
+## Prerequisiti core — stato
 
 | Entità/estensione | Responsabilità |
 | --- | --- |
-| Sites; Devices.SiteId | Sedi, archivio e associazioni dispositivi; backfill e strategia dispositivi non ancora classificati. Distinti da DeviceGroups |
-| Concessioni per sede | Estensione del modello ScopeGrants con vincolo di un solo ambito; nessun grant implicito durante la migrazione |
+| Sites; Devices.SiteId | **Implementato:** sedi archiviabili, FK dispositivo, enrollment per sede, sede storica sui ticket e backfill dei record esistenti a “Sede da assegnare”. Le sedi restano distinte da DeviceGroups. Migrazione e API verificate su database vuoto; upgrade di un database popolato resta da verificare |
+| Concessioni per sede | **Implementato:** `ScopeGrants.SiteId` con vincolo PostgreSQL che ammette un solo ambito; permessi di sede non si trasformano in permessi gruppo/device. Testata visibilità e separazione del permesso `view` |
 | AlertOccurrences / AlertEvents | Identità stabile di occorrenza, device, regola/versione, apertura/recupero e correlazione; gli snapshot metriche esistenti non sono allarmi |
-| Outbox core | Eventi dei cambi core nella stessa transazione della modifica; payload senza segreti, tipo/versione e correlation ID |
+| Outbox core | **Da implementare:** eventi dei cambi core nella stessa transazione della modifica; payload senza segreti, tipo/versione e correlation ID |
 
 ## Tabelle del modulo
 

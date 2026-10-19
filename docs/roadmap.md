@@ -32,8 +32,7 @@ sessioni remote correnti.
 - M5 (console cross-compilata, TOTP e layout testati; flag TOTP inizialmente false): console Windows WebView2 della stessa UI, dashboard layout per utente, TOTP setup/challenge/recovery/cifratura implementati e testati; hardening, retention, restore, upgrade e release firmata ancora aperti.
 
 Release candidata 0.8.3: raccolta on-demand processi/servizi/eventi con permesso
-`diagnostics.view`; versione MSI e workflow Windows aggiornati. Build Linux e
-test locali passati; pipeline Windows e pubblicazione LAN in corso.
+`diagnostics.view`; versione MSI e workflow Windows aggiornati. Build Linux e test locali passati; workflow Windows run 39242100048 riuscito. Kit 0.8.3 non ancora pubblicato sul server LAN.
 
 Gate produzione: revisione minacce, pen test autorizzazione/CSRF/enrollment, build riproducibili e SBOM, backup ripristinato, certificati pubblici verificati, test MSI install/upgrade/uninstall e rotazione credenziali. Nessuna data di completamento promessa per moduli non implementati.
 
@@ -51,11 +50,11 @@ Incremento gestione dispositivi: etichetta/gruppo e revoca identità dalla conso
 
 ## Percorso futuro OmniDesk Service Desk
 
-**Tutte le fasi SD sono proposte, non implementate.** Percorso aggiuntivo: non sostituisce M1–M5 né chiude i gate di produzione. Specifiche in [Service Desk](service-desk.md) e [schema dati](service-desk-data-model.md). Prima di sviluppare saranno stabiliti contratti, matrice permessi e criteri di accettazione per ciascuna fase.
+**SD0 è parzialmente implementata: registro sedi, associazione core, concessioni e snapshot sede ticket sono in sviluppo verificato qui sotto; restano proposte le altre parti SD0 e le fasi SD1–SD5.** Percorso aggiuntivo: non sostituisce M1–M5 né chiude i gate di produzione. Specifiche in [Service Desk](service-desk.md) e [schema dati](service-desk-data-model.md). Prima di sviluppare saranno stabiliti contratti, matrice permessi e criteri di accettazione per ciascuna fase.
 
 | Fase | Risultato previsto | Dipendenze e gate di ingresso/uscita |
 | --- | --- | --- |
-| SD0 — basi comuni e progetto esecutivo | Registro sedi, associazione dispositivi e backfill; concessioni per sede; contratti eventi/outbox e audit; decisioni storage, antivirus, retention e identità portale | Inventario e Identity esistenti; nessun gruppo trasformato implicitamente in sede. Verificare migrazione dati e isolamento autorizzativo prima del primo ticket |
+| SD0 — basi comuni e progetto esecutivo | **Implementato:** registro sedi e associazione Device.SiteId, sede di backfill “Sede da assegnare”, concessioni site-scoped senza ereditarietà, sede sui ticket correnti come snapshot e selezione sede per enrollment. **Da completare:** outbox/event contracts, decisioni storage, antivirus, retention e identità portale | Migrazione CoreSites versionata, grant e visibilità da verificare su upgrade con dati preesistenti; nessun gruppo trasformato implicitamente in sede. Il ticket corrente conserva la sede storica quando il dispositivo viene spostato |
 | SD1 — ticket e console IT | Modulo separato, migrazioni proprie, ticket manuali, stati/priorità/categorie, code/assegnazioni, uno o più dispositivi e una sede, cronologia/audit; link contestuali alle azioni RMM | SD0; transazioni/ETag/idempotenza e permessi granulari testati. Le azioni RMM richiedono anche capacità correnti e collaudo del relativo motore; non aggirano gate M3/M4 |
 | SD2 — portale e collaborazione | Richieste proprie, commenti pubblici/note interne, allegati in quarantena, notifiche e KB iniziale con pubblicazione controllata | SD1; verifica identità utente/associazione dispositivi, storage privato, antivirus e worker. Gate contro fughe via email, ricerca, allegati e conteggi |
 | SD3 — ingressi agente/email e storico interventi | Intake macchina autenticati, mailbox/thread verificati, deduplicazione e qualificazione; correlazione sessioni/job e riepilogo interventi | SD1–SD2; protocollo agente esistente, account verificati, gestione segreti mailbox e test spoof/replay/loop. Nessuna identità umana derivata dal solo mittente email |
@@ -195,3 +194,22 @@ superato il workflow Windows e ora è il target pubblicato per testare
 l’aggiornamento remoto dal client 0.8.1. Il collaudo di installazione e ricevuta
 sul PC pilota resta aperto. Firma Authenticode e invio Microsoft restano fuori
 da questa implementazione; i checksum del server non attestano l’editore.
+
+
+### SD0 — sedi e ambiti autorizzativi core — implementazione verificata
+
+Aggiunta la migrazione versionata `CoreSites`: crea il catalogo, assegna i record
+esistenti alla sede esplicita “Sede da assegnare”, trasferisce la sede corrente
+del dispositivo sui ticket esistenti e rimuove i default dopo il backfill. I gruppi
+non vengono convertiti in sedi e i grant esistenti restano limitati al loro
+ambito. La API consente amministrazione/archiviazione delle sedi, selezione sede
+per enrollment, assegnazione dispositivo, grant site-scoped e filtro ticket;
+la Dashboard espone questi flussi. Ticket già aperti mantengono il proprio
+SiteId storico al successivo spostamento del device.
+
+`./scripts/test.sh` passato con 47 test xUnit/PostgreSQL e 4 Vitest, build
+TypeScript/Vite inclusa. Lo scenario auth dimostra visibilità dei dispositivi
+della sede, negazione separata di `remote.control` e revoca della visibilità;
+`git diff --check` passato. L’upgrade con dati M1–M5 e il deploy live non sono
+ancora verificati. Outbox, allarmi persistenti e il modulo Service Desk SD1
+restano sviluppo successivo.
