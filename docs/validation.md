@@ -894,15 +894,20 @@ Implementato il nome visualizzato modificabile in Account e sicurezza; la sessio
 MeshCentral riceve il nome scelto oppure l’email come fallback, mai l’ID interno.
 Aggiunta la migrazione versionata `20261019140500_OperatorDisplayName`. La prova
 end-to-end verifica la validazione del profilo e che il provider Mesh riceva il
-nome configurato invece dell’ID account. `./scripts/test.sh` passato: 63 test
-API/PostgreSQL, 4 test Vitest, TypeScript e build dashboard. Nessun deploy LAN
-effettuato durante la sessione remota attiva; la prova visiva sul PC resta pendente.
+nome configurato invece dell’ID account. `./scripts/test.sh` passato: 64 test
+API/PostgreSQL, 4 test Vitest, TypeScript e build dashboard. Deploy LAN completato con backup protetto `.backups/20261019T133343Z.6LTaS8`;
+migrazione applicata con API ferma dopo verifica zero sessioni attive, poi API e
+dashboard ricreate. `verify-lan.py` ha confermato CA/readiness, dashboard/assets e
+rifiuto anonimo. Prova visiva sull’indicatore del PC ancora pendente. Gli account
+esistenti hanno il nuovo campo vuoto e vedono l’email come fallback finché non
+impostano il nome in Account e sicurezza.
 
 La durata del link MeshCentral è stata estesa a 30 minuti (prima 5); il countdown
-UI continua a riflettere `ExpiresAt` fornito dal server. L’aggiornamento live è
-rinviato finché risultano sessioni attive.
+UI continua a riflettere `ExpiresAt` fornito dal server. Deploy LAN completato con
+backup `.backups/20261019T133343Z.6LTaS8`, dopo aver verificato zero sessioni attive;
+API e dashboard aggiornate e readiness HTTPS verificata.
 
 Verifica finale dopo la durata di 30 minuti: `./scripts/test.sh` passato con 64
 test xUnit/PostgreSQL, 4 test Vitest, TypeScript e build dashboard. Test dedicato
-vincola la durata a 30 minuti; `docker compose build api dashboard` passato. CI
-per il commit `9355c75` in esecuzione al momento della verifica.
+vincola la durata a 30 minuti; `docker compose build api dashboard` passato. CI per il commit `9355c75` ha passato Linux build/test/smoke; la pipeline Windows
+per packaging dell’agente resta in corso e non blocca le modifiche web.
