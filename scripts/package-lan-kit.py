@@ -14,7 +14,7 @@ parser.add_argument('--artifact', type=Path, required=True)
 parser.add_argument('--run', required=True)
 parser.add_argument('--commit', required=True)
 parser.add_argument('--output', type=Path, required=True)
-parser.add_argument('--version', default='0.6.0')
+parser.add_argument('--version', default='0.8.0')
 parser.add_argument('--remote-engine', action='store_true')
 parser.add_argument('--ca', type=Path, default=Path('omnidesk-local-ca.crt'))
 args = parser.parse_args()
@@ -24,7 +24,7 @@ if not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', args.version) or args.artifact.na
     parser.error('Versione e directory artifact non corrispondenti')
 if args.output.name != f'OmniDesk.Windows.LAN-{args.version}.zip':
     parser.error('Nome output non corrispondente alla versione')
-remote_note = ('Include il motore remoto Windows; abilitarlo dalla console IT dopo enrollment. L'accesso non presidiato resta disattivato per default.'
+remote_note = ("Include il motore remoto Windows; abilitarlo dalla console IT dopo enrollment. L'accesso non presidiato resta disattivato per default."
                if args.remote_engine else 'Non include MeshCentral Agent: il desktop remoto non e disponibile con questo pacchetto.')
 expected = {}
 for line in (args.artifact / 'SHA256SUMS.txt').read_text().splitlines():
