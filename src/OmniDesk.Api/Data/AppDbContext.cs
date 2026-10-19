@@ -39,6 +39,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
 {
     public DbSet<SupportMessage> SupportMessages => Set<SupportMessage>();
     public DbSet<SupportTicket> SupportTickets => Set<SupportTicket>();
+    public DbSet<SupportQueue> SupportQueues => Set<SupportQueue>();
     public DbSet<DeviceGroup> DeviceGroups => Set<DeviceGroup>();
     public DbSet<Site> Sites => Set<Site>();
     public DbSet<Device> Devices => Set<Device>();
@@ -81,9 +82,14 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
         b.Entity<SupportTicket>().Property(x => x.State).HasMaxLength(20);
         b.Entity<SupportTicket>().Property(x => x.Priority).HasMaxLength(20).HasDefaultValue("normal");
         b.Entity<SupportTicket>().Property(x => x.Category).HasMaxLength(32).HasDefaultValue("general");
+        b.Entity<SupportTicket>().HasOne<SupportQueue>().WithMany().HasForeignKey(x => x.QueueId).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<SupportQueue>().Property(x => x.Name).HasMaxLength(100);
+        b.Entity<SupportQueue>().Property(x => x.NormalizedName).HasMaxLength(100);
+        b.Entity<SupportQueue>().HasIndex(x => x.NormalizedName).IsUnique();
         b.Entity<SupportTicket>().HasOne<AppUser>().WithMany().HasForeignKey(x => x.AssigneeId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<SupportTicket>().HasIndex(x => new { x.SiteId, x.State, x.Priority, x.CreatedAt });
         b.Entity<SupportTicket>().HasIndex(x => new { x.SiteId, x.Category, x.State, x.CreatedAt });
+        b.Entity<SupportTicket>().HasIndex(x => new { x.QueueId, x.State, x.CreatedAt });
         b.Entity<SupportTicket>().HasIndex(x => x.AssigneeId);
 
         b.Entity<DashboardLayout>().HasKey(x => x.UserId);

@@ -872,6 +872,36 @@ namespace OmniDesk.Api.Migrations
                     b.ToTable("SupportMessages");
                 });
 
+            modelBuilder.Entity("OmniDesk.Api.Data.SupportQueue", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NormalizedName")
+                        .IsUnique();
+
+                    b.ToTable("SupportQueues");
+                });
+
             modelBuilder.Entity("OmniDesk.Api.Data.SupportTicket", b =>
                 {
                     b.Property<Guid>("Id")
@@ -911,6 +941,9 @@ namespace OmniDesk.Api.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)")
                         .HasDefaultValue("normal");
+
+                    b.Property<Guid?>("QueueId")
+                        .HasColumnType("uuid");
 
                     b.Property<Guid>("RequestId")
                         .HasColumnType("uuid");
@@ -957,6 +990,8 @@ namespace OmniDesk.Api.Migrations
 
                     b.HasIndex("DeviceId", "RequesterKey", "RequestId")
                         .IsUnique();
+
+                    b.HasIndex("QueueId", "State", "CreatedAt");
 
                     b.HasIndex("SiteId", "Category", "State", "CreatedAt");
 
@@ -1222,6 +1257,11 @@ namespace OmniDesk.Api.Migrations
                         .HasForeignKey("DeviceId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("OmniDesk.Api.Data.SupportQueue", null)
+                        .WithMany()
+                        .HasForeignKey("QueueId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("OmniDesk.Api.Data.Site", null)
                         .WithMany()

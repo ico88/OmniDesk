@@ -1,5 +1,14 @@
 namespace OmniDesk.Api.Data;
 
+public sealed class SupportQueue
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string Name { get; set; } = "";
+    public string NormalizedName { get; set; } = "";
+    public bool IsActive { get; set; } = true;
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
 public sealed class SupportTicket
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -13,6 +22,7 @@ public sealed class SupportTicket
     public string State { get; set; } = "open";
     public string Priority { get; set; } = "normal";
     public string Category { get; set; } = "general";
+    public Guid? QueueId { get; set; }
     public string? AssigneeId { get; set; }
     public string? Resolution { get; set; }
     public long Version { get; set; } = 1;

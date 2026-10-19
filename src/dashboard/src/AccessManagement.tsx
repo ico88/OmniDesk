@@ -6,6 +6,7 @@ type Role = { id: string; name: string; permissions: string[] };
 type Target = { id: string; name: string };
 type Site = Target & { isArchived: boolean; deviceCount: number; ticketCount: number };
 type Grant = { id: string; userId: string; roleId: string; groupId: string | null; deviceId: string | null; siteId: string | null };
+type SupportQueue = { id: string; name: string; isActive: boolean; ticketCount: number };
 
 export function AccessManagement({ currentUserId }: { currentUserId: string }) {
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -14,6 +15,7 @@ export function AccessManagement({ currentUserId }: { currentUserId: string }) {
   const [devices, setDevices] = useState<Target[]>([]);
   const [sites, setSites] = useState<Site[]>([]);
   const [grants, setGrants] = useState<Grant[]>([]);
+  const [supportQueues, setSupportQueues] = useState<SupportQueue[]>([]);
   const [scope, setScope] = useState('group');
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState('');
@@ -21,11 +23,11 @@ export function AccessManagement({ currentUserId }: { currentUserId: string }) {
   const [selectedId, setSelectedId] = useState('');
   const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
   async function load() {
-    const [a, r, g, d, s, locations] = await Promise.all([
+    const [a, r, g, d, s, locations, queues] = await Promise.all([
       api<Account[]>('/admin/users'), api<Role[]>('/admin/roles'), api<Target[]>('/admin/groups'),
-      api<Target[]>('/devices'), api<Grant[]>('/admin/grants'), api<Site[]>('/admin/sites'),
+      api<Target[]>('/devices'), api<Grant[]>('/admin/grants'), api<Site[]>('/admin/sites'), api<SupportQueue[]>('/admin/support-queues'),
     ]);
-    setAccounts(a); setRoles(r); setGroups(g); setDevices(d); setGrants(s); setSites(locations);
+    setAccounts(a); setRoles(r); setGroups(g); setDevices(d); setGrants(s); setSites(locations); setSupportQueues(queues);
   }
   async function run(work: () => Promise<void>) {
     setBusy(true); setError(''); setMessage('');
@@ -72,6 +74,10 @@ export function AccessManagement({ currentUserId }: { currentUserId: string }) {
     <section className="panel"><h2>Sedi operative</h2><p>Le sedi sono un ambito distinto dai gruppi; i ticket conservano la sede storica del dispositivo quando vengono aperti.</p>
       <form className="settings" onSubmit={e => { e.preventDefault(); const form = e.currentTarget; const values = new FormData(form); void run(async () => { await api('/admin/sites', 'POST', { name: values.get('name') }); form.reset(); await load(); setMessage('Sede creata'); }); }}><label>Nuova sede<input name="name" required maxLength={200}/></label><button disabled={busy}>Crea sede</button></form>
       <div className="table-wrap"><table><thead><tr><th>Sede</th><th>Dispositivi</th><th>Ticket storici</th><th>Stato</th><th></th></tr></thead><tbody>{sites.map(site => <tr key={site.id}><td>{site.name}</td><td>{site.deviceCount}</td><td>{site.ticketCount}</td><td>{site.isArchived ? 'Archiviata' : 'Attiva'}</td><td>{!site.isArchived && <button className="secondary compact" disabled={busy || site.deviceCount > 0} title={site.deviceCount > 0 ? 'Sposta prima tutti i dispositivi' : undefined} onClick={() => void run(async () => { await api(`/admin/sites/${site.id}`, 'PUT', { name: site.name, expectedName: site.name, isArchived: true }); await load(); setMessage('Sede archiviata'); })}>Archivia</button>}</td></tr>)}</tbody></table></div>
+    </section>
+    <section className="panel"><h2>Code di assistenza</h2><p>Le code organizzano il lavoro senza cambiare i permessi di visibilità del ticket. Disattivare una coda non rimuove le assegnazioni storiche.</p>
+      <form className="settings" onSubmit={e => { e.preventDefault(); const form = e.currentTarget; const values = new FormData(form); void run(async () => { await api('/admin/support-queues', 'POST', { name: values.get('name') }); form.reset(); await load(); setMessage('Coda creata'); }); }}><label>Nuova coda<input name="name" required maxLength={100}/></label><button disabled={busy}>Crea coda</button></form>
+      <div className="table-wrap"><table><thead><tr><th>Coda</th><th>Ticket</th><th>Stato</th><th></th></tr></thead><tbody>{supportQueues.map(queue => <tr key={queue.id}><td>{queue.name}</td><td>{queue.ticketCount}</td><td>{queue.isActive ? 'Attiva' : 'Disattivata'}</td><td><button className="secondary compact" disabled={busy} onClick={() => void run(async () => { await api(`/admin/support-queues/${queue.id}`, 'PUT', { name: queue.name, expectedName: queue.name, isActive: !queue.isActive }); await load(); setMessage(queue.isActive ? 'Coda disattivata' : 'Coda riattivata'); })}>{queue.isActive ? 'Disattiva' : 'Riattiva'}</button></td></tr>)}</tbody></table></div>
     </section>
     <form className="panel settings" onSubmit={e => {
       e.preventDefault(); const form = e.currentTarget; const values = new FormData(form);

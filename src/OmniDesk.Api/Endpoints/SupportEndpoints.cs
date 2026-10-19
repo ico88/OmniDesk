@@ -9,7 +9,8 @@ using OmniDesk.Contracts;
 namespace OmniDesk.Api.Endpoints;
 
 public sealed record SupportStaffEdit(long ExpectedVersion,string State,string? Resolution,bool AddReply=false,
-    string? Priority=null,bool UpdatePriority=false,string? AssigneeId=null,bool UpdateAssignment=false);
+    string? Priority=null,bool UpdatePriority=false,string? AssigneeId=null,bool UpdateAssignment=false,
+    Guid? QueueId=null,bool UpdateQueue=false);
 public static class SupportEndpoints
 {
     private static readonly string[] Priorities = ["low", "normal", "high", "urgent"];
@@ -68,10 +69,19 @@ public static class SupportEndpoints
             return Results.Created($"/api/support/{ticket.Id}", View(ticket));
         });
         var staff = app.MapGroup("/api/support").RequireAuthorization();
-        staff.MapGet("", async (string? state, string? search, Guid? deviceId, Guid? siteId, string? priority, string? assignee, string? category, HttpContext c, AppDbContext db, PermissionService p) => {
+        staff.MapGet("/queues", async (HttpContext c, AppDbContext db, PermissionService p) => {
+            var userId = c.User.UserId();
+            var global = await p.Global(userId);
+            var hasScoped = await (from g in db.ScopeGrants join permission in db.RolePermissions on g.RoleId equals permission.RoleId
+                where g.UserId == userId && (permission.Permission == "tickets.view" || permission.Permission == "tickets.manage") select g.Id).AnyAsync();
+            if (!global.Contains("tickets.view") && !global.Contains("tickets.manage") && !hasScoped) return Results.Forbid();
+            return Results.Ok(await db.SupportQueues.AsNoTracking().Where(x => x.IsActive).OrderBy(x => x.Name).Select(x => new { x.Id, x.Name }).ToArrayAsync());
+        });
+        staff.MapGet("", async (string? state, string? search, Guid? deviceId, Guid? siteId, string? priority, string? assignee, string? category, string? queue, HttpContext c, AppDbContext db, PermissionService p) => {
             if(state is not (null or "" or "open" or "in_progress" or "resolved" or "closed") || search?.Length > 200 ||
                 priority is not (null or "" or "low" or "normal" or "high" or "urgent") || assignee?.Length > 320 ||
-                (!string.IsNullOrEmpty(category) && !Categories.Contains(category))) return Results.BadRequest();
+                (!string.IsNullOrEmpty(category) && !Categories.Contains(category)) ||
+                (!string.IsNullOrEmpty(queue) && queue != "unassigned" && !Guid.TryParse(queue, out _))) return Results.BadRequest();
             if(deviceId.HasValue && !await p.Allows(c.User.UserId(), "tickets.view", deviceId)) return Results.Forbid();
             if(siteId.HasValue && !await p.Allows(c.User.UserId(), "tickets.view", siteId: siteId)) return Results.Forbid();
             var term=search?.Trim().ToLowerInvariant();
@@ -86,10 +96,12 @@ public static class SupportEndpoints
             if(!string.IsNullOrEmpty(term))query=query.Where(t=>t.Subject.ToLower().Contains(term)||db.Devices.Any(d=>d.Id==t.DeviceId&&d.Name.ToLower().Contains(term)));
             if(!string.IsNullOrEmpty(priority))query=query.Where(t=>t.Priority==priority);
             if(!string.IsNullOrEmpty(category))query=query.Where(t=>t.Category==category);
+            if(queue == "unassigned")query=query.Where(t=>t.QueueId==null);
+            else if(Guid.TryParse(queue, out var queueId))query=query.Where(t=>t.QueueId==queueId);
             var assigneeTerm=assignee?.Trim().ToLowerInvariant();
             if(!string.IsNullOrEmpty(assigneeTerm))query=query.Where(t=>t.AssigneeId!=null&&db.Users.Any(u=>u.Id==t.AssigneeId&&u.Email!=null&&u.Email.ToLower()==assigneeTerm));
             return Results.Ok(await query.OrderByDescending(t => t.CreatedAt).Take(100)
-                .Select(t => new {t.Id,t.Number,t.DeviceId,t.SiteId,deviceName=db.Devices.Where(d=>d.Id==t.DeviceId).Select(d=>d.Name).FirstOrDefault(),siteName=db.Sites.Where(s=>s.Id==t.SiteId).Select(s=>s.Name).FirstOrDefault(),t.Subject,t.Description,t.State,t.Priority,t.Category,t.AssigneeId,assigneeEmail=t.AssigneeId==null?null:db.Users.Where(u=>u.Id==t.AssigneeId).Select(u=>u.Email).FirstOrDefault(),t.Resolution,t.Version,t.CreatedAt,t.UpdatedAt,hasScreenshot=t.Screenshot != null}).ToArrayAsync());
+                .Select(t => new {t.Id,t.Number,t.DeviceId,t.SiteId,deviceName=db.Devices.Where(d=>d.Id==t.DeviceId).Select(d=>d.Name).FirstOrDefault(),siteName=db.Sites.Where(s=>s.Id==t.SiteId).Select(s=>s.Name).FirstOrDefault(),t.Subject,t.Description,t.State,t.Priority,t.Category,t.QueueId,queueName=t.QueueId==null?null:db.SupportQueues.Where(q=>q.Id==t.QueueId).Select(q=>q.Name).FirstOrDefault(),t.AssigneeId,assigneeEmail=t.AssigneeId==null?null:db.Users.Where(u=>u.Id==t.AssigneeId).Select(u=>u.Email).FirstOrDefault(),t.Resolution,t.Version,t.CreatedAt,t.UpdatedAt,hasScreenshot=t.Screenshot != null}).ToArrayAsync());
         });
         staff.MapGet("/{id:guid}/assignees", async (Guid id, HttpContext c, AppDbContext db, PermissionService p) => {
             var ticket = await db.SupportTickets.AsNoTracking().SingleOrDefaultAsync(t => t.Id == id);
@@ -130,6 +142,8 @@ public static class SupportEndpoints
             if (!await p.Allows(c.User.UserId(), "tickets.manage", ticket.DeviceId, siteId: ticket.SiteId)) return Results.Forbid();
             ticket=await db.SupportTickets.AsNoTracking().SingleAsync(t=>t.Id==id);
             if(ticket.Version!=r.ExpectedVersion)return Results.Conflict(new {error="Il ticket e stato aggiornato. Ricarica la conversazione prima di salvare."});
+            if (r.UpdateQueue && r.QueueId is not null && !await db.SupportQueues.AnyAsync(q => q.Id == r.QueueId && q.IsActive))
+                return Results.BadRequest(new { error = "La coda selezionata non è attiva." });
             if (r.UpdateAssignment && r.AssigneeId is not null)
             {
                 if (!await db.Users.AnyAsync(u => u.Id == r.AssigneeId && !u.IsDisabled)) return Results.BadRequest(new { error = "L’assegnatario selezionato non è disponibile." });
@@ -137,12 +151,15 @@ public static class SupportEndpoints
                     !await p.Allows(r.AssigneeId, "tickets.manage", ticket.DeviceId, siteId: ticket.SiteId))
                     return Results.BadRequest(new { error = "L’assegnatario non dispone dei permessi per questa richiesta." });
             }
+            if (r.UpdateQueue && r.QueueId is not null && !await db.SupportQueues.AnyAsync(q => q.Id == r.QueueId && q.IsActive))
+                return Results.BadRequest(new { error = "La coda selezionata non è attiva." });
             var body=r.Resolution?.Trim();
             var priority = r.UpdatePriority ? r.Priority! : ticket.Priority;
             var assigneeId = r.UpdateAssignment ? r.AssigneeId : ticket.AssigneeId;
+            var queueId = r.UpdateQueue ? r.QueueId : ticket.QueueId;
             var updated = await db.SupportTickets.Where(t => t.Id == id && t.Version == r.ExpectedVersion)
                 .ExecuteUpdateAsync(s => s.SetProperty(t => t.State, r.State).SetProperty(t => t.Resolution, body)
-                    .SetProperty(t => t.Priority, priority).SetProperty(t => t.AssigneeId, assigneeId)
+                    .SetProperty(t => t.Priority, priority).SetProperty(t => t.AssigneeId, assigneeId).SetProperty(t => t.QueueId, queueId)
                     .SetProperty(t => t.UpdatedAt, DateTimeOffset.UtcNow).SetProperty(t => t.Version, t => t.Version + 1));
             if (updated == 0) return Results.Conflict(new {error="Il ticket e stato aggiornato. Ricarica la conversazione prima di salvare."});
             if(!string.IsNullOrEmpty(body)&&(r.AddReply||body!=ticket.Resolution)) {
@@ -152,9 +169,10 @@ public static class SupportEndpoints
             if(ticket.State!=r.State)db.SupportMessages.Add(new SupportMessage {TicketId=id,ActorId=c.User.UserId(),Kind="state_change",FromState=ticket.State,ToState=r.State});
             if (ticket.Priority != priority) db.AuditEvents.Add(new AuditEvent { ActorId = c.User.UserId(), Action = "ticket.priority.update", Target = id.ToString() });
             if (ticket.AssigneeId != assigneeId) db.AuditEvents.Add(new AuditEvent { ActorId = c.User.UserId(), Action = "ticket.assignee.update", Target = id.ToString() });
+            if (ticket.QueueId != queueId) db.AuditEvents.Add(new AuditEvent { ActorId = c.User.UserId(), Action = "ticket.queue.update", Target = id.ToString() });
             db.AuditEvents.Add(new AuditEvent { ActorId = c.User.UserId(), Action = "ticket.update", Target = id.ToString() });
             CoreOutbox.Add(db, "ticket.updated", "ticket", id,
-                new { ticketId = id, deviceId = ticket.DeviceId, siteId = ticket.SiteId, oldState = ticket.State, state = r.State, oldPriority = ticket.Priority, priority, oldAssigneeId = ticket.AssigneeId, assigneeId, version = r.ExpectedVersion + 1 }, c.TraceIdentifier);
+                new { ticketId = id, deviceId = ticket.DeviceId, siteId = ticket.SiteId, oldState = ticket.State, state = r.State, oldPriority = ticket.Priority, priority, oldAssigneeId = ticket.AssigneeId, assigneeId, oldQueueId = ticket.QueueId, queueId, version = r.ExpectedVersion + 1 }, c.TraceIdentifier);
             await db.SaveChangesAsync(); await tx.CommitAsync(); return Results.NoContent();
         });
         staff.MapGet("/{id:guid}/messages",async(Guid id,long? before,HttpContext c,AppDbContext db,PermissionService p)=>{
