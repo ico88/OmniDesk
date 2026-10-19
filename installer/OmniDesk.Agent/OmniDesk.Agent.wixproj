@@ -1,3 +1,4 @@
 <Project Sdk="WixToolset.Sdk/6.0.2">
 <PropertyGroup><OutputName>OmniDesk.Agent</OutputName><InstallerPlatform>x64</InstallerPlatform><DefineConstants>AgentPublishDir=$(MSBuildThisFileDirectory)..\..\artifacts\agent-win-x64;TrayPublishDir=$(MSBuildThisFileDirectory)..\..\artifacts\tray-win-x64</DefineConstants></PropertyGroup>
+<ItemGroup><PackageReference Include="WixToolset.Util.wixext" Version="6.0.2" /></ItemGroup>
 </Project>

@@ -1,4 +1,4 @@
-<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
   <Package Name="OmniDesk Agent" Manufacturer="OmniDesk" Version="0.6.0" UpgradeCode="2B357D2E-F3D9-4BBD-B7E4-68E4E279FA82" Scope="perMachine">
     <MajorUpgrade DowngradeErrorMessage="A newer OmniDesk Agent is already installed." />
     <MediaTemplate EmbedCab="yes" />
@@ -8,11 +8,7 @@
           <File Id="AgentExe" Source="$(var.AgentPublishDir)\OmniDesk.Agent.Windows.exe" KeyPath="yes" />
           <ServiceInstall Id="InstallService" Name="OmniDeskAgent" DisplayName="OmniDesk Agent" Description="OmniDesk monitoring and inventory agent" Type="ownProcess" Start="auto" ErrorControl="normal" Account="LocalSystem">
             <PermissionEx Sddl="D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;CCLCRC;;;IU)" />
-            <ServiceConfigFailureActions OnInstall="yes" OnReinstall="yes" ResetPeriod="86400">
-              <Failure Action="restartService" Delay="5000" />
-              <Failure Action="restartService" Delay="30000" />
-              <Failure Action="restartService" Delay="120000" />
-            </ServiceConfigFailureActions>
+            <util:ServiceConfig FirstFailureActionType="restart" SecondFailureActionType="restart" ThirdFailureActionType="restart" ResetPeriodInDays="1" RestartServiceDelayInSeconds="30" />
           </ServiceInstall>
           <ServiceControl Id="ControlService" Name="OmniDeskAgent" Start="install" Stop="both" Remove="uninstall" Wait="yes" />
         </Component>
