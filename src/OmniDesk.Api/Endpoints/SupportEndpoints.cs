@@ -15,6 +15,7 @@ public sealed record SupportStaffEdit(long ExpectedVersion,string State,string? 
 public sealed record SupportInternalNote(long ExpectedVersion, string Body);
 public sealed record ManualSupportCreate(Guid RequestId, Guid DeviceId, string Subject, string Description, string Category, string Priority);
 public sealed record SupportTicketDeviceChange(long ExpectedVersion, Guid DeviceId);
+public sealed record SupportTicketParticipantChange(long ExpectedVersion, string UserId);
 public sealed record SupportInterventionLink(long ExpectedVersion, Guid DeviceId, string ArtifactType, Guid ArtifactId);
 public sealed record SupportInterventionSummaryCreate(long ExpectedVersion, Guid DeviceId, string ArtifactType,
     Guid ArtifactId, string Summary, string Outcome, string? FollowUp);
@@ -44,6 +45,9 @@ public static class SupportEndpoints
     private static bool ValidKey(string? key) => key is { Length: 64 } && key.All(Uri.IsHexDigit);
     private static SupportTicketView View(SupportTicket t) => new(t.Id, t.Number, t.DeviceId, t.Subject, t.Description, t.State,
         t.Resolution, t.Version, t.CreatedAt, t.UpdatedAt, t.Screenshot != null, t.Category, t.Origin);
+    private static async Task<bool> CanViewManageTicket(PermissionService permissions, string userId, SupportTicket ticket) =>
+        await permissions.Allows(userId, "tickets.view", ticket.DeviceId, siteId: ticket.SiteId) &&
+        await permissions.Allows(userId, "tickets.manage", ticket.DeviceId, siteId: ticket.SiteId);
     private static async Task<string?> LinkedArtifactCapability(AppDbContext db, Guid ticketId, Guid deviceId, string artifactType, Guid artifactId)
     {
         var bodies = await db.SupportMessages.AsNoTracking().Where(x => x.TicketId == ticketId && x.Kind == "rmm_intervention")
@@ -334,6 +338,103 @@ public static class SupportEndpoints
             return Results.NoContent();
         });
         var staff = app.MapGroup("/api/support").RequireAuthorization();
+        staff.MapGet("/{id:guid}/participants", async (Guid id, HttpContext c, AppDbContext db, PermissionService p) => {
+            var ticket = await db.SupportTickets.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id);
+            if (ticket is null) return Results.NotFound();
+            var userId = c.User.UserId();
+            if (!await p.Allows(userId, "tickets.view", ticket.DeviceId, siteId: ticket.SiteId)) return Results.Forbid();
+            var rows = await (from participant in db.SupportTicketParticipants.AsNoTracking()
+                              join user in db.Users.AsNoTracking() on participant.UserId equals user.Id
+                              where participant.TicketId == id && !user.IsDisabled
+                              orderby user.DisplayName, user.Email
+                              select new { participant.Id, participant.UserId, participant.AddedBy, participant.AddedAt,
+                                  user.DisplayName, user.Email }).ToArrayAsync();
+            var visible = new List<object>();
+            foreach (var row in rows)
+                if (await p.Allows(row.UserId, "tickets.view", ticket.DeviceId, siteId: ticket.SiteId))
+                    visible.Add(new { row.Id, row.UserId, name = string.IsNullOrWhiteSpace(row.DisplayName) ? row.Email : row.DisplayName,
+                        row.Email, row.AddedAt });
+            c.Response.Headers.CacheControl = "no-store";
+            return Results.Ok(visible);
+        });
+        staff.MapGet("/{id:guid}/participant-candidates", async (Guid id, HttpContext c, AppDbContext db, PermissionService p) => {
+            var ticket = await db.SupportTickets.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id);
+            if (ticket is null) return Results.NotFound();
+            if (!await CanViewManageTicket(p, c.User.UserId(), ticket)) return Results.Forbid();
+            var existing = await db.SupportTicketParticipants.AsNoTracking().Where(x => x.TicketId == id)
+                .Select(x => x.UserId).ToArrayAsync();
+            var candidates = await db.Users.AsNoTracking().Where(x => !x.IsDisabled && x.Id != c.User.UserId() &&
+                    (ticket.RequesterUserId == null || x.Id != ticket.RequesterUserId) && !existing.Contains(x.Id))
+                .OrderBy(x => x.DisplayName).ThenBy(x => x.Email).Take(200)
+                .Select(x => new { x.Id, x.DisplayName, x.Email }).ToArrayAsync();
+            var visible = new List<object>();
+            foreach (var candidate in candidates)
+                if (await p.Allows(candidate.Id, "tickets.view", ticket.DeviceId, siteId: ticket.SiteId))
+                    visible.Add(new { id = candidate.Id, name = string.IsNullOrWhiteSpace(candidate.DisplayName) ? candidate.Email : candidate.DisplayName,
+                        email = candidate.Email });
+            c.Response.Headers.CacheControl = "no-store";
+            return Results.Ok(visible);
+        });
+        staff.MapPost("/{id:guid}/participants", async (Guid id, SupportTicketParticipantChange r, HttpContext c, AppDbContext db, PermissionService p) => {
+            if (r.ExpectedVersion < 1 || string.IsNullOrWhiteSpace(r.UserId) || r.UserId.Length > 450 || r.UserId == c.User.UserId())
+                return Results.BadRequest(new { error = "Seleziona un partecipante valido." });
+            var actorId = c.User.UserId();
+            var ticket = await db.SupportTickets.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id);
+            if (ticket is null) return Results.NotFound();
+            if (!await CanViewManageTicket(p, actorId, ticket)) return Results.Forbid();
+            if (ticket.RequesterUserId == r.UserId || !await db.Users.AnyAsync(x => x.Id == r.UserId && !x.IsDisabled) ||
+                !await p.Allows(r.UserId, "tickets.view", ticket.DeviceId, siteId: ticket.SiteId))
+                return Results.BadRequest(new { error = "Il partecipante deve essere attivo e avere già accesso di lettura al ticket." });
+
+            await using var tx = await db.Database.BeginTransactionAsync();
+            await DeviceOperationLock.Acquire(db, ticket.DeviceId);
+            ticket = await db.SupportTickets.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id);
+            if (ticket is null) return Results.NotFound();
+            if (!await CanViewManageTicket(p, actorId, ticket)) return Results.Forbid();
+            if (ticket.Version != r.ExpectedVersion) return Results.Conflict(new { error = "Il ticket è stato aggiornato. Ricarica i partecipanti." });
+            if (ticket.RequesterUserId == r.UserId || !await db.Users.AnyAsync(x => x.Id == r.UserId && !x.IsDisabled) ||
+                !await p.Allows(r.UserId, "tickets.view", ticket.DeviceId, siteId: ticket.SiteId))
+                return Results.BadRequest(new { error = "Il partecipante deve essere attivo e avere già accesso di lettura al ticket." });
+            if (await db.SupportTicketParticipants.AnyAsync(x => x.TicketId == id && x.UserId == r.UserId))
+                return Results.Conflict(new { error = "Questo utente partecipa già al ticket." });
+            var now = DateTimeOffset.UtcNow;
+            var changed = await db.SupportTickets.Where(x => x.Id == id && x.Version == r.ExpectedVersion)
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.Version, x => x.Version + 1).SetProperty(x => x.UpdatedAt, now));
+            if (changed == 0) return Results.Conflict(new { error = "Il ticket è stato aggiornato. Ricarica i partecipanti." });
+            var participant = new SupportTicketParticipant { TicketId = id, UserId = r.UserId, AddedBy = actorId, AddedAt = now };
+            db.SupportTicketParticipants.Add(participant);
+            db.AuditEvents.Add(new AuditEvent { ActorId = actorId, Action = "ticket.participant.added", Target = id.ToString() });
+            CoreOutbox.Add(db, "ticket.participant.added", "ticket", id,
+                new { ticketId = id, deviceId = ticket.DeviceId, actorId, participantUserId = r.UserId, version = r.ExpectedVersion + 1 }, c.TraceIdentifier);
+            await db.SaveChangesAsync();
+            await tx.CommitAsync();
+            return Results.Created($"/api/support/{id}/participants/{participant.Id}", new { participant.Id, participant.UserId, participant.AddedAt });
+        });
+        staff.MapDelete("/{id:guid}/participants/{participantId:guid}", async (Guid id, Guid participantId, long expectedVersion, HttpContext c, AppDbContext db, PermissionService p) => {
+            if (expectedVersion < 1) return Results.BadRequest();
+            var actorId = c.User.UserId();
+            var ticket = await db.SupportTickets.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id);
+            if (ticket is null) return Results.NotFound();
+            if (!await CanViewManageTicket(p, actorId, ticket)) return Results.Forbid();
+            await using var tx = await db.Database.BeginTransactionAsync();
+            await DeviceOperationLock.Acquire(db, ticket.DeviceId);
+            ticket = await db.SupportTickets.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id);
+            if (ticket is null) return Results.NotFound();
+            if (!await CanViewManageTicket(p, actorId, ticket)) return Results.Forbid();
+            if (ticket.Version != expectedVersion) return Results.Conflict(new { error = "Il ticket è stato aggiornato. Ricarica i partecipanti." });
+            var participant = await db.SupportTicketParticipants.SingleOrDefaultAsync(x => x.Id == participantId && x.TicketId == id);
+            if (participant is null) return Results.NotFound();
+            var changed = await db.SupportTickets.Where(x => x.Id == id && x.Version == expectedVersion)
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.Version, x => x.Version + 1).SetProperty(x => x.UpdatedAt, DateTimeOffset.UtcNow));
+            if (changed == 0) return Results.Conflict(new { error = "Il ticket è stato aggiornato. Ricarica i partecipanti." });
+            db.SupportTicketParticipants.Remove(participant);
+            db.AuditEvents.Add(new AuditEvent { ActorId = actorId, Action = "ticket.participant.removed", Target = id.ToString() });
+            CoreOutbox.Add(db, "ticket.participant.removed", "ticket", id,
+                new { ticketId = id, deviceId = ticket.DeviceId, actorId, version = expectedVersion + 1 }, c.TraceIdentifier);
+            await db.SaveChangesAsync();
+            await tx.CommitAsync();
+            return Results.NoContent();
+        });
         staff.MapPost("/manual", async (ManualSupportCreate r, HttpContext c, AppDbContext db, PermissionService p) => {
             var priority = CanonicalPriority(r.Priority);
             if (r.RequestId == Guid.Empty || r.DeviceId == Guid.Empty || string.IsNullOrWhiteSpace(r.Subject) || r.Subject.Trim().Length > 200 ||
@@ -686,13 +787,14 @@ public static class SupportEndpoints
             if ((r.UpdateQueue || r.UpdateAssignment) && queueId is not null && assigneeId is not null && !await db.SupportQueueMembers.AnyAsync(m => m.QueueId == queueId && m.UserId == assigneeId))
                 return Results.BadRequest(new { error = "L’assegnatario deve appartenere alla coda selezionata." });
             var priority = r.UpdatePriority ? updatedPriority! : ticket.Priority;
+            var replyAdded = !string.IsNullOrEmpty(body) && (r.AddReply || body != ticket.Resolution);
             var updated = await db.SupportTickets.Where(t => t.Id == id && t.Version == r.ExpectedVersion)
                 .ExecuteUpdateAsync(s => s.SetProperty(t => t.State, r.State).SetProperty(t => t.Resolution, resolution)
                     .SetProperty(t => t.Priority, priority).SetProperty(t => t.AssigneeId, assigneeId).SetProperty(t => t.QueueId, queueId)
                     .SetProperty(t => t.UpdatedAt, DateTimeOffset.UtcNow).SetProperty(t => t.Version, t => t.Version + 1));
             if (updated == 0) return Results.Conflict(new {error="Il ticket e stato aggiornato. Ricarica la conversazione prima di salvare."});
-            if(!string.IsNullOrEmpty(body)&&(r.AddReply||body!=ticket.Resolution)) {
-                db.SupportMessages.Add(new SupportMessage {TicketId=id,ActorId=c.User.UserId(),Body=body});
+            if(replyAdded) {
+                db.SupportMessages.Add(new SupportMessage {TicketId=id,ActorId=c.User.UserId(),Body=body!});
                 db.AuditEvents.Add(new AuditEvent {ActorId=c.User.UserId(),Action="ticket.reply",Target=id.ToString()});
             }
             if(ticket.State!=r.State)db.SupportMessages.Add(new SupportMessage {TicketId=id,ActorId=c.User.UserId(),Kind="state_change",FromState=ticket.State,ToState=r.State});
@@ -701,7 +803,7 @@ public static class SupportEndpoints
             if (ticket.QueueId != queueId) db.AuditEvents.Add(new AuditEvent { ActorId = c.User.UserId(), Action = "ticket.queue.update", Target = id.ToString() });
             db.AuditEvents.Add(new AuditEvent { ActorId = c.User.UserId(), Action = "ticket.update", Target = id.ToString() });
             CoreOutbox.Add(db, "ticket.updated", "ticket", id,
-                new { ticketId = id, deviceId = ticket.DeviceId, siteId = ticket.SiteId, actorId = c.User.UserId(), oldState = ticket.State, state = r.State, oldPriority = ticket.Priority, priority, oldAssigneeId = ticket.AssigneeId, assigneeId, oldQueueId = ticket.QueueId, queueId, version = r.ExpectedVersion + 1 }, c.TraceIdentifier);
+                new { ticketId = id, deviceId = ticket.DeviceId, siteId = ticket.SiteId, actorId = c.User.UserId(), oldState = ticket.State, state = r.State, oldPriority = ticket.Priority, priority, oldAssigneeId = ticket.AssigneeId, assigneeId, oldQueueId = ticket.QueueId, queueId, replyAdded, version = r.ExpectedVersion + 1 }, c.TraceIdentifier);
             await db.SaveChangesAsync(); await tx.CommitAsync(); return Results.NoContent();
         });
         staff.MapPost("/{id:guid}/internal-notes", async (Guid id, SupportInternalNote r, HttpContext c, AppDbContext db, PermissionService p) => {

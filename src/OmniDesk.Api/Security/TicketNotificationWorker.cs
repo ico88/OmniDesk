@@ -102,12 +102,21 @@ public sealed class TicketNotificationWorker(IServiceScopeFactory scopes, ILogge
         {
             kind = "ticket.reply";
             await AddAssigneeOrQueue(db, root, recipients, ct);
+            await AddTicketParticipants(db, ticket.Id, evt.OccurredAt, recipients, ct);
         }
-        else if (evt.EventType == "ticket.updated" && TryString(root, "assigneeId", out var assignee) &&
-                 (!TryString(root, "oldAssigneeId", out var oldAssignee) || !StringComparer.Ordinal.Equals(assignee, oldAssignee)))
+        else if (evt.EventType == "ticket.updated")
         {
-            kind = "ticket.assigned";
-            recipients.Add(assignee);
+            var assignmentChanged = TryString(root, "assigneeId", out var assignee) &&
+                (!TryString(root, "oldAssigneeId", out var oldAssignee) || !StringComparer.Ordinal.Equals(assignee, oldAssignee));
+            kind = assignmentChanged ? "ticket.assigned" : TryBoolean(root, "replyAdded") ? "ticket.reply" : "ticket.updated";
+            if (assignmentChanged) recipients.Add(assignee);
+            else if (kind == "ticket.reply") await AddAssigneeOrQueue(db, root, recipients, ct);
+            await AddTicketParticipants(db, ticket.Id, evt.OccurredAt, recipients, ct);
+        }
+        else if (evt.EventType == "ticket.participant.added" && TryString(root, "participantUserId", out var participant))
+        {
+            kind = "ticket.participant.added";
+            recipients.Add(participant);
         }
         if (kind is null) return;
 
@@ -137,6 +146,14 @@ public sealed class TicketNotificationWorker(IServiceScopeFactory scopes, ILogge
                      .Select(x => x.UserId).ToArrayAsync(ct)) recipients.Add(userId);
     }
 
+    private static async Task AddTicketParticipants(AppDbContext db, Guid ticketId, DateTimeOffset eventAt,
+        HashSet<string> recipients, CancellationToken ct)
+    {
+        foreach (var userId in await db.SupportTicketParticipants.AsNoTracking()
+                     .Where(x => x.TicketId == ticketId && x.AddedAt <= eventAt)
+                     .Select(x => x.UserId).ToArrayAsync(ct)) recipients.Add(userId);
+    }
+
     private static bool TryString(JsonElement root, string name, out string value)
     {
         if (root.TryGetProperty(name, out var property) && property.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(property.GetString()))
@@ -144,6 +161,9 @@ public sealed class TicketNotificationWorker(IServiceScopeFactory scopes, ILogge
         value = "";
         return false;
     }
+
+    private static bool TryBoolean(JsonElement root, string name) =>
+        root.TryGetProperty(name, out var property) && property.ValueKind == JsonValueKind.True;
 
     private async Task RecordFailure(Guid eventId, Exception error, CancellationToken ct)
     {

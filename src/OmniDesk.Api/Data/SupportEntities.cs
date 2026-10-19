@@ -111,6 +111,15 @@ public sealed class SupportTicketDevice
     public string SiteNameSnapshot { get; set; } = "";
 }
 
+public sealed class SupportTicketParticipant
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid TicketId { get; set; }
+    public string UserId { get; set; } = "";
+    public string? AddedBy { get; set; }
+    public DateTimeOffset AddedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
 public sealed class SupportInterventionSummary
 {
     public Guid Id { get; set; } = Guid.NewGuid();

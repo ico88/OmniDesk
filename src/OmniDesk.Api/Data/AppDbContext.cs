@@ -39,6 +39,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
 {
     public DbSet<SupportMessage> SupportMessages => Set<SupportMessage>();
     public DbSet<SupportTicketDevice> SupportTicketDevices => Set<SupportTicketDevice>();
+    public DbSet<SupportTicketParticipant> SupportTicketParticipants => Set<SupportTicketParticipant>();
     public DbSet<SupportInterventionSummary> SupportInterventionSummaries => Set<SupportInterventionSummary>();
     public DbSet<PortalDeviceAccess> PortalDeviceAccesses => Set<PortalDeviceAccess>();
     public DbSet<SupportTicket> SupportTickets => Set<SupportTicket>();
@@ -89,6 +90,11 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
         b.Entity<SupportTicketDevice>().HasOne<Device>().WithMany().HasForeignKey(x => x.DeviceId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<SupportTicketDevice>().HasOne<AppUser>().WithMany().HasForeignKey(x => x.LinkedBy).OnDelete(DeleteBehavior.SetNull);
         b.Entity<SupportTicketDevice>().HasIndex(x => new { x.DeviceId, x.TicketId });
+        b.Entity<SupportTicketParticipant>().HasOne<SupportTicket>().WithMany().HasForeignKey(x => x.TicketId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<SupportTicketParticipant>().HasOne<AppUser>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<SupportTicketParticipant>().HasOne<AppUser>().WithMany().HasForeignKey(x => x.AddedBy).OnDelete(DeleteBehavior.SetNull);
+        b.Entity<SupportTicketParticipant>().HasIndex(x => new { x.TicketId, x.UserId }).IsUnique();
+        b.Entity<SupportTicketParticipant>().HasIndex(x => new { x.UserId, x.AddedAt });
         b.Entity<SupportInterventionSummary>().HasOne<SupportTicket>().WithMany().HasForeignKey(x => x.TicketId).OnDelete(DeleteBehavior.Cascade);
         b.Entity<SupportInterventionSummary>().HasOne<Device>().WithMany().HasForeignKey(x => x.DeviceId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<SupportInterventionSummary>().HasOne<AppUser>().WithMany().HasForeignKey(x => x.AuthorId).OnDelete(DeleteBehavior.SetNull);

@@ -1403,6 +1403,37 @@ namespace OmniDesk.Api.Migrations
                     b.ToTable("SupportTicketDevices");
                 });
 
+            modelBuilder.Entity("OmniDesk.Api.Data.SupportTicketParticipant", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("AddedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("AddedBy")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("TicketId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AddedBy");
+
+                    b.HasIndex("TicketId", "UserId")
+                        .IsUnique();
+
+                    b.HasIndex("UserId", "AddedAt");
+
+                    b.ToTable("SupportTicketParticipants");
+                });
+
             modelBuilder.Entity("OmniDesk.Api.Data.SupportWorkflow", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1935,6 +1966,26 @@ namespace OmniDesk.Api.Migrations
                     b.HasOne("OmniDesk.Api.Data.SupportTicket", null)
                         .WithMany()
                         .HasForeignKey("TicketId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("OmniDesk.Api.Data.SupportTicketParticipant", b =>
+                {
+                    b.HasOne("OmniDesk.Api.Data.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("AddedBy")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("OmniDesk.Api.Data.SupportTicket", null)
+                        .WithMany()
+                        .HasForeignKey("TicketId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("OmniDesk.Api.Data.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
