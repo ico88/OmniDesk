@@ -14,6 +14,18 @@ public static class SlaPolicyEndpoints
     public static void MapSlaPolicyEndpoints(this WebApplication app)
     {
         var policies = app.MapGroup("/api/admin/support-sla/policies").RequireAuthorization();
+        // Return only scopes the caller can manage; scoped managers must not see unrelated sites.
+        app.MapGet("/api/admin/support-sla/scopes", async (HttpContext context, AppDbContext db, PermissionService permissions) =>
+        {
+            var userId = context.User.UserId();
+            var canManageGlobal = await permissions.Allows(userId, "tickets.sla.manage");
+            var sites = new List<object>();
+            foreach (var site in await db.Sites.AsNoTracking().Where(x => !x.IsArchived).OrderBy(x => x.Name).ToArrayAsync())
+                if (await permissions.Allows(userId, "tickets.sla.manage", siteId: site.Id))
+                    sites.Add(new { site.Id, site.Name });
+            if (!canManageGlobal && sites.Count == 0) return Results.Forbid();
+            return Results.Ok(new { canManageGlobal, sites });
+        }).RequireAuthorization();
 
         policies.MapGet("", async (HttpContext context, AppDbContext db, PermissionService permissions) =>
         {
@@ -72,7 +84,6 @@ public static class SlaPolicyEndpoints
 
             var nextVersion = policy.CurrentVersion + 1;
             policy.CurrentVersion = nextVersion;
-            policy.Name = request.Name.Trim();
             policy.Version++;
             policy.UpdatedAt = DateTimeOffset.UtcNow;
             db.SupportSlaPolicyVersions.Add(Version(policy, nextVersion, request.Name, request.Definition, userId));

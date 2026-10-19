@@ -11,6 +11,7 @@ import { KnowledgeBase } from './KnowledgeBase';
 import { Notifications } from './Notifications';
 import { CustomerPortal } from './CustomerPortal';
 import { TicketWorkflowAdmin } from './TicketWorkflowAdmin';
+import { SlaPolicyAdmin } from './SlaPolicyAdmin';
 
 type User = { id: string; email: string; displayName: string | null; globalPermissions: string[]; twoFactorAvailable: boolean; twoFactorEnabled: boolean };
 type Branding = { name: string; logoUrl: string; primaryColor: string; theme: 'light' | 'dark' };
@@ -40,6 +41,7 @@ function App() {
   const [tab, setTab] = useState('overview');
   const [focusTicketId, setFocusTicketId] = useState<string|null>(null);
   const [search,setSearch]=useState('');
+  const [canManageSla,setCanManageSla]=useState(false);
   const admin = user?.globalPermissions.includes('administration') ?? false;
   const canReadKnowledge = user?.globalPermissions.some(p=>p==='knowledge.view'||p==='knowledge.manage') ?? false;
 
@@ -74,6 +76,12 @@ function App() {
     document.documentElement.style.setProperty('--primary', branding.primaryColor);
     document.title = branding.name;
   }, [branding]);
+  useEffect(()=>{
+    if(!user)return;
+    let active=true;
+    void api('/admin/support-sla/scopes').then(()=>{if(active)setCanManageSla(true);}).catch(()=>{if(active)setCanManageSla(false);});
+    return()=>{active=false;};
+  },[user?.id]);
   async function action(work: () => Promise<void>) {
     setBusy(true); setError(''); setMessage('');
     try { await work(); } catch (e) { setError(e instanceof Error ? e.message : 'Errore inatteso'); }
@@ -93,13 +101,14 @@ function App() {
   return <div className="shell"><aside>
     <div className="brand">{branding.logoUrl ? <img src={branding.logoUrl} alt="Logo" referrerPolicy="no-referrer"/> : <img className="brand-mark" src="/favicon.svg" alt=""/>}<strong>{branding.name}</strong></div>
     <small className="nav-label">WORKSPACE</small>
-    <nav aria-label="Navigazione">{[['overview','Panoramica'],['devices','Dispositivi'],['security','Account e sicurezza'],['myTickets','I miei ticket'],['support','Assistenza'],...(canReadKnowledge ? [['knowledge','Knowledge base']] : []),...(admin ? [['branding','Personalizzazione'],['users','Utenti'],['workflows','Workflow ticket'],['audit','Audit']] : [])].map(([id,label]) => <button key={id} className={tab === id ? 'active' : ''} aria-current={tab===id?'page':undefined} onClick={() => { setTab(id); setTotpSetup(null); setRecoveryCodes([]); setEnrollment(''); setStatus(null);  setError(''); setMessage(''); }}><Icon name={id}/><span>{label}</span></button>)}</nav>
+    <nav aria-label="Navigazione">{[['overview','Panoramica'],['devices','Dispositivi'],['security','Account e sicurezza'],['myTickets','I miei ticket'],['support','Assistenza'],...(canReadKnowledge ? [['knowledge','Knowledge base']] : []),...(canManageSla ? [['slaPolicies','Policy SLA']] : []),...(admin ? [['branding','Personalizzazione'],['users','Utenti'],['workflows','Workflow ticket'],['audit','Audit']] : [])].map(([id,label]) => <button key={id} className={tab === id ? 'active' : ''} aria-current={tab===id?'page':undefined} onClick={() => { setTab(id); setTotpSetup(null); setRecoveryCodes([]); setEnrollment(''); setStatus(null);  setError(''); setMessage(''); }}><Icon name={id}/><span>{label}</span></button>)}</nav>
     <div className="account"><small>{user.email}</small><button disabled={busy} onClick={() => void action(async () => { await api('/auth/logout', 'POST'); setUser(null); setTotpSetup(null); setRecoveryCodes([]); setEnrollment(''); setStatus(null); setGroups([]); setBranding(defaults); setAudit([]); setDevices([]); setTab('overview'); await refreshCsrf(); })}><Icon name="logout"/>Esci</button></div>
-  </aside><main className="content" aria-busy={busy}><header><div><small className="eyebrow">WORKSPACE / GESTIONE IT</small><h1>{{overview:'Panoramica',devices:'Dispositivi',branding:'Personalizzazione',users:'Utenti',workflows:'Workflow ticket',audit:'Audit amministrativo',security:'Account e sicurezza',myTickets:'I miei ticket',support:'Assistenza',knowledge:'Knowledge base'}[tab]}</h1></div><div className="header-actions"><Notifications onOpenTicket={id=>{setFocusTicketId(id);setTab('support');}}/><span className="badge"><Icon name="security" size={15}/>{admin?'Amministratore':'Accesso limitato'}</span></div></header>
+  </aside><main className="content" aria-busy={busy}><header><div><small className="eyebrow">WORKSPACE / GESTIONE IT</small><h1>{{overview:'Panoramica',devices:'Dispositivi',branding:'Personalizzazione',users:'Utenti',workflows:'Workflow ticket',slaPolicies:'Policy SLA',audit:'Audit amministrativo',security:'Account e sicurezza',myTickets:'I miei ticket',support:'Assistenza',knowledge:'Knowledge base'}[tab]}</h1></div><div className="header-actions"><Notifications onOpenTicket={id=>{setFocusTicketId(id);setTab('support');}}/><span className="badge"><Icon name="security" size={15}/>{admin?'Amministratore':'Accesso limitato'}</span></div></header>
     {error && <p role="alert" className="error">{error}</p>}{message && <p role="status" className="notice"><Icon name="check"/>{message}</p>}
     {tab === 'support' && <SupportDesk sites={sites} devices={devices} visibleDeviceIds={devices.map(d=>d.id)} focusTicketId={focusTicketId} onTicketFocused={()=>setFocusTicketId(null)} onOpenDevice={id=>action(async()=>{const next=await api<DeviceStatus>(`/devices/${id}/status`);setStatus(next);setTab('devices');})}/>}
     {tab === 'myTickets' && <CustomerPortal onMessage={setMessage}/>}
     {tab === 'knowledge' && canReadKnowledge && <KnowledgeBase canManage={user.globalPermissions.includes('knowledge.manage')} onMessage={setMessage}/>}
+    {tab === 'slaPolicies' && canManageSla && <SlaPolicyAdmin onMessage={setMessage}/>}
     {tab === 'overview' && <><div className="stats">{widgets.map(widget => <article key={widget} className="panel">{widget === 'devices' ? <><div className="stat-title"><small>Dispositivi visibili</small><Icon name="devices"/></div><h2>{devices.length}</h2><p>Autorizzati per il tuo account</p></> : widget === 'permissions' ? <><div className="stat-title"><small>Permessi globali</small><Icon name="users"/></div><h2>{user.globalPermissions.length}</h2><p>{user.globalPermissions.join(', ') || 'Solo concessioni locali'}</p></> : <><div className="stat-title"><small>Autenticazione</small><Icon name="security"/></div><h2>Identity</h2><p>{user.twoFactorEnabled ? '2FA attiva' : '2FA non attiva'}</p></>}</article>)}</div><details className="panel"><summary>Personalizza i tuoi riquadri</summary>{[['devices','Dispositivi'],['permissions','Permessi'],['authentication','Autenticazione']].map(([id,label]) => <label key={id}><input style={{width:'auto'}} type="checkbox" checked={widgets.includes(id)} disabled={busy} onChange={e => { const previous = widgets; const next = e.target.checked ? [...widgets,id] : widgets.filter(x => x !== id); setWidgets(next); void action(async () => { try { await api('/dashboard/layout','PUT',{widgets:next}); } catch (error) { setWidgets(previous); throw error; } }); }}/>{label}</label>)}<button disabled={busy || widgets.length < 2} onClick={() => void action(async () => { const next=[...widgets.slice(1),widgets[0]]; await api('/dashboard/layout','PUT',{widgets:next}); setWidgets(next); })}>Ruota ordine riquadri</button></details><section className="panel welcome"><div><span className="eyebrow">IL TUO SPAZIO DI LAVORO</span><h2>Assistenza, senza perdere il filo.</h2><p>Trova un dispositivo, avvia una sessione autorizzata o segui le richieste di assistenza.</p></div><div className="action-row"><button onClick={()=>setTab('devices')}><Icon name="devices"/>Vai ai dispositivi</button><button className="secondary" onClick={()=>setTab('support')}><Icon name="support"/>Apri assistenza</button></div></section></>}
     {tab === 'devices' && <><section className="panel device-list"><div className="section-heading"><div><span className="eyebrow">DISPOSITIVI</span><h2>Parco macchine <span className="count">{devices.length}</span></h2></div><button className="secondary" disabled={busy} onClick={() => void action(async () => setDevices(await api<Device[]>('/devices')))}><Icon name="refresh"/>Aggiorna</button></div>
       <label className="search-field"><Icon name="search"/><input aria-label="Cerca dispositivo" placeholder="Cerca un dispositivo per nome…" value={search} onChange={e=>setSearch(e.target.value)}/></label>
