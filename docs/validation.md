@@ -625,12 +625,17 @@ grant malformato. La allowlist iframe MeshCentral è configurata solo per gli
 origin OmniDesk LAN e dominio HTTPS configurati in Compose; non è abilitato
 alcun login token.
 
+La readiness include anche lo stato di abilitazione del provisioning: un nodo
+mappato ma disattivato non viene presentato come pronto nella UI. Scenario remoto
+verifica il flag attivo/inattivo dalla stessa API di disponibilità.
+
 Verifiche:
 
 - `docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD/src/dashboard:/work" -w /work node:22-alpine sh -c 'npm ci && npm run build && npm test'`: riuscito; TypeScript/Vite e 4 Vitest.
 - `./scripts/test.sh`: 47 xUnit API/PostgreSQL isolati riusciti; include filtro `deviceId` staff e 403 senza `tickets.view`.
 - `docker compose -f compose.yaml -f compose.mesh.yaml -f compose.mesh-lan.yaml config --quiet`: riuscito.
 - `docker compose -f compose.yaml -f compose.mesh.yaml -f compose.mesh-lan.yaml build api dashboard meshcentral`: riuscito; API pubblicata, dashboard Vite e immagine MeshCentral ricostruite.
+- `docker compose -f compose.yaml -f compose.mesh.yaml -f compose.mesh-lan.yaml build api dashboard`: ripetuto dopo la correzione dello stato di abilitazione; riuscito.
 - `docker compose -f compose.yaml -f compose.mesh.yaml -f compose.mesh-lan.yaml run --rm --no-deps --entrypoint caddy caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile`: configurazione LAN valida.
 - `node --check entrypoint.mjs` nel container Node 22: riuscito. `npm ci` riporta 0 vulnerabilità.
 - `./scripts/smoke.sh --browser`: riuscito su stack effimero isolato; Chromium verifica le dieci schede dispositivo, i controlli disabilitati dopo revoca, e regressioni account/grant/ticket/download già coperte dallo smoke.
