@@ -45,3 +45,14 @@ Accodamento, claim, cancellazione queued, modifica metadata e revoca dispositivo
 ## Supporto Windows 0.6.0
 
 Contratti ticket/screenshot, identità locale del richiedente, permessi `tickets.view`/`tickets.manage`, limiti e idempotenza: [support-implementation.md](support-implementation.md). `/api/devices/{id}/remote-sessions/availability` espone la presenza di configurazione/mapping, senza attestare connessione reale del dispositivo. NodeId visibile solo ad amministrazione globale.
+
+## Service Desk SD1
+
+`GET /api/support` restituisce i ticket visibili e include `priority`, `assigneeId`
+e `assigneeEmail`. `GET /api/support/{id}/assignees` richiede `tickets.manage`
+sull’ambito storico del ticket e restituisce fino a 200 account attivi con entrambi
+i permessi `tickets.view` e `tickets.manage` nello stesso ambito. `PUT
+/api/support/{id}` mantiene il contratto di stato/risposta e accetta inoltre
+`priority` con `updatePriority` e `assigneeId` nullable con `updateAssignment`;
+validazione ruolo, abilitazione, ambito e versione avvengono sul server. Priorità
+ammesse: `low`, `normal`, `high`, `urgent`. Vedere [modello Service Desk](service-desk-data-model.md).

@@ -1,6 +1,6 @@
 # Service Desk — schema PostgreSQL proposto
 
-**Il modello del modulo Service Desk resta proposto e senza schema dedicato.** Il core ha ora la migrazione `CoreSites` per `Sites`, `Devices.SiteId`, `ScopeGrants.SiteId` e `SupportTickets.SiteId`; Identity, dispositivi e audit restano nel core. Le altre entità elencate sotto sono proposte da implementare nelle fasi successive. UUID per entità, timestamp UTC, versioni per concorrenza ottimistica e FK esplicite; JSONB riservato a snapshot/eventi versionati, non sostituisce relazioni e vincoli.
+**Il Service Desk è incrementale:** ticket e conversazione esistono nel core OmniDesk; non è ancora stato creato lo schema PostgreSQL separato `service_desk`. Sedi, permessi per sede, snapshot ticket, outbox, priorità e assegnazione hanno migrazioni core. Code, workflow configurabili, partecipanti, allegati generici, SLA, email, automazioni e knowledge base restano proposte per le fasi successive. UUID, timestamp UTC, versioni per concorrenza ottimistica e FK esplicite; JSONB è riservato a snapshot/eventi versionati, non sostituisce relazioni e vincoli.
 
 ## Prerequisiti core — stato
 
@@ -15,7 +15,7 @@
 
 | Entità proposta | Campi e vincoli principali |
 | --- | --- |
-| Tickets | Id, Number univoco, SiteId obbligatorio, RequesterUserId verificato, QueueId, AssigneeUserId nullable, WorkflowVersionId, StateId, PriorityId, CategoryId, Subject, Description, ReceivedAt, CreatedAt, ResolvedAt/ClosedAt nullable, Version. FK Identity senza duplicare password o identità |
+| Tickets | **Core implementato:** `SupportTickets` contiene device/sede storica, requester macchina, subject/description, state, priority (`low/normal/high/urgent`, default `normal`), `AssigneeId` Identity nullable, resolution/screenshot, version e date. FK assignee Restrict e indici dedicati. **Proposto:** Number, QueueId, workflow configurabile/versionato, CategoryId e ciclo Received/Resolved/Closed strutturato |
 | TicketDevices | PK (TicketId, DeviceId), LinkedAt/By, snapshot nome/sede al collegamento. Almeno una riga per ticket effettivo |
 | TicketParticipants | PK ticket/utente/relazione, richiedente o follower; partecipazione non equivale a concessione RMM |
 | Queues / QueueMembers | Code/team e membri Identity; membership soggetta alle policy di ambito |

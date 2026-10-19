@@ -241,3 +241,17 @@ interrotte. Policy condivisa rifiuta nomi non validi e servizi OmniDesk/Windows
 critici. Release 0.8.4 in CI per Agent/Tray/Setup/MSI. Nessun servizio è stato
 modificato sul dispositivo pilota; test interattivo Windows, pubblicazione LAN
 e firma restano aperti.
+
+
+### SD1 — priorità e assegnazione ticket — sorgenti e test verificati
+
+Il ticket core supporta priorità `low/normal/high/urgent` e assegnatario
+facoltativo, con migrazione EF dedicata. La console IT mostra e modifica entrambi;
+la lista espone email assegnatario. I candidati sono account abilitati con
+`tickets.view` e `tickets.manage` sullo stesso dispositivo/sede del ticket;
+nuove assegnazioni sono ricontrollate lato server. Le modifiche sono versionate,
+auditate e incluse nell’outbox senza descrizioni o contenuti di conversazione.
+`./scripts/test.sh`: 62 test xUnit/PostgreSQL e 4 Vitest passati. Migrazione
+verificata nel database isolato della suite; upgrade del database LAN con record
+preesistenti non eseguito e nessun deploy effettuato. Restano code, SLA, categorie,
+numerazione leggibile, bulk assignment e viste operative.

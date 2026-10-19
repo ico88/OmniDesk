@@ -783,3 +783,21 @@ servizio, idempotenza, claim/risultato e policy) e 4 Vitest. Cross-publish Agent
 passati. Workflow GitHub Actions Windows per il nuovo MSI 0.8.4 in corso. Il test
 Agent non controlla servizi reali; nessuna operazione è stata inviata al PC pilota
 e il deploy LAN è stato evitato.
+
+
+## SD1 — priorità e assegnazione ticket — 19 ottobre 2026
+
+Migrazione `TicketAssignmentAndPriority`: priorità persistente (default `normal`),
+assegnatario Identity opzionale, FK Restrict e indici per sede/stato/priorità/data
+e assegnatario. API consente elenco candidati solo con `tickets.manage` sul ticket;
+sono inclusi account attivi che hanno sia `tickets.view` sia `tickets.manage`
+nell’ambito storico del dispositivo/sede. La mutazione rivalida permessi,
+ammissibilità e versione; audit e outbox registrano le modifiche senza contenuti
+ticket. Dashboard aggiornata per elenco, dettaglio e selettori. Test coprono default,
+default deny, ambito, assegnazione non autorizzata e aggiornamento versionato.
+
+`./scripts/test.sh`: 62 xUnit/PostgreSQL e 4 Vitest passati. `docker compose build
+api dashboard`, `docker compose config -q` e `git diff --check` passati. Workflow
+Windows MSI 0.8.4 ha superato build, installazione, recovery e disinstallazione;
+upgrade/repair/rollback è ancora in corso. Nessun deploy o test di upgrade su DB
+LAN con record reali.
