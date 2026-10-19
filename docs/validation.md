@@ -1710,3 +1710,15 @@ backup usato è storico: non contiene allegati né manifest generale, quindi la
 prova allegati/integrità generale resta aperta. Mesh non è stata ripristinata.
 `bash -n`, `docker compose config` isolato e `git diff --check` passati. Nessun
 servizio LAN modificato.
+
+Aggiornamento del gate restore: `./scripts/smoke.sh --browser` passato anche
+dopo aver aggiunto la creazione di un archivio effimero dallo stack appena
+collaudato. Il fixture conteneva un ticket con un allegato pulito; il manifest
+generale, i checksum blob e i riferimenti nel DB sono risultati validi. Il
+verificatore ha ripristinato DB, file, chiavi Identity e storage CA in volumi
+isolati, migrato il DB senza modifiche pendenti, avviato API e Caddy e superato
+probe HTTPS/CSRF/anonimo. Lo scenario browser ora scarica il contenuto reale e
+verifica che la revoca dell'accesso portale non elimini il file visibile allo
+staff. Il trasferimento del fixture legge i volumi con gli UID dei container,
+senza allargare ACL. Questo prova il percorso software con dati sintetici; il
+restore di una fotografia LAN/off-site e i dati Mesh restano non verificati.

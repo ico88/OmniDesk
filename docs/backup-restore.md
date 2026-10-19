@@ -1,6 +1,6 @@
 # Backup e verifica ripristino
 
-Disponibili backup locale, verifica DB/blob e restore applicativo isolato con chiavi Identity e CA Caddy. Non costituiscono ancora un disaster recovery completo: storage Mesh opzionale, cifratura dei backup, copia off-site, retention, consistenza allegati, failover e tempi RPO/RTO restano da collaudare/configurare.
+Disponibili backup locale, verifica DB/blob e restore applicativo isolato con chiavi Identity e CA Caddy. Lo smoke Chromium crea anche un archivio effimero dal runtime con un allegato reale di test e ne prova il ripristino completo. Non è ancora un disaster recovery completo: storage Mesh opzionale, cifratura, copia off-site, retention, consistenza del backup live, failover e tempi RPO/RTO restano da collaudare/configurare.
 
 ## Backup dell'istanza standard
 
@@ -30,6 +30,6 @@ Verifica checksum e importa il dump con `pg_restore --exit-on-error` in un Postg
 
 Ripristinare inizialmente su host isolato e usare la configurazione/versione di origine: creare volumi nuovi, importare il dump, ripristinare le chiavi Identity e la CA mantenendo ACL e ownership, recuperare configurazione/segreti tramite canale riservato. Prima di esporre il servizio verificare schema, login/password/TOTP/recovery, cookie Secure/CSRF, autorizzazioni, TLS e identità dispositivo. Conservare le chiavi Identity originali: generarne altre rende illeggibili i token cifrati già presenti. Ripristinare la CA evita di dover distribuire un nuovo trust ai client.
 
-Prova runtime eseguita sul backup storico `.backups/20261019T153639Z.mzZpdG`: dump importato, 29 migrazioni storiche applicate alla copia con l'immagine API locale corrente, chiavi Identity/CA ripristinate, API pronta, accesso anonimo negato, cookie antiforgery Secure emesso su HTTPS. Quel backup precede l'inclusione dei blob e del manifest generale: controllo allegati e integrità completa dell'archivio non sono coperti. Il volume Mesh non è stato avviato né verificato.
+Prova runtime eseguita sia sul backup storico `.backups/20261019T153639Z.mzZpdG` (DB/Identity/CA, senza blob) sia sul fixture creato da `./scripts/smoke.sh --browser`: il secondo include il database aggiornato, l'allegato ticket clean del portale, manifest SHA-256 completo, chiavi Identity e CA Caddy. Il test importa il DB in PostgreSQL temporaneo, verifica tutti i riferimenti ai blob, applica migrazioni pendenti, avvia API/Caddy e controlla readiness, diniego anonimo, antiforgery Secure su HTTPS e fiducia nella CA ripristinata. Le copie hanno rete interna, nessuna porta host e volumi temporanei distrutti al termine. Il volume Mesh non viene ripristinato né verificato.
 
 Per un recupero reale, applicare eventuali migrazioni solo dopo verifica compatibilità e provare rollback su copie senza cancellare i volumi originari. Non sovrascrivere il DB live o le sue chiavi durante la verifica. I job/sessioni ripristinati richiedono riconciliazione: una fotografia storica non riattiva automaticamente autorizzazioni revocate o operazioni remote. Il restore isolato non sostituisce una prova periodica di disaster recovery su host separato.
