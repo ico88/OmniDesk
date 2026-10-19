@@ -42,6 +42,7 @@ public static class SupportScenario
         Auth(); var response = await agent.PostAsJsonAsync("/api/agent/support",new SupportIntake(owner,create));
         Assert.Equal(HttpStatusCode.Created,response.StatusCode);
         var ticket = (await response.Content.ReadFromJsonAsync<SupportTicketView>())!;
+        Assert.True(ticket.Number > 0);
         Assert.Equal(device,ticket.DeviceId); Assert.True(ticket.HasScreenshot);
         using (var scope = factory.Services.CreateScope())
         {
@@ -94,6 +95,7 @@ public static class SupportScenario
         Assert.Equal(HttpStatusCode.NoContent,(await admin.PutAsJsonAsync($"/api/support/{ticket.Id}",new {expectedVersion=1,state="resolved",resolution="Risolto fixture",addReply=true,priority="urgent",updatePriority=true,assigneeId=scopedId,updateAssignment=true})).StatusCode);
         var assignedTicket=(await admin.GetFromJsonAsync<System.Text.Json.JsonElement[]>($"/api/support?deviceId={device}"))!.Single();
         Assert.Equal("urgent",assignedTicket.GetProperty("priority").GetString());
+        Assert.True(assignedTicket.GetProperty("number").GetInt64() > 0);
         Assert.Equal(scopedId,assignedTicket.GetProperty("assigneeId").GetString());
         Assert.Single((await admin.GetFromJsonAsync<System.Text.Json.JsonElement[]>($"/api/support?priority=urgent"))!);
         Assert.Single((await admin.GetFromJsonAsync<System.Text.Json.JsonElement[]>($"/api/support?assignee={Uri.EscapeDataString("scoped@example.test")}"))!);
