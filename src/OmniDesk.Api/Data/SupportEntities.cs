@@ -74,6 +74,20 @@ public sealed class SupportSlaPolicyVersion
     public DateTimeOffset PublishedAt { get; set; } = DateTimeOffset.UtcNow;
 }
 
+public sealed class SupportTicketSlaTarget
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid TicketId { get; set; }
+    public string TargetType { get; set; } = "first_response";
+    public Guid PolicyId { get; set; }
+    public int PolicyVersion { get; set; }
+    public int Cycle { get; set; } = 1;
+    public DateTimeOffset StartedAt { get; set; }
+    public DateTimeOffset DueAt { get; set; }
+    public DateTimeOffset? CompletedAt { get; set; }
+    public DateTimeOffset? BreachedAt { get; set; }
+}
+
 public sealed class SupportTicket
 {
     public Guid Id { get; set; } = Guid.NewGuid();

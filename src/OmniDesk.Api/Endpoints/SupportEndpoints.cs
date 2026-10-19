@@ -7,6 +7,7 @@ using System.Security.Cryptography;
 using OmniDesk.Api.Attachments;
 using OmniDesk.Api.Data;
 using OmniDesk.Api.Security;
+using OmniDesk.Api.ServiceDesk;
 using OmniDesk.Contracts;
 
 namespace OmniDesk.Api.Endpoints;
@@ -168,6 +169,8 @@ public static class SupportEndpoints
             var ticket = new SupportTicket { DeviceId = id, SiteId = siteId, RequesterKey = r.RequesterKey, RequestId = r.Ticket.RequestId,
                 Subject = r.Ticket.Subject.Trim(), Description = r.Ticket.Description.Trim(), Category = r.Ticket.Category, QueueId = queueId,
                 WorkflowId = workflowBinding.WorkflowId, WorkflowVersion = workflowBinding.WorkflowVersion, Screenshot = screenshot };
+            try { await TicketSlaTargetService.ApplyInitialTargets(db, ticket, c.RequestAborted); }
+            catch (SlaPolicyConfigurationException) { return Results.StatusCode(503); }
             db.SupportTickets.Add(ticket);
             var primaryDeviceName = await db.Devices.Where(x => x.Id == id).Select(x => x.Name).SingleAsync();
             var primarySiteName = await db.Sites.Where(x => x.Id == siteId).Select(x => x.Name).SingleAsync();
@@ -285,6 +288,8 @@ public static class SupportEndpoints
                 Category = category, Priority = "p3", QueueId = queueId, WorkflowId = workflowBinding.WorkflowId,
                 WorkflowVersion = workflowBinding.WorkflowVersion, CreatedAt = now, UpdatedAt = now, Screenshot = screenshot
             };
+            try { await TicketSlaTargetService.ApplyInitialTargets(db, ticket, c.RequestAborted); }
+            catch (SlaPolicyConfigurationException) { return Results.StatusCode(503); }
             db.SupportTickets.Add(ticket);
             db.SupportTicketDevices.Add(new SupportTicketDevice { TicketId = ticket.Id, DeviceId = device.Id,
                 LinkedAt = now, DeviceNameSnapshot = device.Name, SiteIdSnapshot = device.SiteId, SiteNameSnapshot = device.SiteName });
@@ -670,6 +675,8 @@ public static class SupportEndpoints
             var ticket = new SupportTicket { DeviceId = device.Id, SiteId = device.SiteId, RequesterKey = requesterKey, RequestId = r.RequestId,
                 Origin = "operator", Subject = r.Subject.Trim(), Description = r.Description.Trim(), Category = r.Category, Priority = priority,
                 QueueId = queueId, WorkflowId = workflowBinding.WorkflowId, WorkflowVersion = workflowBinding.WorkflowVersion };
+            try { await TicketSlaTargetService.ApplyInitialTargets(db, ticket, c.RequestAborted); }
+            catch (SlaPolicyConfigurationException) { return Results.StatusCode(503); }
             db.SupportTickets.Add(ticket);
             var deviceName = await db.Devices.Where(x => x.Id == device.Id).Select(x => x.Name).SingleAsync();
             var siteName = await db.Sites.Where(x => x.Id == device.SiteId).Select(x => x.Name).SingleAsync();

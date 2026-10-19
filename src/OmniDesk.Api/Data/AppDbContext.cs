@@ -48,6 +48,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
     public DbSet<SupportWorkflowVersion> SupportWorkflowVersions => Set<SupportWorkflowVersion>();
     public DbSet<SupportSlaPolicy> SupportSlaPolicies => Set<SupportSlaPolicy>();
     public DbSet<SupportSlaPolicyVersion> SupportSlaPolicyVersions => Set<SupportSlaPolicyVersion>();
+    public DbSet<SupportTicketSlaTarget> SupportTicketSlaTargets => Set<SupportTicketSlaTarget>();
     public DbSet<SupportQueue> SupportQueues => Set<SupportQueue>();
     public DbSet<SupportQueueMember> SupportQueueMembers => Set<SupportQueueMember>();
     public DbSet<SupportQueueRoutingRule> SupportQueueRoutingRules => Set<SupportQueueRoutingRule>();
@@ -195,6 +196,12 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
         b.Entity<SupportSlaPolicyVersion>().Property(x => x.PublishedBy).HasMaxLength(450);
         b.Entity<SupportSlaPolicyVersion>().HasOne<SupportSlaPolicy>().WithMany().HasForeignKey(x => x.PolicyId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<SupportSlaPolicyVersion>().HasOne<AppUser>().WithMany().HasForeignKey(x => x.PublishedBy).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<SupportTicketSlaTarget>().Property(x => x.TargetType).HasMaxLength(24);
+        b.Entity<SupportTicketSlaTarget>().HasOne<SupportTicket>().WithMany().HasForeignKey(x => x.TicketId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<SupportTicketSlaTarget>().HasOne<SupportSlaPolicyVersion>().WithMany()
+            .HasForeignKey(x => new { x.PolicyId, x.PolicyVersion }).OnDelete(DeleteBehavior.Restrict);
+        b.Entity<SupportTicketSlaTarget>().HasIndex(x => new { x.TicketId, x.TargetType, x.Cycle }).IsUnique();
+        b.Entity<SupportTicketSlaTarget>().HasIndex(x => new { x.DueAt, x.CompletedAt, x.BreachedAt });
 
         b.Entity<DashboardLayout>().HasKey(x => x.UserId);
         b.Entity<DashboardLayout>().HasOne<AppUser>().WithOne().HasForeignKey<DashboardLayout>(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
