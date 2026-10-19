@@ -615,6 +615,13 @@ public static class SupportScenario
         Assert.Equal(HttpStatusCode.NoContent, (await admin.DeleteAsync($"{participantsUrl}/{readerParticipant.GetProperty("id").GetGuid()}?expectedVersion=3")).StatusCode);
         Assert.Empty((await readerClient.GetFromJsonAsync<System.Text.Json.JsonElement[]>(participantsUrl))!);
         var attachmentUrl = $"/api/support/{participantTicketId}/attachments";
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            db.SupportTicketParticipants.Add(new SupportTicketParticipant { TicketId = participantTicketId,
+                UserId = readerId, AddedBy = adminUser, AddedAt = DateTimeOffset.UtcNow.AddMinutes(-1) });
+            await db.SaveChangesAsync();
+        }
         async Task<HttpResponseMessage> Upload(string name, string contents, long version, string visibility)
         {
             using var form = new MultipartFormDataContent();
@@ -675,6 +682,13 @@ public static class SupportScenario
         }
         Assert.True(await scanWorker.ProcessNext(CancellationToken.None));
         Assert.Equal(HttpStatusCode.OK, (await admin.GetAsync($"{attachmentUrl}/{internalId}")).StatusCode);
+        var attachmentNotifications = new TicketNotificationWorker(factory.Services.GetRequiredService<IServiceScopeFactory>(),
+            NullLogger<TicketNotificationWorker>.Instance);
+        while (await attachmentNotifications.ProcessNext(CancellationToken.None)) { }
+        var readerInbox = await readerClient.GetFromJsonAsync<System.Text.Json.JsonElement>("/api/notifications");
+        var attachmentNotices = readerInbox.GetProperty("notifications").EnumerateArray()
+            .Where(x => x.GetProperty("ticketId").GetGuid() == participantTicketId && x.GetProperty("kind").GetString() == "ticket.attachment").ToArray();
+        Assert.Single(attachmentNotices);
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
