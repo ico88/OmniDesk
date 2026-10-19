@@ -1,5 +1,5 @@
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
-  <Package Name="OmniDesk Agent" Manufacturer="OmniDesk" Version="0.8.3" UpgradeCode="2B357D2E-F3D9-4BBD-B7E4-68E4E279FA82" Scope="perMachine">
+  <Package Name="OmniDesk Agent" Manufacturer="OmniDesk" Version="0.8.4" UpgradeCode="2B357D2E-F3D9-4BBD-B7E4-68E4E279FA82" Scope="perMachine">
     <MajorUpgrade DowngradeErrorMessage="A newer OmniDesk Agent is already installed." />
     <MediaTemplate EmbedCab="yes" />
     <CustomAction Id="RevokeDeviceBeforeUninstall" FileRef="AgentExe" ExeCommand="revoke" Execute="deferred" Impersonate="no" Return="check" />

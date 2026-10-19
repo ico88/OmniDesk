@@ -47,6 +47,7 @@ public static class DeviceManagementEndpoints
                 {
                     var allowed = job.Kind.StartsWith("diagnostics.")
                         ? (job.Kind is "diagnostics.processes" or "diagnostics.services" or "diagnostics.events") && await permissions.Allows(job.RequestedBy, "diagnostics.view", id)
+                        : job.Kind.StartsWith("service.") ? (job.Kind is "service.start" or "service.stop" or "service.restart") && await permissions.Allows(job.RequestedBy, "services.manage", id)
                         : job.Kind == "agent.update" ? (await permissions.Global(job.RequestedBy)).Contains("administration")
                         : await permissions.Allows(job.RequestedBy, "updates", id);
                     if (!allowed)

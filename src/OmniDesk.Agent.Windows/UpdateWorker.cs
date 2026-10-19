@@ -4,6 +4,8 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
+using ServiceController = System.ServiceProcess.ServiceController;
+using ServiceControllerStatus = System.ServiceProcess.ServiceControllerStatus;
 using System.Text.Json;
 using System.Management;
 using OmniDesk.Contracts;
@@ -49,7 +51,10 @@ public sealed class UpdateWorker(ILogger<UpdateWorker> logger) : BackgroundServi
                         else
                         {
                             // Crash during native operation: never execute the same install again automatically.
-                            receipt = receipt with { Result = new(receipt.LeaseId, false, false, [], "Operation interrupted; inspect Windows Update history before retry") };
+                            var recovery = receipt.Kind is "service.start" or "service.stop" or "service.restart"
+                                ? "Operation interrupted; inspect the service state before retry"
+                                : "Operation interrupted; inspect Windows Update history before retry";
+                            receipt = receipt with { Result = new(receipt.LeaseId, false, false, [], recovery) };
                             Save(receiptPath, receipt);
                         }
                     }
@@ -101,6 +106,12 @@ public sealed class UpdateWorker(ILogger<UpdateWorker> logger) : BackgroundServi
                                     Save(receiptPath, new UpdateReceipt(job.Id, job.LeaseId, result, job.Kind));
                                 }
                             }
+                            else if (job.Kind is "service.start" or "service.stop" or "service.restart")
+                            {
+                                Save(receiptPath, new UpdateReceipt(job.Id, job.LeaseId, null, job.Kind));
+                                var result = ExecuteServiceControl(job);
+                                Save(receiptPath, new UpdateReceipt(job.Id, job.LeaseId, result, job.Kind));
+                            }
                             else if (job.Kind is "scan" or "install")
                             {
                                 Save(receiptPath, new UpdateReceipt(job.Id, job.LeaseId, null));
@@ -124,6 +135,59 @@ public sealed class UpdateWorker(ILogger<UpdateWorker> logger) : BackgroundServi
     }
     internal static void Save(string path, UpdateReceipt value)
     { AgentIdentity.WriteTrusted(path, JsonSerializer.Serialize(value)); }
+
+    internal static UpdateResultRequest ExecuteServiceControl(UpdateLease job)
+    {
+        var control = job.ServiceControl;
+        if (control is null || !ServiceControlPolicy.IsControllable(control.ServiceName) || !ServiceControlPolicy.IsValidAction(control.Action))
+            return new(job.LeaseId, false, false, [], "Service operation rejected by local policy");
+
+        try
+        {
+            using var service = new ServiceController(control.ServiceName);
+            if (control.Action is "stop" or "restart")
+            {
+                service.Refresh();
+                if (service.Status == ServiceControllerStatus.StartPending)
+                    service.WaitForStatus(ServiceControllerStatus.Running, TimeSpan.FromSeconds(20));
+                service.Refresh();
+                if (service.Status is ServiceControllerStatus.Running or ServiceControllerStatus.Paused)
+                {
+                    service.Stop();
+                    service.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(20));
+                }
+                else if (service.Status == ServiceControllerStatus.StopPending)
+                    service.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(20));
+            }
+
+            if (control.Action is "start" or "restart")
+            {
+                service.Refresh();
+                if (service.Status == ServiceControllerStatus.Paused)
+                {
+                    service.Continue();
+                    service.WaitForStatus(ServiceControllerStatus.Running, TimeSpan.FromSeconds(20));
+                }
+                else if (service.Status == ServiceControllerStatus.Stopped)
+                {
+                    service.Start();
+                    service.WaitForStatus(ServiceControllerStatus.Running, TimeSpan.FromSeconds(20));
+                }
+                else if (service.Status == ServiceControllerStatus.StartPending)
+                    service.WaitForStatus(ServiceControllerStatus.Running, TimeSpan.FromSeconds(20));
+            }
+
+            service.Refresh();
+            var expected = control.Action == "stop" ? ServiceControllerStatus.Stopped : ServiceControllerStatus.Running;
+            return service.Status == expected
+                ? new(job.LeaseId, true, false, [])
+                : new(job.LeaseId, false, false, [], "Service did not reach the requested state");
+        }
+        catch (Exception e) when (e is InvalidOperationException or TimeoutException or UnauthorizedAccessException or System.ComponentModel.Win32Exception or PlatformNotSupportedException)
+        {
+            return new(job.LeaseId, false, false, [], $"Service operation failed ({e.GetType().Name})");
+        }
+    }
     private static string AgentVersion() => typeof(UpdateWorker).Assembly.GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
         .OfType<System.Reflection.AssemblyInformationalVersionAttribute>().FirstOrDefault()?.InformationalVersion.Split('+')[0] ?? "0.0.0";
     private static async Task<UpdateResultRequest?> BeginAgentUpdate(UpdateLease job, HttpClient client, Uri server, string assertion, string receiptPath, CancellationToken ct)

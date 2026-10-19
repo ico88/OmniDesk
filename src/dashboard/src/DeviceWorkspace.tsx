@@ -19,6 +19,7 @@ type UpdateItem = { UpdateId: string; Revision: number; Title: string; Kb: strin
 type UpdateJob = { id: string; kind: string; state: string; createdAt: string; result: string | null };
 type DiagnosticJob = UpdateJob & { completedAt: string | null };
 type DiagnosticData = { Kind: string; CollectedAt: string; Processes?: { ProcessId: number; Name: string }[]; Services?: { Name: string; DisplayName: string; State: string; StartType: string }[]; Events?: { Log: string; TimeCreated: string; Id: number; Level: string; Source: string; Message: string }[] };
+type ServiceJob = UpdateJob & { completedAt: string | null };
 type WindowsDownload = { available: boolean; release: { version: string; msiSha256?: string | null; msiSize?: number | null } | null };
 
 const jobLabels: Record<string, string> = { queued: 'In coda', leased: 'In esecuzione', succeeded: 'Completato', failed: 'Non riuscito', cancelled: 'Annullato' };
@@ -47,6 +48,7 @@ export function DeviceWorkspace({ device, admin, groups, sites, onDeviceChanged,
   const [selectedUpdates, setSelectedUpdates] = useState<UpdateItem[]>([]);
   const [windowsRelease, setWindowsRelease] = useState<WindowsDownload | null>(null);
   const [diagnosticJobs, setDiagnosticJobs] = useState<DiagnosticJob[]>([]);
+  const [serviceJobs, setServiceJobs] = useState<ServiceJob[]>([]);
 
   async function work(action: () => Promise<void>) {
     setBusy(true);
@@ -58,6 +60,15 @@ export function DeviceWorkspace({ device, admin, groups, sites, onDeviceChanged,
 
   async function loadJobs() { setJobs(await api<UpdateJob[]>(`/devices/${device.id}/updates`)); setSelectedUpdates([]); }
   async function loadDiagnostics() { setDiagnosticJobs(await api<DiagnosticJob[]>(`/devices/${device.id}/diagnostics`)); }
+  async function loadServiceJobs() { setServiceJobs(await api<ServiceJob[]>(`/devices/${device.id}/services/jobs`)); }
+  async function requestServiceAction(serviceName: string, action: 'start' | 'stop' | 'restart') {
+    const verb = action === 'start' ? 'avviare' : action === 'stop' ? 'arrestare' : 'riavviare';
+    if (!window.confirm(`Confermi di ${verb} il servizio Windows “${serviceName}” sul dispositivo ${device.name}?`)) return;
+    await work(async () => {
+      await api(`/devices/${device.id}/services/actions`, 'POST', { requestId: crypto.randomUUID(), serviceName, action });
+      await loadServiceJobs();
+    });
+  }
 
   useEffect(() => {
     let active = true;
@@ -88,6 +99,15 @@ export function DeviceWorkspace({ device, admin, groups, sites, onDeviceChanged,
     if (!count('diagnostics.view')) return;
     let active = true;
     const refresh = async () => { try { const rows = await api<DiagnosticJob[]>(`/devices/${device.id}/diagnostics`); if (active) setDiagnosticJobs(rows); } catch { /* The page shows a useful error on explicit refresh/request. */ } };
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 4000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [activeTab, device.id, device.capabilities]);
+
+  useEffect(() => {
+    if (activeTab !== 'services' || !device.capabilities.includes('services.manage')) return;
+    let active = true;
+    const refresh = async () => { try { const rows = await api<ServiceJob[]>(`/devices/${device.id}/services/jobs`); if (active) setServiceJobs(rows); } catch { /* Explicit actions surface request errors in the panel. */ } };
     void refresh();
     const timer = window.setInterval(() => void refresh(), 4000);
     return () => { active = false; window.clearInterval(timer); };
@@ -175,14 +195,27 @@ export function DeviceWorkspace({ device, admin, groups, sites, onDeviceChanged,
         let data: DiagnosticData | null = null;
         if (latest?.state === 'succeeded' && latest.result) { try { data = JSON.parse(latest.result).DiagnosticJson ? JSON.parse(JSON.parse(latest.result).DiagnosticJson) as DiagnosticData : null; } catch { data = null; } }
         return <>
-          <div className="section-heading"><div><span className="eyebrow">DIAGNOSTICA IN SOLA LETTURA</span><h3>{title}</h3></div><div className="action-row"><button className="secondary compact" disabled={busy || !count('diagnostics.view') || device.revoked || !device.online} onClick={() => void work(loadDiagnostics)}><Icon name="refresh" size={15}/>Aggiorna</button><button disabled={busy || !count('diagnostics.view') || device.revoked || !device.online} onClick={() => void work(async () => { await api(`/devices/${device.id}/diagnostics/${kind}`, 'POST', { requestId: crypto.randomUUID() }); await loadDiagnostics(); })}>Raccogli dati</button></div></div>
+          <div className="section-heading"><div><span className="eyebrow">{kind === 'services' ? 'INVENTARIO E CONTROLLO AUTORIZZATO' : 'DIAGNOSTICA IN SOLA LETTURA'}</span><h3>{title}</h3></div><div className="action-row"><button className="secondary compact" disabled={busy || !count('diagnostics.view') || device.revoked || !device.online} onClick={() => void work(loadDiagnostics)}><Icon name="refresh" size={15}/>Aggiorna</button><button disabled={busy || !count('diagnostics.view') || device.revoked || !device.online} onClick={() => void work(async () => { await api(`/devices/${device.id}/diagnostics/${kind}`, 'POST', { requestId: crypto.randomUUID() }); await loadDiagnostics(); })}>Raccogli dati</button></div></div>
           {!count('diagnostics.view') ? <p>Non hai il permesso diagnostics.view su questo dispositivo.</p> : <>
             {latest && <p className="muted">{jobLabels[latest.state] ?? latest.state}{latest.completedAt ? ` · ${new Date(latest.completedAt).toLocaleString('it-IT')}` : ''}{latest.state === 'failed' && latest.result ? ` · ${JSON.parse(latest.result).Error ?? 'Raccolta non riuscita'}` : ''}</p>}
             {!latest && <p>Nessuna raccolta richiesta. I dati vengono letti solo dopo aver premuto “Raccogli dati”.</p>}
             {kind === 'processes' && <div className="table-wrap"><table><thead><tr><th>PID</th><th>Processo</th></tr></thead><tbody>{(data?.Processes ?? []).map((item, i) => <tr key={`${item.ProcessId}-${i}`}><td>{item.ProcessId}</td><td>{item.Name}</td></tr>)}</tbody></table></div>}
-            {kind === 'services' && <div className="table-wrap"><table><thead><tr><th>Servizio</th><th>Nome visualizzato</th><th>Stato</th><th>Avvio</th></tr></thead><tbody>{(data?.Services ?? []).map(item => <tr key={item.Name}><td>{item.Name}</td><td>{item.DisplayName}</td><td>{item.State}</td><td>{item.StartType}</td></tr>)}</tbody></table></div>}
+            {kind === 'services' && <>
+              {!count('services.manage') && <p className="muted">La modifica richiede il permesso separato <code>services.manage</code>.</p>}
+              <div className="table-wrap"><table><thead><tr><th>Servizio</th><th>Nome visualizzato</th><th>Stato</th><th>Avvio</th><th>Azioni</th></tr></thead><tbody>{(data?.Services ?? []).map(item => <tr key={item.Name}><td>{item.Name}</td><td>{item.DisplayName}</td><td>{item.State}</td><td>{item.StartType}</td><td>{count('services.manage') && <div className="action-row">
+                {item.State !== 'Running' && <button className="secondary compact" disabled={busy || device.revoked || !device.online || item.StartType === 'Disabled'} onClick={() => void requestServiceAction(item.Name, 'start')}>Avvia</button>}
+                {item.State !== 'Stopped' && <button className="secondary compact" disabled={busy || device.revoked || !device.online} onClick={() => void requestServiceAction(item.Name, 'stop')}>Arresta</button>}
+                <button className="secondary compact" disabled={busy || device.revoked || !device.online || item.StartType === 'Disabled'} onClick={() => void requestServiceAction(item.Name, 'restart')}>Riavvia</button>
+              </div>}</td></tr>)}</tbody></table></div>
+              {count('services.manage') && <div className="service-action-history"><h4>Interventi sui servizi</h4>{!serviceJobs.length && <p className="muted">Nessuna azione registrata.</p>}{serviceJobs.map(job => {
+                let result: { Succeeded?: boolean; Error?: string | null } | null = null;
+                try { result = job.result ? JSON.parse(job.result) as { Succeeded?: boolean; Error?: string | null } : null; } catch { result = null; }
+                const action = job.kind.replace('service.', '');
+                return <article className="update-job-card" key={job.id}><div><strong>{action === 'start' ? 'Avvio' : action === 'stop' ? 'Arresto' : 'Riavvio'} · {job.id.slice(0, 8)}</strong><span className={`status-pill ${job.state === 'succeeded' ? 'online' : job.state === 'failed' ? 'danger' : 'offline'}`}>{jobLabels[job.state] ?? job.state}</span></div><small>{new Date(job.createdAt).toLocaleString('it-IT')}</small>{result?.Error && <small>{result.Error}</small>}{job.state === 'queued' && <button className="secondary compact" disabled={busy} onClick={() => void work(async () => { await api(`/devices/${device.id}/services/jobs/${job.id}`, 'DELETE'); await loadServiceJobs(); })}>Annulla</button>}</article>;
+              })}</div>}
+            </>}
             {kind === 'events' && <div className="table-wrap"><table><thead><tr><th>Data</th><th>Registro</th><th>Livello</th><th>Origine</th><th>Messaggio</th></tr></thead><tbody>{(data?.Events ?? []).map((item, i) => <tr key={`${item.Log}-${item.Id}-${i}`}><td>{new Date(item.TimeCreated).toLocaleString('it-IT')}</td><td>{item.Log}</td><td>{item.Level}</td><td>{item.Source}</td><td>{item.Message}</td></tr>)}</tbody></table></div>}
-            {data && <small>Raccolti il {new Date(data.CollectedAt).toLocaleString('it-IT')} · lettura senza possibilità di terminare processi o modificare servizi.</small>}
+            {data && <small>Raccolti il {new Date(data.CollectedAt).toLocaleString('it-IT')} · la modifica servizi richiede conferma ed è verificata dal server e dall’Agent.</small>}
           </>}
         </>;
       })()}

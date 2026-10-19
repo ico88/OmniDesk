@@ -95,6 +95,47 @@ public static class UpdateEndpoints
             try { await db.SaveChangesAsync(); } catch (DbUpdateException e) when (e.InnerException is Npgsql.PostgresException { SqlState: "23505" }) { return Results.Conflict(); }
             await tx.CommitAsync(); return Results.Created($"/api/devices/{id}/diagnostics/{job.Id}", new { job.Id, job.State });
         });
+        var services = app.MapGroup("/api/devices/{id:guid}/services").RequireAuthorization().AddEndpointFilter(async (c, next) => {
+            var id = Guid.Parse(c.HttpContext.Request.RouteValues["id"]!.ToString()!);
+            return await c.HttpContext.RequestServices.GetRequiredService<PermissionService>().Allows(c.HttpContext.User.UserId(), "services.manage", id) ? await next(c) : Results.Forbid();
+        });
+        services.MapGet("jobs", async (Guid id, AppDbContext db) => Results.Ok(await db.UpdateJobs.AsNoTracking()
+            .Where(x => x.DeviceId == id && x.Kind.StartsWith("service."))
+            .OrderByDescending(x => x.CreatedAt).Take(30)
+            .Select(x => new { x.Id, x.Kind, x.State, x.CreatedAt, x.CompletedAt, x.Result }).ToListAsync()));
+        services.MapPost("actions", async (Guid id, ServiceControlRequest r, HttpContext c, AppDbContext db, PermissionService permissions) => {
+            if (r.RequestId == Guid.Empty || !ServiceControlPolicy.IsControllable(r.ServiceName) || !ServiceControlPolicy.IsValidAction(r.Action)) return Results.BadRequest();
+            await using var tx = await db.Database.BeginTransactionAsync();
+            await DeviceOperationLock.Acquire(db, id);
+            if (!await permissions.Allows(c.User.UserId(), "services.manage", id)) return Results.Forbid();
+            if (!await db.DeviceCredentials.AnyAsync(x => x.DeviceId == id && x.RevokedAt == null)) return Results.Conflict();
+            var kind = "service." + r.Action;
+            var control = new ServiceControlPayload(r.ServiceName, r.Action);
+            var payload = JsonSerializer.Serialize(control);
+            var existing = await db.UpdateJobs.AsNoTracking().SingleOrDefaultAsync(x => x.DeviceId == id && x.RequestId == r.RequestId);
+            if (existing is not null)
+            {
+                var existingControl = existing.Kind == kind ? JsonSerializer.Deserialize<ServiceControlPayload>(existing.Payload) : null;
+                return existingControl == control ? Results.Ok(new { existing.Id, existing.State }) : Results.Conflict();
+            }
+            if (await db.UpdateJobs.AnyAsync(x => x.DeviceId == id && (x.State == "queued" || x.State == "leased"))) return Results.Conflict(new { code = "job_active", message = "È già in corso un lavoro per questo dispositivo." });
+            var job = new UpdateJob { DeviceId = id, RequestId = r.RequestId, RequestedBy = c.User.UserId(), Kind = kind, Payload = payload };
+            db.UpdateJobs.Add(job);
+            db.AuditEvents.Add(Event(c.User.UserId(), "service.control.queue", job.Id));
+            CoreOutbox.Add(db, "service.action.queued", "device", id, new { jobId = job.Id, serviceName = r.ServiceName, action = r.Action }, c.TraceIdentifier);
+            try { await db.SaveChangesAsync(); } catch (DbUpdateException e) when (e.InnerException is Npgsql.PostgresException { SqlState: "23505" }) { return Results.Conflict(); }
+            await tx.CommitAsync(); return Results.Created($"/api/devices/{id}/services/jobs/{job.Id}", new { job.Id, job.State });
+        });
+        services.MapDelete("jobs/{jobId:guid}", async (Guid id, Guid jobId, HttpContext c, AppDbContext db) => {
+            await using var tx = await db.Database.BeginTransactionAsync();
+            await DeviceOperationLock.Acquire(db, id);
+            var job = await db.UpdateJobs.AsNoTracking().SingleOrDefaultAsync(x => x.Id == jobId && x.DeviceId == id && x.Kind.StartsWith("service."));
+            if (job is null) return Results.NotFound();
+            var cancelled = await db.UpdateJobs.Where(x => x.Id == jobId && x.State == "queued").ExecuteUpdateAsync(s => s.SetProperty(x => x.State, "cancelled").SetProperty(x => x.CompletedAt, DateTimeOffset.UtcNow));
+            if (cancelled != 1) return Results.Conflict();
+            db.AuditEvents.Add(Event(c.User.UserId(), "service.control.cancel", jobId));
+            await db.SaveChangesAsync(); await tx.CommitAsync(); return Results.NoContent();
+        });
         var agent = app.MapGroup("/api/agent/jobs").WithMetadata(new MachineRequest()).RequireAuthorization(new AuthorizeAttribute { AuthenticationSchemes = DeviceAuthentication.SchemeName });
         agent.MapPost("/claim", async (HttpContext c, AppDbContext db, PermissionService permissions) => {
             var id = Guid.Parse(c.User.UserId()); var now = DateTimeOffset.UtcNow;
@@ -111,6 +152,8 @@ public static class UpdateEndpoints
                 ? (await permissions.Global(job.RequestedBy)).Contains("administration")
                 : job.Kind.StartsWith("diagnostics.")
                     ? (job.Kind is "diagnostics.processes" or "diagnostics.services" or "diagnostics.events") && await permissions.Allows(job.RequestedBy, "diagnostics.view", id)
+                : job.Kind.StartsWith("service.")
+                    ? (job.Kind is "service.start" or "service.stop" or "service.restart") && await permissions.Allows(job.RequestedBy, "services.manage", id)
                 : await permissions.Allows(job.RequestedBy, "updates", id);
             if (!authorized)
             {
@@ -121,9 +164,12 @@ public static class UpdateEndpoints
             var lease = Guid.NewGuid(); var expiry = now.AddMinutes(65);
             var changed = await db.UpdateJobs.Where(x => x.Id == job.Id && x.State == "queued").ExecuteUpdateAsync(s => s.SetProperty(x => x.State, "leased").SetProperty(x => x.LeaseId, lease).SetProperty(x => x.LeaseExpiresAt, expiry));
             if (changed != 1) return Results.NoContent();
-            db.AuditEvents.Add(Event(null, job.Kind.StartsWith("diagnostics.") ? "diagnostics.claim" : "update.claim", job.Id)); await db.SaveChangesAsync(); await tx.CommitAsync();
+            var claimAction = job.Kind.StartsWith("diagnostics.") ? "diagnostics.claim" : job.Kind.StartsWith("service.") ? "service.control.claim" : "update.claim";
+            db.AuditEvents.Add(Event(null, claimAction, job.Id)); await db.SaveChangesAsync(); await tx.CommitAsync();
             var updatePackage = job.Kind == "agent.update" ? JsonSerializer.Deserialize<AgentUpdatePackage>(job.Payload) : null;
-            return Results.Ok(new UpdateLease(job.Id, lease, job.Kind, job.Kind == "agent.update" ? [] : JsonSerializer.Deserialize<UpdateSelection[]>(job.Payload)!, expiry, updatePackage));
+            var serviceControl = job.Kind.StartsWith("service.") ? JsonSerializer.Deserialize<ServiceControlPayload>(job.Payload) : null;
+            var selections = job.Kind == "agent.update" || job.Kind.StartsWith("service.") ? [] : JsonSerializer.Deserialize<UpdateSelection[]>(job.Payload)!;
+            return Results.Ok(new UpdateLease(job.Id, lease, job.Kind, selections, expiry, updatePackage, serviceControl));
         });
         agent.MapGet("/{jobId:guid}/package", async (Guid jobId, Guid leaseId, HttpContext c, AppDbContext db, IConfiguration config) => {
             var deviceId = Guid.Parse(c.User.UserId()); var now = DateTimeOffset.UtcNow;
@@ -167,7 +213,8 @@ public static class UpdateEndpoints
             var changed = await db.UpdateJobs.Where(x => x.Id == jobId && x.DeviceId == id && x.State == "leased" && x.LeaseId == r.LeaseId && x.LeaseExpiresAt > now)
                 .ExecuteUpdateAsync(s => s.SetProperty(x => x.State, state).SetProperty(x => x.Result, payload).SetProperty(x => x.CompletedAt, now));
             if (changed != 1) return Results.Conflict();
-            db.AuditEvents.Add(Event(null, (job.Kind.StartsWith("diagnostics.") ? "diagnostics.result." : "update.result.") + state, jobId)); await db.SaveChangesAsync(); await tx.CommitAsync(); return Results.NoContent();
+            var resultAction = job.Kind.StartsWith("diagnostics.") ? "diagnostics.result." : job.Kind.StartsWith("service.") ? "service.control.result." : "update.result.";
+            db.AuditEvents.Add(Event(null, resultAction + state, jobId)); await db.SaveChangesAsync(); await tx.CommitAsync(); return Results.NoContent();
         });
     }
     private static AuditEvent Event(string? actor, string action, Guid id) => new() { ActorId = actor, Action = action, Target = id.ToString() };

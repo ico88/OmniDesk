@@ -685,6 +685,11 @@ namespace OmniDesk.Api.Migrations
                         new
                         {
                             RoleId = "Administrator",
+                            Permission = "services.manage"
+                        },
+                        new
+                        {
+                            RoleId = "Administrator",
                             Permission = "administration"
                         },
                         new
