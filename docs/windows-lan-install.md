@@ -109,3 +109,16 @@ passarlo come argomento al processo. L'opzione EnrollmentTokenFile resta
 supportata per automazioni; le istruzioni precedenti descrivono tale modalita.
 Non modificare policy globali: se necessario usare RemoteSigned con Scope Process
 e sbloccare i due script verificati, come indicato nel LEGGIMI del kit.
+
+### Aggiornamento correttivo Tray 0.7.1
+
+La 0.7.0 usa erroneamente WindowsIdentity.Groups per cercare il SID logon;
+.NET filtra quel gruppo. Il servizio puo inviare heartbeat mentre la Tray
+mostra servizio/stato server non disponibile. La 0.7.1 legge TokenLogonSid
+nativo anche nel controllo del client impersonato, senza ampliare le ACL.
+Per aggiornare: chiudere solo l'icona Tray, estrarre il nuovo kit e avviare
+Installa-OmniDesk.ps1 da PowerShell amministrativa. Non disinstallare e non
+revocare il dispositivo: sullo stesso server lo script conserva l'identita
+protetta esistente e non richiede un altro token. Dopo l'aggiornamento avviare
+la Tray dalla sessione ordinaria (oppure logoff/logon) e verificarne lo stato.
+Queste sono istruzioni di collaudo: registrare esito CI e prova PC in validation.
