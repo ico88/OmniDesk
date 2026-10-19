@@ -31,7 +31,14 @@ public sealed class MigrationTests
                 await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO \"Devices\" (\"Id\",\"Name\",\"GroupId\",\"SiteId\") VALUES ({deviceId},'Existing device',{groupId},{siteId})");
                 var oldRequestId = Guid.NewGuid();
                 await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO \"SupportTickets\" (\"Id\",\"RequestId\",\"DeviceId\",\"SiteId\",\"RequesterKey\",\"Subject\",\"Description\",\"State\",\"Priority\",\"AssigneeId\",\"Resolution\",\"Version\",\"CreatedAt\",\"UpdatedAt\",\"Screenshot\") VALUES ({ticketId},{oldRequestId},{deviceId},{siteId},{new string('C', 64)},'Existing ticket','Before upgrade','open','normal',NULL,NULL,1,now(),now(),NULL)");
+                await migrator.MigrateAsync("20261019155141_KnowledgeBase");
+                var articleId = Guid.NewGuid();
+                await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO \"KnowledgeArticles\" (\"Id\",\"Slug\",\"NormalizedSlug\",\"Title\",\"Summary\",\"Body\",\"IsPublished\",\"Version\",\"CreatedAt\",\"UpdatedAt\",\"PublishedAt\") VALUES ({articleId},'legacy-guide','legacy-guide','Legacy guide','Before scope rollout','Existing content',true,4,now(),now(),now())");
                 await db.Database.MigrateAsync();
+                var legacyRevision = await db.KnowledgeArticleRevisions.AsNoTracking().SingleAsync(x => x.ArticleId == articleId && x.Version == 4);
+                Assert.Equal("Existing content", legacyRevision.Body);
+                Assert.Null(legacyRevision.SiteId);
+                Assert.Null(legacyRevision.GroupId);
                 var existing = await db.SupportTickets.AsNoTracking().SingleAsync(x => x.Id == ticketId);
                 Assert.True(existing.Number > 0);
                 Assert.Equal("general", existing.Category);

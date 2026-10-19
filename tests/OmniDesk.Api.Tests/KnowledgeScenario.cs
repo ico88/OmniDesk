@@ -11,6 +11,7 @@ public static class KnowledgeScenario
     public static async Task Run(ApiFactory factory, HttpClient admin, HttpClient viewer, string password)
     {
         Assert.Equal(HttpStatusCode.Forbidden, (await viewer.GetAsync("/api/knowledge")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await viewer.GetAsync("/api/knowledge/scopes")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await viewer.PostAsJsonAsync("/api/knowledge", new { slug = "viewer", title = "Forbidden", summary = "", body = "no", isPublished = true })).StatusCode);
 
         var slug = "first-line-guide-" + Guid.NewGuid().ToString("N")[..8];
@@ -39,6 +40,55 @@ public static class KnowledgeScenario
         Assert.Contains(visible!, x => x.GetProperty("id").GetGuid() == id);
         Assert.Equal("Read-only checks first.\nNever paste credentials.", (await operatorClient.GetFromJsonAsync<JsonElement>($"/api/knowledge/{id}")).GetProperty("body").GetString());
         Assert.Equal(HttpStatusCode.Forbidden, (await operatorClient.PutAsJsonAsync($"/api/knowledge/{id}", new { slug, title = "Hacked", summary = "", body = "no", isPublished = true, expectedVersion = 1 })).StatusCode);
+
+        var siteResponse = await admin.PostAsJsonAsync("/api/admin/sites", new { name = "Knowledge site " + Guid.NewGuid().ToString("N")[..8] });
+        Assert.Equal(HttpStatusCode.Created, siteResponse.StatusCode);
+        var siteId = (await siteResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+        var groupResponse = await admin.PostAsJsonAsync("/api/admin/groups", new { name = "Knowledge group " + Guid.NewGuid().ToString("N")[..8] });
+        Assert.Equal(HttpStatusCode.Created, groupResponse.StatusCode);
+        var groupId = (await groupResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+        var siteSlug = "site-guide-" + Guid.NewGuid().ToString("N")[..8];
+        var groupSlug = "group-guide-" + Guid.NewGuid().ToString("N")[..8];
+        var siteArticle = await admin.PostAsJsonAsync("/api/knowledge", new { slug = siteSlug, title = "Site guide", summary = "Scoped to site", body = "Site content", isPublished = true, siteId });
+        var groupArticle = await admin.PostAsJsonAsync("/api/knowledge", new { slug = groupSlug, title = "Group guide", summary = "Scoped to group", body = "Group content", isPublished = true, groupId });
+        Assert.Equal(HttpStatusCode.Created, siteArticle.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, groupArticle.StatusCode);
+        var siteArticleId = (await siteArticle.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+        var groupArticleId = (await groupArticle.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+        Assert.Equal(siteId, (await admin.GetFromJsonAsync<JsonElement>($"/api/knowledge/{siteArticleId}/versions/1")).GetProperty("siteId").GetGuid());
+        Assert.Equal(groupId, (await admin.GetFromJsonAsync<JsonElement>($"/api/knowledge/{groupArticleId}/versions/1")).GetProperty("groupId").GetGuid());
+
+        var scopedEmail = $"knowledge-scoped-{Guid.NewGuid():N}@example.test";
+        Assert.Equal(HttpStatusCode.Created, (await admin.PostAsJsonAsync("/api/admin/users", new { email = scopedEmail, password, role = "Viewer" })).StatusCode);
+        using var scopedClient = factory.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost"), AllowAutoRedirect = false });
+        await Csrf(scopedClient);
+        Assert.Equal(HttpStatusCode.NoContent, (await scopedClient.PostAsJsonAsync("/api/auth/login", new { email = scopedEmail, password })).StatusCode);
+        await Csrf(scopedClient);
+        Assert.Equal(HttpStatusCode.Created, (await admin.PostAsJsonAsync("/api/admin/grants", new { userId = (await admin.GetFromJsonAsync<JsonElement[]>("/api/admin/users"))!.Single(x => x.GetProperty("email").GetString() == scopedEmail).GetProperty("id").GetString(), role = "Operator", siteId, groupId = (Guid?)null, deviceId = (Guid?)null })).StatusCode);
+        var scopedArticles = await scopedClient.GetFromJsonAsync<JsonElement[]>("/api/knowledge");
+        Assert.Contains(scopedArticles!, x => x.GetProperty("id").GetGuid() == siteArticleId);
+        Assert.DoesNotContain(scopedArticles!, x => x.GetProperty("id").GetGuid() == groupArticleId || x.GetProperty("id").GetGuid() == id);
+        Assert.Equal(HttpStatusCode.OK, (await scopedClient.GetAsync($"/api/knowledge/{siteArticleId}")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await scopedClient.GetAsync($"/api/knowledge/{groupArticleId}")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await scopedClient.GetAsync($"/api/knowledge/{siteArticleId}/versions")).StatusCode);
+
+        var legacyUpdate = await admin.PutAsJsonAsync($"/api/knowledge/{siteArticleId}", new { slug = siteSlug, title = "Site guide", summary = "Legacy client update", body = "Scoped content", isPublished = true, expectedVersion = 1 });
+        Assert.Equal(HttpStatusCode.OK, legacyUpdate.StatusCode);
+        Assert.Equal(siteId, (await legacyUpdate.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("siteId").GetGuid());
+        var moved = await admin.PutAsJsonAsync($"/api/knowledge/{siteArticleId}", new { slug = siteSlug, title = "Site guide", summary = "Moved to group", body = "Scoped content", isPublished = true, expectedVersion = 2, siteId = (Guid?)null, groupId, scopeSpecified = true });
+        Assert.Equal(HttpStatusCode.OK, moved.StatusCode);
+        var historicalScope = await admin.GetFromJsonAsync<JsonElement>($"/api/knowledge/{siteArticleId}/versions/1");
+        Assert.Equal(siteId, historicalScope.GetProperty("siteId").GetGuid());
+        Assert.Equal(siteId, (await admin.GetFromJsonAsync<JsonElement>($"/api/knowledge/{siteArticleId}/versions/2")).GetProperty("siteId").GetGuid());
+        Assert.Equal(groupId, (await admin.GetFromJsonAsync<JsonElement>($"/api/knowledge/{siteArticleId}/versions/3")).GetProperty("groupId").GetGuid());
+        Assert.Equal(HttpStatusCode.NotFound, (await scopedClient.GetAsync($"/api/knowledge/{siteArticleId}")).StatusCode);
+        Assert.Equal(HttpStatusCode.Created, (await admin.PostAsJsonAsync("/api/admin/grants", new { userId = (await admin.GetFromJsonAsync<JsonElement[]>("/api/admin/users"))!.Single(x => x.GetProperty("email").GetString() == scopedEmail).GetProperty("id").GetString(), role = "Operator", siteId = (Guid?)null, groupId, deviceId = (Guid?)null })).StatusCode);
+        var groupScopedArticles = await scopedClient.GetFromJsonAsync<JsonElement[]>("/api/knowledge");
+        Assert.Contains(groupScopedArticles!, x => x.GetProperty("id").GetGuid() == groupArticleId);
+        Assert.Contains(groupScopedArticles!, x => x.GetProperty("id").GetGuid() == siteArticleId);
+
+        var invalidScope = await admin.PostAsJsonAsync("/api/knowledge", new { slug = "invalid-scope-" + Guid.NewGuid().ToString("N")[..8], title = "Invalid scope", summary = "", body = "No", isPublished = true, siteId, groupId });
+        Assert.Equal(HttpStatusCode.BadRequest, invalidScope.StatusCode);
 
         var draft = await admin.PostAsJsonAsync("/api/knowledge", new { slug = slug + "-draft", title = "Draft", summary = "Internal draft", body = "Do not show to readers", isPublished = false });
         Assert.Equal(HttpStatusCode.Created, draft.StatusCode);

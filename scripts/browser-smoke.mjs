@@ -19,9 +19,14 @@ try {
  await page.getByLabel('Nome visualizzato',{exact:true}).fill('Federico Operatore');
  await page.getByRole('button',{name:'Salva nome',exact:true}).click();
  await page.getByText('Nome operatore aggiornato',{exact:true}).waitFor();
+ const scopeToken=(await (await context.request.get('https://omnidesk.test/api/auth/csrf')).json()).token;
+ const kbGroupName='Knowledge scope '+randomBytes(5).toString('hex');
+ const kbGroupResponse=await context.request.post('https://omnidesk.test/api/admin/groups',{headers:{'X-CSRF-TOKEN':scopeToken},data:{name:kbGroupName}});
+ assert.equal(kbGroupResponse.status(),201,'Knowledge scope fixture group created');
  const knowledgeTitle='Guida browser '+randomBytes(5).toString('hex');
  await page.getByRole('button',{name:'Knowledge base',exact:true}).click();
  await page.getByRole('button',{name:'Nuovo',exact:true}).click();
+ await page.getByLabel('Ambito articolo',{exact:true}).selectOption({label:`Gruppo · ${kbGroupName}`});
  await page.getByLabel('Slug',{exact:true}).fill('browser-'+randomBytes(5).toString('hex'));
  await page.getByLabel('Titolo',{exact:true}).fill(knowledgeTitle);
  await page.getByLabel('Descrizione breve',{exact:true}).fill('Guida interna di prova');
