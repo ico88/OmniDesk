@@ -250,9 +250,10 @@ ruolo Administrator predefinito e concedibile esplicitamente tramite ruolo scope
 API serializza l’azione nella coda device e rivalida il permesso al claim; la UI
 richiede conferma. Agent ricontrolla PID, nome e timestamp d’avvio, rifiuta nomi
 di processi critici e OmniDesk e conserva una ricevuta che impedisce il replay
-automatico dopo crash. Self-test Windows crea e termina esclusivamente un `cmd.exe`
-temporaneo. Release MSI candidata 0.8.5. Il test su un processo applicativo
-reale del PC pilota e la verifica CI Windows sono ancora aperti.
+automatico dopo crash. Self-test Windows crea e termina esclusivamente un
+processo PowerShell temporaneo. È consentito annullare solo lavori ancora in coda.
+Release MSI candidata 0.8.5. Il test su un processo applicativo reale del PC pilota
+e la verifica CI Windows sono ancora aperti.
 
 
 ### SD1 — priorità e assegnazione ticket — sorgenti e test verificati

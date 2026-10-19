@@ -807,14 +807,16 @@ LAN con record reali.
 
 Nuova capability `processes.manage`, seed solo Administrator predefinito e grant
 scoped per ruoli custom; endpoint queue/storico con lock device, idempotenza,
-audit e outbox. Il claim rivalida il permesso. L’Agent registra una ricevuta
+audit e outbox, cancellazione dei job queued e rivalidazione del permesso. Il claim
+rivalida il permesso. L’Agent registra una ricevuta
 protetta prima di eseguire e non ripete un’azione interrotta; ricontrolla PID,
-nome e ora d’avvio per evitare PID riutilizzati. Policy blocca processi Windows
+nome e ora d’avvio (tolleranza 250 ms) per evitare PID riutilizzati. Policy blocca processi Windows
 critici, Defender, MeshCentral e OmniDesk. UI richiede conferma esplicita.
 
 La suite aggiornata verifica default deny, validazione timestamp/PID, blocco
 processi protetti, assegnazione custom scoped, idempotenza e claim/result senza
-eseguire processi sul PC pilota. L’Agent self-test Windows crea un `cmd.exe`
-temporaneo e prova ad arrestare solo quella fixture. `dotnet publish` cross-target
-win-x64 e build API/dashboard passati. Workflow Actions 0.8.5 da eseguire dopo push;
+eseguire processi sul PC pilota. L’Agent self-test Windows crea un processo
+PowerShell temporaneo e prova ad arrestare solo quella fixture. `dotnet publish` cross-target
+win-x64 e build API/dashboard passati. Workflow Actions 0.8.5 in corso sulla prima
+revisione della feature; una nuova esecuzione verificherà anche l’ultimo hardening;
 nessun deploy LAN né azione su processi reali.

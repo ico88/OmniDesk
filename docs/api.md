@@ -24,7 +24,7 @@ JSON, stessa origine, cookie Identity. Errori 400/401/403/409/429; nessun redire
 | POST /api/devices/{id}/services/actions | `services.manage` globale o scoped + CSRF; coda idempotente start/stop/restart; no shell; nomi e servizi protetti validati |
 | GET/DELETE /api/devices/{id}/services/jobs[/{jobId}] | `services.manage` sul dispositivo; storico limitato e annullamento solo queued |
 | POST /api/devices/{id}/processes/actions | `processes.manage` sul dispositivo + CSRF; termina PID/nome/ora avvio selezionati; policy critica server e Agent |
-| GET /api/devices/{id}/processes/jobs | `processes.manage`; storico limitato |
+| GET/DELETE /api/devices/{id}/processes/jobs[/{jobId}] | `processes.manage`; storico limitato e annullamento solo queued |
 | GET /api/admin/grants | administration globale; elenco concessioni |
 | GET/POST/PUT /api/admin/sites | administration globale; catalogo sedi; create/update/archive con conflitto se sede assegnata a device |
 | POST /api/admin/users | administration globale + CSRF; {email,password,role} nome ruolo esistente oppure null (solo concessioni locali); 201 |
