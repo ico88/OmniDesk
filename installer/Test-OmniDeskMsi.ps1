@@ -41,7 +41,11 @@ try {
     foreach ($ace in $acl.DiscretionaryAcl) {
         if ($ace.AceQualifier -eq [Security.AccessControl.AceQualifier]::AccessAllowed -and
             $ace.SecurityIdentifier.Value -notin @('S-1-5-18','S-1-5-32-544') -and
-            ($ace.AccessMask -band 0xD0172) -ne 0) { throw 'DACL concede controllo servizio a un principal standard.' }
+            ($ace.AccessMask -band 0x500D0172) -ne 0) { throw 'DACL concede controllo servizio a un principal standard.' }
+    }
+    foreach ($sid in @('S-1-5-18','S-1-5-32-544')) {
+        $allowed = @($acl.DiscretionaryAcl | Where-Object { $_.AceQualifier -eq [Security.AccessControl.AceQualifier]::AccessAllowed -and $_.SecurityIdentifier.Value -eq $sid -and ($_.AccessMask -band 0xF01FF) -eq 0xF01FF })
+        if ($allowed.Count -eq 0) { throw 'SYSTEM/Administrators non hanno SERVICE_ALL_ACCESS esplicito.' }
     }
     $previous = [uint32]$service.ProcessId
     Stop-Process -Id $previous -Force
