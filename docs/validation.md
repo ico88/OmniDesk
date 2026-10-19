@@ -1767,16 +1767,21 @@ scoped, diniego cross-site, pubblicazione di una nuova versione, conflitto stale
 e assenza del permesso per Operator; verifica inoltre snapshot della versione e
 scadenze calcolate sul calendario lavorativo, inclusa la settimana successiva.
 `./scripts/test.sh` passa: 88 test API/PostgreSQL, build production dashboard e
-6/6 Vitest. I target iniziali sono applicati ai nuovi ticket. Restano il loro
-completamento agli eventi ticket, pause/ripresa, cicli di riapertura, worker
-breach, escalation, allarmi e visualizzazione SLA nella UI.
+6/6 Vitest. I target iniziali sono applicati ai nuovi ticket; la risposta
+pubblica dell'operatore completa idempotentemente il primo riscontro e la
+transizione a resolved/closed completa la risoluzione nella stessa transazione
+ticket. Il test verifica timestamp, indipendenza dei due target e idempotenza.
+Restano pause/ripresa, cicli di riapertura, worker breach, escalation, allarmi e
+visualizzazione SLA nella UI.
 
-CI Linux e Windows `39339233583`/`39339233542` sono verdi per il commit base
-policy SLA, inclusi smoke browser e install/upgrade/repair/rollback MSI.
+CI Linux e Windows `39339233583`/`39339233542` sono verdi per la policy SLA
+base. Sul commit dei target iniziali, CI Linux `39340488203` è verde; il job
+Windows `39340488177` sta completando la baseline MSI upgrade/repair/rollback.
 Ricostruito `omnidesk-api:local` dai sorgenti aggiornati, `./scripts/smoke.sh
---browser` è passato applicando entrambe le migrazioni
+--browser` è passato dopo entrambe le modifiche applicative, applicando entrambe le migrazioni
 `20261019225641_SupportSlaPolicies` e `20261019230803_TicketSlaTargets`;
 verificati stack HTTPS, Chromium, ClamAV clean/EICAR, backup con allegato e
-restore completo isolato DB/blob/chiavi/CA con probe HTTPS/CSRF/anonimo. La CI
-per l'estensione target SLA partirà dopo il push. Nessun servizio LAN è stato
-modificato.
+restore completo isolato DB/blob/chiavi/CA con probe HTTPS/CSRF/anonimo. Il
+completamento dei target è stato poi verificato con una seconda suite API e un
+secondo smoke runtime locale; la CI di tale estensione partirà dopo il push.
+Nessun servizio LAN è stato modificato.
