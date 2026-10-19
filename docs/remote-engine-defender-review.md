@@ -43,3 +43,16 @@ antivirus o ripristino automatico di file messi in quarantena.
 
 Riprendere il collaudo remoto solo dopo aver risolto la valutazione del binario
 nel contesto autorizzato; verificare su Windows reale mapping, consenso e revoca.
+
+## Preparazione invio del campione (19 ottobre 2026)
+
+Campione upstream recuperato dal runtime MeshCentral installato sul server e
+verificato senza eseguirlo: `artifacts/microsoft-submission/MeshService64.exe`,
+3,444,736 byte, SHA256 uguale al valore atteso sopra.
+`artifacts/microsoft-submission/submission-details.txt` contiene campi e testo
+in inglese da incollare nel portale. Il solo EXE è stato estratto; nessun MSI,
+chiave, token o configurazione inclusi. File locale ignorato da Git e con ACL
+ristretta. Il portale Microsoft richiede account sviluppatore, CAPTCHA e invio
+esplicito; inoltre richiede di accettare i termini che indicano conservazione
+negli Stati Uniti. Non risultano credenziali Microsoft o interazione autenticata
+nel workspace: preparazione completata, invio a Microsoft non ancora trasmesso.
