@@ -284,3 +284,12 @@ auditate e incluse nell’outbox senza descrizioni o contenuti di conversazione.
 verificate da schema vuoto e da uno schema isolato con ticket preesistente; upgrade
 del database LAN non eseguito e nessun deploy effettuato. Restano code, SLA,
 bulk assignment e viste operative.
+
+### Identità leggibile dell’operatore nelle sessioni remote — 2026-10-19
+
+MeshCentral riceveva l’ID interno dell’account come guest name, visibile nel banner
+sul PC assistito. In implementazione: campo nome visualizzato nell’account,
+modificabile dall’utente; nome passato alla creazione della sessione e fallback
+all’email. La migrazione `OperatorDisplayName` aggiunge un campo nullable, quindi
+non richiede modifiche ai profili esistenti. Il comportamento resta soggetto ai
+permessi e alla creazione sessione già applicati dal server.

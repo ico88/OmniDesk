@@ -887,3 +887,13 @@ CI del commit `1d8e9db`: Linux build/test/smoke browser [39257184292](https://gi
 Verifiche: `./scripts/test.sh` passato (63 xUnit/PostgreSQL, 4 Vitest e TypeScript); scenario ticket verifica default deny, body non visibile all'utente scoped, inserimento admin, conflitto di versione, audit e assenza del body nell'outbox. `docker compose config -q`, `docker compose -f compose.test.yaml config -q`, `docker compose build api dashboard` e `git diff --check` passati. `./scripts/smoke.sh --browser` passato dopo aggiornamento del test harness per generare assertion Agent fresche a ogni richiesta: Chromium verifica la UI admin e che il feed dell'Agent non contenga la nota. CI del commit `c3e609e`: Linux [39258442637](https://github.com/ico88/OmniDesk/actions/runs/39258442637) e Windows [39258442710](https://github.com/ico88/OmniDesk/actions/runs/39258442710) riuscite.
 
 Deploy LAN note interne: backup protetto `.backups/20261019T132311Z.zsZ0gC` completato; verificate zero sessioni remote attive, applicata `20261019131702_TicketInternalNotes`, aggiornati solo API/dashboard. HTTPS readiness `ready`, dashboard 200, anonimo `/api/auth/me` 401, bundle aggiornato confermato e seed Administrator verificato. Non creati ticket o note fittizi. Non sono ancora verificati su dati reali l'accesso con capability scoped o il flusso operatore dall'interfaccia; restano coperti da test isolati e da collaudo utente.
+
+### Nome leggibile dell’operatore remoto — 2026-10-19
+
+Implementato il nome visualizzato modificabile in Account e sicurezza; la sessione
+MeshCentral riceve il nome scelto oppure l’email come fallback, mai l’ID interno.
+Aggiunta la migrazione versionata `20261019140500_OperatorDisplayName`. La prova
+end-to-end verifica la validazione del profilo e che il provider Mesh riceva il
+nome configurato invece dell’ID account. `./scripts/test.sh` passato: 63 test
+API/PostgreSQL, 4 test Vitest, TypeScript e build dashboard. Nessun deploy LAN
+effettuato durante la sessione remota attiva; la prova visiva sul PC resta pendente.
