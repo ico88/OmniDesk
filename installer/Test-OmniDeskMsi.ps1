@@ -32,6 +32,10 @@ try {
     foreach ($file in @('OmniDesk.Agent.Windows.exe','OmniDesk.Tray.Windows.exe')) {
         if (-not (Test-Path (Join-Path $directory $file))) { throw "Componente mancante: $file" }
     }
+    Add-Type -AssemblyName System.Drawing
+    $trayIcon = [System.Drawing.Icon]::ExtractAssociatedIcon((Join-Path $directory 'OmniDesk.Tray.Windows.exe'))
+    if (-not $trayIcon -or $trayIcon.Size.Width -lt 16 -or $trayIcon.Size.Height -lt 16) { throw 'Icona prodotto OmniDesk non incorporata nella Tray.' }
+    $trayIcon.Dispose()
     $remote = Get-CimInstance Win32_Service -Filter "Name='OmniDeskRemote'"
     if (-not $remote -or $remote.StartMode -ne 'Manual' -or $remote.State -ne 'Stopped' -or $remote.StartName -ne 'LocalSystem') { throw 'Servizio remoto non conforme o avviato senza approvazione.' }
     $remoteDirectory = Join-Path $directory 'Remote'
@@ -77,7 +81,7 @@ try {
     $previous = [uint32]$service.ProcessId
     Stop-Process -Id $previous -Force
     $null = Wait-Agent -PreviousPid $previous
-    Write-Host 'PASS MSI: Agent/Tray, avvio automatico SYSTEM, startup Tray, DACL e recovery dopo crash.'
+    Write-Host 'PASS MSI: Agent/Tray, icona prodotto, avvio automatico SYSTEM, startup Tray, DACL e recovery dopo crash.'
     Write-Host 'Non verificati: logon Tray, pipe interattiva, screenshot, enrollment LAN, remoto e upgrade.'
 }
 catch {

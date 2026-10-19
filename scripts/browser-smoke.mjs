@@ -8,6 +8,9 @@ try {
  const context=await browser.newContext({ignoreHTTPSErrors:true}); // Test CA only; production clients must trust CA.
  const page=await context.newPage(); const errors=[]; page.on('pageerror',e=>errors.push(e.message));
  await page.goto('https://omnidesk.test');
+ assert.equal(await page.locator('link[rel="icon"]').getAttribute('href'),'/favicon.svg','OmniDesk favicon is linked');
+ assert.match(await (await context.request.get('https://omnidesk.test/favicon.svg')).text(),/fill="#2563eb"/,'OmniDesk brand favicon is served');
+ assert.equal(await page.locator('.login-card>.brand-mark').getAttribute('src'),'/favicon.svg','Login uses the shared OmniDesk mark');
  await page.getByLabel('Email',{exact:true}).fill('admin@example.test');
  await page.getByLabel('Password',{exact:true}).fill(readFileSync('/run/secrets/bootstrap_password','utf8').trim());
  await page.getByRole('button',{name:'Accedi',exact:true}).click();
@@ -245,5 +248,5 @@ try {
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true,'No horizontal page overflow on mobile');
  await page.screenshot({path:'/previews/devices-mobile.png',fullPage:true});
  assert.deepEqual(errors,[],'No browser JavaScript exceptions');
- console.log('PASS: Chromium accounts/grants, isolated device enrollment and online badge from signed heartbeat, ticket notification inbox/click-through, ticket resolution/internal note visibility, device management, protected Windows download and viewer UI permissions');
+ console.log('PASS: Chromium account/grant flows, favicon/shared brand mark, signed-heartbeat online badge, ticket notification click-through, support desk, device management and viewer permissions');
 } finally {await browser.close();}
