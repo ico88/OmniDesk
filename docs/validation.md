@@ -1144,3 +1144,13 @@ UI autenticata. `./scripts/smoke.sh --browser` passato: migrazioni/bootstrap,
 HTTPS, login, badge, support desk, device management e permessi viewer; lo stack
 temporaneo è stato rimosso dal trap. Workflow GitHub Linux e Windows sono ancora
 in coda.
+
+### Gestione coda GitHub Actions
+
+I workflow Linux e Windows ignorano push e pull request composti solo da file
+Markdown (`docs/**` e `*.md`). Ogni workflow usa un gruppo per workflow/ref con
+`cancel-in-progress: false`: i run in esecuzione vengono preservati e una nuova
+revisione può sostituire quella ancora pending per lo stesso ref. Verificato lo
+YAML con PyYAML e asserzioni su trigger, filtri e concorrenza. La coda già
+esistente precede queste regole e non è dichiarata risolta; il comportamento
+verrà verificato dal prossimo evento Actions sul branch.
