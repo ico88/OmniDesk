@@ -323,3 +323,16 @@ Attendere CI Windows e nuovo collaudo PC prima di dichiarare la Tray operativa.
 Run esteso 39209623222 bloccato nel test MSI aggiuntivo: richiesta cancellazione,
 non superato; aggiunto timeout per ogni msiexec test e rilascio view COM nel
 fixture rollback. Non usa il PC destinatario.
+
+### Hotfix 0.7.1: CI Windows riuscita
+
+Run https://github.com/ico88/OmniDesk/actions/runs/39211896966 riuscito sul commit
+e88a5c8: lettura nativa SID logon nel self-test Windows, parsing e prompt,
+contratti, build Agent/Tray/MSI, installazione/crash/recovery/disinstallazione,
+upgrade baseline 0.6 con stato locale preservato, repair con ripristino ACL e
+rollback deferred con assenza servizi/startup residui. Log locale:
+/tmp/omnidesk-071-windows-success.log. Linux run 39211897037 riuscito.
+Il test upgrade precedentemente pendente e ora passato con rilascio view COM e
+timeout espliciti. Queste prove non comprendono il desktop interattivo o la Tray
+nella sessione reale dell'operatore. Artifact originale scaricato e da usare per
+kit 0.7.1 (senza overlay script). Aggiornamento in-place, identita preservata.

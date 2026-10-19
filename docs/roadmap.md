@@ -76,3 +76,5 @@ Installazione manuale semplificata: launcher LAN con parametri verificati e rich
 Distribuzione del launcher interattivo separata dal binario MSI: mantenuto l'MSI 0.7 verificato (run 39207328177), aggiornato solo lo script con prompt gia testato Windows. Provenienza dei due componenti esplicita nel manifest/LEGGIMI. Il collaudo esteso upgrade/repair/rollback rimane distinto e non viene dichiarato superato.
 
 Hotfix 0.7.1 Tray: lettura SID di logon dal token nativo per correggere mancata creazione pipe e autenticazione client. Build locale passata; self-test Windows esteso, aggiornamento del client e prova Tray reali da eseguire. Non richiede un nuovo enrollment dello stesso server.
+
+0.7.1: Windows run 39211896966 e Linux 39211897037 riusciti. Confermata lettura SID logon nativa e lifecycle MSI; chiusi i controlli CI di upgrade baseline 0.6, repair ACL e rollback. Kit in pubblicazione per collaudo Tray sul PC reale; consenso e sessione remota restano da verificare separatamente.
