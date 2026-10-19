@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 <PropertyGroup><TargetFramework>net10.0</TargetFramework><IsTestProject>true</IsTestProject><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings></PropertyGroup>
 <ItemGroup>
+<Compile Include="../../src/OmniDesk.Windows.Ipc/PipeConnectionRetry.cs" Link="PipeConnectionRetry.cs" />
 <Compile Include="../../src/OmniDesk.Agent.Windows/AgentConnection.cs" Link="AgentConnection.cs" />
 <PackageReference Include="Otp.NET" Version="1.4.1" />
 <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
