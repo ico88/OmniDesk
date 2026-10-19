@@ -5,7 +5,8 @@ $ast = [Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRo
 if ($errors.Count) { throw 'Installer parse failed.' }
 $outer = $ast.Find({param($node) $node -is [Management.Automation.Language.TryStatementAst] -and $node.Finally -and $node.Finally.Extent.Text.Contains('$stagedToken, $stagedCa')}, $true)
 if (!$outer) { throw 'Installer cleanup not found.' }
-$cleanup = [scriptblock]::Create($outer.Finally.Extent.Text)
+$body = $outer.Finally.Extent.Text
+$cleanup = [scriptblock]::Create($body.Substring(1, $body.Length - 2))
 foreach ($keepPackage in @($false, $true)) {
     $root = Join-Path $env:RUNNER_TEMP ('source-cleanup-test-' + [Guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory $root | Out-Null
