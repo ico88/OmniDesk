@@ -27,7 +27,7 @@ public static class UpdateEndpoints
             if (installed >= target) return Results.Conflict(new { code = "already_current", message = "L’Agent installato è già aggiornato." });
             await using var tx = await db.Database.BeginTransactionAsync();
             await DeviceOperationLock.Acquire(db, id);
-            if (!await db.DeviceCredentials.AnyAsync(x => x.DeviceId == id && x.RevokedAt == null)) return Results.Conflict();
+            if (!await db.DeviceCredentials.AnyAsync(x => x.DeviceId == id && x.RevokedAt == null)) return AgentUnavailable();
             var existing = await db.UpdateJobs.AsNoTracking().SingleOrDefaultAsync(x => x.DeviceId == id && x.RequestId == request.RequestId);
             if (existing is not null) return existing.Kind == "agent.update" && existing.Payload == JsonSerializer.Serialize(new AgentUpdatePackage(release.Version, release.MsiSha256, release.MsiSize.Value))
                 ? Results.Ok(new { existing.Id, existing.State }) : Results.Conflict();
@@ -52,7 +52,7 @@ public static class UpdateEndpoints
             await using var tx = await db.Database.BeginTransactionAsync();
             await DeviceOperationLock.Acquire(db, id);
             if (!await permissions.Allows(c.User.UserId(), "updates", id)) return Results.Forbid();
-            if (!await db.DeviceCredentials.AnyAsync(x => x.DeviceId == id && x.RevokedAt == null)) return Results.Conflict();
+            if (!await db.DeviceCredentials.AnyAsync(x => x.DeviceId == id && x.RevokedAt == null)) return AgentUnavailable();
             var existing = await db.UpdateJobs.AsNoTracking().SingleOrDefaultAsync(x => x.DeviceId == id && x.RequestId == r.RequestId);
             if (existing is not null)
                 return existing.Kind == kind && JsonSerializer.Deserialize<UpdateSelection[]>(existing.Payload)!.SequenceEqual(r.Updates ?? [])
@@ -87,7 +87,7 @@ public static class UpdateEndpoints
             await using var tx = await db.Database.BeginTransactionAsync();
             await DeviceOperationLock.Acquire(db, id);
             if (!await permissions.Allows(c.User.UserId(), "diagnostics.view", id)) return Results.Forbid();
-            if (!await db.DeviceCredentials.AnyAsync(x => x.DeviceId == id && x.RevokedAt == null)) return Results.Conflict();
+            if (!await db.DeviceCredentials.AnyAsync(x => x.DeviceId == id && x.RevokedAt == null)) return AgentUnavailable();
             var jobKind = "diagnostics." + kind;
             var existing = await db.UpdateJobs.AsNoTracking().SingleOrDefaultAsync(x => x.DeviceId == id && x.RequestId == r.RequestId);
             if (existing is not null) return existing.Kind == jobKind ? Results.Ok(new { existing.Id, existing.State }) : Results.Conflict();
@@ -112,7 +112,7 @@ public static class UpdateEndpoints
             await using var tx = await db.Database.BeginTransactionAsync();
             await DeviceOperationLock.Acquire(db, id);
             if (!await permissions.Allows(c.User.UserId(), "services.manage", id)) return Results.Forbid();
-            if (!await db.DeviceCredentials.AnyAsync(x => x.DeviceId == id && x.RevokedAt == null)) return Results.Conflict();
+            if (!await db.DeviceCredentials.AnyAsync(x => x.DeviceId == id && x.RevokedAt == null)) return AgentUnavailable();
             var kind = "service." + r.Action;
             var control = new ServiceControlPayload(r.ServiceName, r.Action);
             var payload = JsonSerializer.Serialize(control);
@@ -163,7 +163,7 @@ public static class UpdateEndpoints
             await using var tx = await db.Database.BeginTransactionAsync();
             await DeviceOperationLock.Acquire(db, id);
             if (!await permissions.Allows(c.User.UserId(), "processes.manage", id)) return Results.Forbid();
-            if (!await db.DeviceCredentials.AnyAsync(x => x.DeviceId == id && x.RevokedAt == null)) return Results.Conflict();
+            if (!await db.DeviceCredentials.AnyAsync(x => x.DeviceId == id && x.RevokedAt == null)) return AgentUnavailable();
             var control = new ProcessControlPayload(r.ProcessId, Path.GetFileName(r.ProcessName), r.StartedAt);
             var payload = JsonSerializer.Serialize(control);
             var existing = await db.UpdateJobs.AsNoTracking().SingleOrDefaultAsync(x => x.DeviceId == id && x.RequestId == r.RequestId);
@@ -265,6 +265,10 @@ public static class UpdateEndpoints
         });
     }
     private static AuditEvent Event(string? actor, string action, Guid id) => new() { ActorId = actor, Action = action, Target = id.ToString() };
+    private static IResult AgentUnavailable() => Results.Conflict(new {
+        code = "agent_credential_unavailable",
+        message = "Identità Agent assente o revocata: le operazioni sul dispositivo sono disabilitate. Verifica lo stato e la registrazione dell’Agent."
+    });
     private static bool ValidDiagnostic(string kind, string json)
     {
         try
