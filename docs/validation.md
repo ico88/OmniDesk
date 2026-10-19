@@ -1301,3 +1301,31 @@ con Chromium su Compose isolato. Compose standard/test e `git diff --check`
 passati. GitHub Actions `build-and-test` run 39297406507 e
 `windows-agent-package` run 39297406508 passate, inclusi i test MSI Windows.
 Nessun dato, container o schema LAN è stato modificato.
+
+### Portale ticket personale e conferma marchio Tray/favicon — 2026-10-19
+
+Il portale usa un'associazione amministrativa account-dispositivo separata dai
+grant RMM. `RequesterUserId` distingue l'identità web dall'identità macchina;
+creazione e risposte sono protette da antiforgery, ownership, link attivo,
+versione attesa, rate limit, audit e outbox. La lettura restituisce solo messaggi
+pubblici; la revoca del link rimuove immediatamente l'accesso e blocca nuove
+risposte. Migrazione EF `20261019180416_PortalRequesterAccess` applicata dalla
+suite al database PostgreSQL temporaneo, non al database LAN.
+
+Verifica `./scripts/test.sh`: 64/64 xUnit/PostgreSQL e 5/5 Vitest; build
+TypeScript/Vite passata. `./scripts/smoke.sh --browser` passato su Compose
+isolato, incluso Chromium: account/grant, ticket, supporto, permessi Viewer e
+favicon coordinata; nessun deploy o test autenticato sul server LAN.
+`docker compose build api dashboard`, configurazione Compose standard/test e
+`git diff --check` passati. Il test del lockout verifica lo stato Identity
+persistito, evitando che il limite HTTP di 20 tentativi al minuto mascheri la
+risposta dopo cinque password errate. Non dichiarati test del portale su browser
+interattivo o runtime LAN.
+
+Conferma dell'icona richiesta: Tray e icona Windows dell'eseguibile leggono lo
+stesso `assets/omnidesk.ico`; `NotifyIcon` mantiene il marchio anche in stato di
+errore. La favicon SVG già presente riproduce il simbolo OmniDesk, ed è collegata
+in `dashboard/index.html`, usata anche da login e brand mark. Lo smoke Chromium
+ha verificato URL e asset servito. Nessuna modifica Windows MSI o nuovo asset è
+necessario per questa richiesta; la pipeline Windows 39290031180 aveva già
+verificato il pacchetto con l'icona condivisa.

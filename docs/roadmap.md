@@ -426,6 +426,21 @@ dead-letter. Build API/dashboard, Vitest e smoke Chromium isolato passano.
 Questa milestone non invia email/push e non è stata pubblicata sull'istanza LAN;
 il comportamento runtime live resta da provare dopo la finestra di test attiva.
 
+### Portale personale ticket — implementazione iniziale nel ramo
+
+Identity web è collegata al dispositivo tramite `PortalDeviceAccesses`, assegnata
+e revocata da un amministratore con audit. Il portale React permette a qualunque
+account attivo autenticato di vedere i dispositivi esplicitamente associati,
+aprire ticket, leggere la propria conversazione e inviare risposte pubbliche.
+Le API applicano ownership `RequesterUserId`, link ancora attivo, sede e
+credenziale valide, antiforgery sulle mutazioni, idempotenza del RequestId,
+versione attesa e rate limit; le note interne non entrano nei DTO. La relazione
+non concede permessi RMM e la revoca chiude la visibilità e le nuove risposte.
+Migrazione e test PostgreSQL passano; dashboard TypeScript/Vite e Vitest passano.
+La migrazione è stata verificata soltanto sul database temporaneo. Rimangono
+smoke browser dedicato, pubblicazione LAN e prova autenticata; screenshot,
+allegati, email e notifiche in tempo reale non sono inclusi in questa fase.
+
 ### Marchio condiviso Tray, installer e favicon
 
 Creato un asset OmniDesk multi-risoluzione con monitor bianco su fondo blu. La
