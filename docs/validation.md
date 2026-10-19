@@ -1328,4 +1328,10 @@ errore. La favicon SVG già presente riproduce il simbolo OmniDesk, ed è colleg
 in `dashboard/index.html`, usata anche da login e brand mark. Lo smoke Chromium
 ha verificato URL e asset servito. Nessuna modifica Windows MSI o nuovo asset è
 necessario per questa richiesta; la pipeline Windows 39290031180 aveva già
-verificato il pacchetto con l'icona condivisa.
+verificato il pacchetto con l'icona condivisa. Sul commit `1f65d57`, GitHub
+Actions `build-and-test` run
+https://github.com/ico88/OmniDesk/actions/runs/39300451667 e
+`windows-agent-package` run
+https://github.com/ico88/OmniDesk/actions/runs/39300451660 sono riusciti; il
+run Windows ha ricompilato l'MSI, verificato installazione/recovery/uninstall e
+upgrade/repair/rollback contro entrambe le baseline storiche.
