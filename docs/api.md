@@ -68,4 +68,8 @@ richiede `tickets.manage` su ogni ticket. `GET /api/support/queues` richiede alm
 `/api/admin/support-queues`. L'amministrazione gestisce la membership con
 `GET/PUT /api/admin/support-queues/{id}/members` usando la versione attesa della
 coda; membership non concede visibilità sui ticket o permessi sui dispositivi.
+Le regole di routing sono amministrate sotto `/api/admin/support-routing`, una
+per categoria globale o per sede. Per i nuovi ticket prevale la regola della
+sede; la regola globale è il fallback. Il routing assegna la coda, non l'operatore
+e non cambia i grant.
 Vedere [modello Service Desk](service-desk-data-model.md).

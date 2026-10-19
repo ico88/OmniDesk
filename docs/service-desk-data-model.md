@@ -1,6 +1,6 @@
 # Service Desk — schema PostgreSQL proposto
 
-**Il Service Desk è incrementale:** ticket e conversazione esistono nel core OmniDesk; non è ancora stato creato lo schema PostgreSQL separato `service_desk`. Sedi, permessi per sede, snapshot ticket, outbox, priorità e assegnazione hanno migrazioni core. Code, workflow configurabili, partecipanti, allegati generici, SLA, email, automazioni e knowledge base restano proposte per le fasi successive. UUID, timestamp UTC, versioni per concorrenza ottimistica e FK esplicite; JSONB è riservato a snapshot/eventi versionati, non sostituisce relazioni e vincoli.
+**Il Service Desk è incrementale:** ticket, conversazione, code, membership, routing, priorità e assegnazione esistono nel core OmniDesk; non è ancora stato creato lo schema PostgreSQL separato `service_desk`. Workflow configurabili, partecipanti, allegati generici, SLA, email, automazioni e knowledge base restano proposte per le fasi successive. UUID, timestamp UTC, versioni per concorrenza ottimistica e FK esplicite; JSONB è riservato a snapshot/eventi versionati, non sostituisce relazioni e vincoli.
 
 ## Prerequisiti core — stato
 
@@ -16,10 +16,10 @@
 | Entità proposta | Campi e vincoli principali |
 | --- | --- |
 | Tickets | **Core implementato:** `SupportTickets` contiene numero Identity univoco, device/sede storica, requester macchina, subject/description, state, priority (`low/normal/high/urgent`, default `normal`), category controllata (`general/hardware/software/network/account/other`, default `general`), `QueueId` e `AssigneeId` nullable, resolution/screenshot, version e date. FK Restrict e indici dedicati. **Proposto:** workflow configurabile/versionato e ciclo Received/Resolved/Closed strutturato |
-| Queues | **Core implementato:** `SupportQueues` globale, nome normalizzato univoco, versione e attiva/disattiva; membership account sostituita in modo versionato. Assegnazione ticket richiede `tickets.manage`, gli assegnatari devono appartenere alla coda, senza cambiare visibilità per device/sede. **Proposto:** queue scoped per sito, regole di routing e code SLA |
+| Queues | **Core implementato:** `SupportQueues` globale, nome normalizzato univoco, versione e attiva/disattiva; membership account sostituita in modo versionato. Assegnazione ticket richiede `tickets.manage`, gli assegnatari devono appartenere alla coda, senza cambiare visibilità per device/sede. `SupportQueueRoutingRules` applica categoria globale con override di sede ai nuovi ticket. **Proposto:** code scoped per sito, target SLA |
 | TicketDevices | PK (TicketId, DeviceId), LinkedAt/By, snapshot nome/sede al collegamento. Almeno una riga per ticket effettivo |
 | TicketParticipants | PK ticket/utente/relazione, richiedente o follower; partecipazione non equivale a concessione RMM |
-| QueueMembers | Membri Identity con FK e unicità coda/utente; la membership limita gli assegnatari proposti, ma non concede accesso ai ticket |
+| QueueMembers / QueueRoutingRules | Membri Identity con FK e unicità coda/utente; la membership limita gli assegnatari proposti, ma non concede accesso ai ticket. Regole univoche per categoria/sede selezionano la coda dei nuovi ticket, con prevalenza della sede rispetto al fallback globale |
 | Categories / Priorities | Categorie core piatte controllate e priorità low/normal/high/urgent implementate; gerarchia, priorità P1–P4 e matrice impatto/urgenza versionabile restano proposte |
 | WorkflowVersions / States / Transitions | Stati, transizioni ammesse, requisiti di motivo/risoluzione e versione pubblicata immutabile |
 | TicketComments | TicketId, AuthorId/origine, Visibility public/internal, Body sanitizzato, CreatedAt, revisione/tombstone; cambi visibilità espliciti e auditati |

@@ -835,6 +835,12 @@ Migrazione `SupportQueueMembership` aggiunge `SupportQueueMembers` con chiave co
 
 `./scripts/test.sh` passato dopo le modifiche: 63 test xUnit/PostgreSQL e 4 Vitest; migrazioni applicate al database temporaneo e dashboard TypeScript compilata. Verificati utente inesistente, sostituzione membership, conflitto versione obsoleta, filtro assegnatari e rifiuto di assegnatario non membro. `docker compose config -q`, configurazione Compose test e `git diff --check` passati. CI sul commit precedente `da96021`: build-and-test [39250303866](https://github.com/ico88/OmniDesk/actions/runs/39250303866) e Windows package [39250303878](https://github.com/ico88/OmniDesk/actions/runs/39250303878) riusciti; tali run non includono questa modifica. Nessun deploy LAN, upgrade del database live o test Windows interattivo effettuato.
 
+### Routing automatico code ticket — 2026-10-19
+
+Migrazione `SupportQueueRouting` aggiunge regole univoche per categoria globale o categoria/sede, con FK Restrict a sito e coda, versione di concorrenza, audit e outbox. La gestione richiede `administration`; la UI permette di creare e rimuovere le regole. I nuovi ticket selezionano prima la regola attiva della sede e poi quella globale; code disattivate non vengono selezionate. Il routing non sceglie assegnatari e non concede permessi.
+
+`./scripts/test.sh`: 63 xUnit/PostgreSQL e 4 Vitest passati, con migrazione, fallback globale, precedenza sede, conflitti di unicità/versione, cancellazione versione-attesa e divieto per utente scoped. Build TypeScript e `docker compose build api dashboard` riuscite. `./scripts/smoke.sh --browser` passato: migrazioni/bootstrap isolati, HTTPS, Chromium, gestione account/grant, dispositivo fixture, ticket e permessi UI. Lo smoke non esercita i controlli routing dalla pagina amministrativa, coperti da API test e build. `docker compose config -q`, configurazione Compose test e `git diff --check` passati. Nessun deploy LAN o upgrade del database live.
+
 
 ## Terminazione processi RMM — 19 ottobre 2026
 
