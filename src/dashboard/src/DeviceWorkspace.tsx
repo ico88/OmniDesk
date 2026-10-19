@@ -49,8 +49,8 @@ export function DeviceWorkspace({ device, admin, groups, onDeviceChanged, onMess
     let active = true;
     const loadAvailability = async () => {
       try {
-        const state = await api<{ configured: boolean; mapped: boolean; revoked: boolean }>(`/devices/${device.id}/remote-sessions/availability`);
-        if (active) setRemoteReady(state.configured && state.mapped && !state.revoked);
+        const state = await api<{ configured: boolean; mapped: boolean; revoked: boolean; enabled: boolean }>(`/devices/${device.id}/remote-sessions/availability`);
+        if (active) setRemoteReady(state.configured && state.mapped && !state.revoked && state.enabled);
       } catch { if (active) setRemoteReady(false); }
     };
     void loadAvailability();

@@ -27,7 +27,7 @@ public static class RemoteEndpoints
             var revoked = await db.DeviceCredentials.AnyAsync(x => x.DeviceId == id && x.RevokedAt != null);
             var accessPolicy=await db.RemoteProvisionings.AsNoTracking().SingleOrDefaultAsync(x=>x.DeviceId==id);
             var admin = await p.Allows(c.User.UserId(), "administration");
-            return Results.Ok(new { configured = mesh.Configured, mapped = mapping != null, revoked,
+            return Results.Ok(new { configured = mesh.Configured, mapped = mapping != null, revoked, enabled = accessPolicy?.Enabled ?? true,
                 nodeId = admin ? mapping?.NodeId : null, unattendedAllowed=accessPolicy?.UnattendedAllowed??false });
         });
         devices.MapGet("", async (Guid id, HttpContext c, AppDbContext db, PermissionService p) => {

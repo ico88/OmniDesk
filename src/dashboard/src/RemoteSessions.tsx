@@ -3,7 +3,7 @@ import { api } from './api';
 import { Icon } from './Icon';
 
 type Session = {id:string;capability:string;state:string;createdAt:string;expiresAt:string|null;consentRequired:boolean};
-type Availability = {configured:boolean;mapped:boolean;revoked:boolean;nodeId:string|null;unattendedAllowed:boolean};
+type Availability = {configured:boolean;mapped:boolean;revoked:boolean;enabled:boolean;nodeId:string|null;unattendedAllowed:boolean};
 export function RemoteSessions({deviceId,admin,onAvailability}:{deviceId:string;admin:boolean;onAvailability:(ready:boolean)=>void}) {
   const [sessions,setSessions]=useState<Session[]>([]);
   const [availability,setAvailability]=useState<Availability|null>(null);
@@ -14,7 +14,7 @@ export function RemoteSessions({deviceId,admin,onAvailability}:{deviceId:string;
   const [message,setMessage]=useState('');
   async function load() {
     const [rows,config]=await Promise.all([api<Session[]>(`/devices/${deviceId}/remote-sessions`),api<Availability>(`/devices/${deviceId}/remote-sessions/availability`)]);
-    setSessions(rows);setAvailability(config);setNode(config.nodeId??'');onAvailability(config.configured&&config.mapped&&!config.revoked);
+    setSessions(rows);setAvailability(config);setNode(config.nodeId??'');onAvailability(config.configured&&config.mapped&&!config.revoked&&config.enabled);
     if(admin) {const config=await api<{enabled:boolean;unattendedAllowed:boolean;accessPolicyVersion:number}>(`/admin/devices/${deviceId}/remote-provisioning`);setEnabled(config.enabled);setPolicy(config);}
   }
   async function work(action:()=>Promise<void>) {

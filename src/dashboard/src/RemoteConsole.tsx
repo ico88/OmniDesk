@@ -111,7 +111,7 @@ export function RemoteConsole({ deviceId, deviceName, capability, allowed, ready
     {error && <p className="remote-inline-error" role="alert"><X size={16}/>{error}</p>}
     {revoked && <p className="remote-empty-state"><ShieldCheck size={20}/>Dispositivo revocato: l’apertura di sessioni remote è disabilitata.</p>}
     {!revoked && !allowed && <p className="remote-empty-state"><ShieldCheck size={20}/>Il tuo account non ha il permesso necessario per questa sessione.</p>}
-    {!revoked && allowed && !ready && <p className="remote-empty-state"><ShieldCheck size={20}/>Motore remoto non pronto o nodo non associato. Apri Desktop remoto per verificare la configurazione.</p>}
+    {!revoked && allowed && !ready && <p className="remote-empty-state"><ShieldCheck size={20}/>Motore remoto disattivato o non ancora associato. In Desktop remoto un amministratore può verificare la configurazione.</p>}
     {active && session ? <div className="remote-frame-shell">
       {viewState === 'loading' && <div className="frame-loading"><LoaderCircle className="spin" size={20}/>Apertura della sessione autorizzata…</div>}
       <iframe
