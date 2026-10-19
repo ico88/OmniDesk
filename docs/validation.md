@@ -1043,5 +1043,6 @@ interattiva autenticata dal browser ancora aperta.
 
 Retry UI ticket manuali: il modulo conserva lo stesso `RequestId` se il browser
 ritenta senza modificare i campi; ogni modifica al payload genera una nuova chiave
-di richiesta. Build TypeScript/Vite e Vitest 5/5 passati. Pubblicazione LAN
-della sola dashboard ancora da eseguire.
+di richiesta. Build TypeScript/Vite e Vitest 5/5 passati. La dashboard è stata aggiornata
+soltanto dopo CI Linux; il bundle pubblico mostra il form, readiness HTTPS/CA e
+rifiuto anonimo sono passati. Nessun login o invio ticket runtime è stato eseguito.
