@@ -139,6 +139,18 @@ public sealed class SlaPolicyScenario(ApiFactory factory) : IClassFixture<ApiFac
             Assert.Equal(2, fallbackTargets.Length);
             Assert.All(fallbackTargets, target => Assert.Equal(globalPolicy.Id, target.PolicyId));
             Assert.All(fallbackTargets, target => Assert.Equal(1, target.PolicyVersion));
+            var overdueAt = DateTimeOffset.UtcNow.AddMinutes(-1);
+            await db.SupportTicketSlaTargets.Where(x => x.TicketId == fallbackTicket.Id)
+                .ExecuteUpdateAsync(update => update.SetProperty(x => x.DueAt, overdueAt));
+            var breached = 0;
+            while (await SlaBreachWorker.MarkNextBreach(db)) breached++;
+            Assert.Equal(2, breached);
+            var breachedTargets = await db.SupportTicketSlaTargets.AsNoTracking()
+                .Where(x => x.TicketId == fallbackTicket.Id).ToArrayAsync();
+            Assert.All(breachedTargets, target => Assert.NotNull(target.BreachedAt));
+            Assert.Equal(2, await db.AuditEvents.AsNoTracking().CountAsync(x =>
+                x.Action == "ticket.sla.target.breached" && x.Target == fallbackTicket.Id.ToString()));
+            Assert.False(await SlaBreachWorker.MarkNextBreach(db));
             await tx.RollbackAsync();
         }
     }
