@@ -10,6 +10,7 @@ using OmniDesk.Api.Data;
 using OmniDesk.Api.Attachments;
 using OmniDesk.Api.Endpoints;
 using OmniDesk.Api.Security;
+using OmniDesk.Api.Maintenance;
 using OmniDesk.Remote.MeshCentral;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -66,6 +67,8 @@ builder.Services.AddHostedService<AssertionCleanup>();
 builder.Services.AddHostedService<RemoteSessionGuard>();
 builder.Services.AddHostedService<RemoteProvisioningGuard>();
 builder.Services.AddHostedService<TicketNotificationWorker>();
+builder.Services.Configure<RetentionOptions>(builder.Configuration.GetSection(RetentionOptions.SectionName));
+builder.Services.AddHostedService<CoreOutboxRetentionWorker>();
 builder.Services.AddAuthorization();
 var trustedProxyNetwork = builder.Configuration["Proxy:Network"];
 if (!string.IsNullOrEmpty(trustedProxyNetwork))
