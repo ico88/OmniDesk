@@ -11,7 +11,7 @@ JSON, stessa origine, cookie Identity. Errori 400/401/403/409/429; nessun redire
 | POST /api/auth/logout | autenticato, CSRF; 204 |
 | GET /api/auth/me | autenticato; id,email, globalPermissions, twoFactorAvailable (flag server), twoFactorEnabled |
 | GET /api/devices | autenticato; soli dispositivi con view; lista vuota fino a enrollment M2 |
-| PUT /api/admin/devices/{id} | administration globale + CSRF; {name,groupId,expectedName,expectedGroupId}; rinomina/cambio gruppo, 409 se i valori correnti differiscono da quelli attesi |
+| PUT /api/admin/devices/{id} | administration globale + CSRF; {name,groupId,siteId,expectedName,expectedGroupId,expectedSiteId}; rinomina/cambio gruppo o sede; 409 su valori correnti diversi |
 | POST /api/admin/devices/{id}/revoke | administration globale + CSRF; revoca idempotente, annulla job queued e richiede revoca sessioni remote attive; nessuna disinstallazione o riattivazione implicita |
 | GET /api/branding | autenticato; name,logoUrl,primaryColor,theme |
 | PUT /api/branding | administration globale + CSRF; medesimi campi; logo URL HTTPS o vuoto, tema light/dark |
@@ -21,9 +21,12 @@ JSON, stessa origine, cookie Identity. Errori 400/401/403/409/429; nessun redire
 | POST /api/admin/users/{id}/revoke-sessions | administration globale + CSRF; invalida tutte le sessioni web dell'account, inclusa quella corrente se il destinatario è l'operatore |
 | GET /api/admin/roles | administration globale; ruoli e permessi |
 | POST /api/admin/roles | administration globale + CSRF; {name,permissions[]}; permessi indipendenti, nomi univoci |
+| POST /api/devices/{id}/services/actions | `services.manage` globale o scoped + CSRF; coda idempotente start/stop/restart; no shell; nomi e servizi protetti validati |
+| GET/DELETE /api/devices/{id}/services/jobs[/{jobId}] | `services.manage` sul dispositivo; storico limitato e annullamento solo queued |
 | GET /api/admin/grants | administration globale; elenco concessioni |
+| GET/POST/PUT /api/admin/sites | administration globale; catalogo sedi; create/update/archive con conflitto se sede assegnata a device |
 | POST /api/admin/users | administration globale + CSRF; {email,password,role} nome ruolo esistente oppure null (solo concessioni locali); 201 |
-| POST /api/admin/grants | administration globale + CSRF; {userId,role,groupId?,deviceId?}; ruolo esistente, esattamente un ambito; 201 |
+| POST /api/admin/grants | administration globale + CSRF; {userId,role,groupId?,deviceId?,siteId?}; ruolo esistente, esattamente un ambito; 201 |
 | DELETE /api/admin/grants/{id} | administration globale + CSRF; revoca; 204 |
 | GET /api/admin/audit | administration globale; ultimi 100 eventi decrescenti |
 

@@ -32,7 +32,7 @@ sessioni remote correnti.
 - M5 (console cross-compilata, TOTP e layout testati; flag TOTP inizialmente false): console Windows WebView2 della stessa UI, dashboard layout per utente, TOTP setup/challenge/recovery/cifratura implementati e testati; hardening, retention, restore, upgrade e release firmata ancora aperti.
 
 Release candidata 0.8.3: raccolta on-demand processi/servizi/eventi con permesso
-`diagnostics.view`; versione MSI e workflow Windows aggiornati. Build Linux e test locali passati; workflow Windows run 39242100048 riuscito. Kit 0.8.3 non ancora pubblicato sul server LAN.
+`diagnostics.view`; versione MSI e workflow Windows aggiornati. Build Linux e test locali passati; workflow Windows run 39242100048 riuscito. Il kit 0.8.3 ha superato CI Windows/Linux; nessun deploy di quella release sul server LAN registrato qui.
 
 Gate produzione: revisione minacce, pen test autorizzazione/CSRF/enrollment, build riproducibili e SBOM, backup ripristinato, certificati pubblici verificati, test MSI install/upgrade/uninstall e rotazione credenziali. Nessuna data di completamento promessa per moduli non implementati.
 
@@ -226,3 +226,18 @@ sono verificati con test API e PostgreSQL. Nessun dispatcher/consumer è ancora
 attivo: gli eventi restano persistenti nel DB finché la fase worker non ne
 implementa consegna idempotente, backoff, dead-letter e retention. Non dichiarare
 notifiche o integrazioni asincrone operative.
+
+
+### RMM — controllo servizi Windows autorizzato — sorgenti e test Linux verificati
+
+Aggiunta la capability indipendente `services.manage`, concessa globalmente solo
+al ruolo Administrator predefinito; Operator non la riceve, mentre ruoli custom
+possono averla assegnata esplicitamente. API e claim Agent verificano il grant
+per dispositivo, una sola operazione può essere in coda, richieste duplicate sono
+idempotenti, il risultato resta consultabile e auditato. L’interfaccia richiede
+conferma per ogni avvio/arresto/riavvio. Agent usa ServiceController con timeout
+e ricevuta ACL protetta, non esegue shell e non ripete automaticamente operazioni
+interrotte. Policy condivisa rifiuta nomi non validi e servizi OmniDesk/Windows
+critici. Release 0.8.4 in CI per Agent/Tray/Setup/MSI. Nessun servizio è stato
+modificato sul dispositivo pilota; test interattivo Windows, pubblicazione LAN
+e firma restano aperti.

@@ -766,3 +766,20 @@ risposta non vi siano serializzati. `./scripts/test.sh` passato: 47 test
 xUnit/PostgreSQL e 4 Vitest; build TypeScript/Vite inclusa. `docker compose build
 api dashboard`, `docker compose config -q` e `git diff --check` passati. Nessun worker o
 consegna a sistemi esterni è implementato o testato.
+
+
+## Controllo autorizzato servizi Windows — 19 ottobre 2026
+
+Implementata capability separata `services.manage`, API queue/cancel/list con
+check globale/scope dispositivo, audit e revalidazione al claim; l’Agent riceve
+solo i tre comandi start/stop/restart e usa una policy condivisa che respinge
+nomi malformati e servizi OmniDesk/Windows protetti. UI richiede conferma esplicita
+e limita i controlli alla capability; ricevuta locale impedisce il retry automatico
+dopo arresto anomalo.
+
+`./scripts/test.sh` passato: 62 xUnit/PostgreSQL (inclusi default deny, validazione
+servizio, idempotenza, claim/risultato e policy) e 4 Vitest. Cross-publish Agent
+`win-x64`, build API/dashboard, `docker compose config -q` e `git diff --check`
+passati. Workflow GitHub Actions Windows per il nuovo MSI 0.8.4 in corso. Il test
+Agent non controlla servizi reali; nessuna operazione è stata inviata al PC pilota
+e il deploy LAN è stato evitato.
