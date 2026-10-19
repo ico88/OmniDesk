@@ -36,6 +36,16 @@ public static class TicketSlaTargetService
             Create(ticket, policy.Id, version.Version, "resolution", definition.ResolutionMinutes, calendar));
     }
 
+    public static Task<int> CompleteTarget(AppDbContext db, Guid ticketId, string targetType,
+        DateTimeOffset completedAt, CancellationToken cancellationToken = default)
+    {
+        if (targetType is not ("first_response" or "resolution"))
+            throw new ArgumentOutOfRangeException(nameof(targetType));
+        return db.SupportTicketSlaTargets
+            .Where(x => x.TicketId == ticketId && x.TargetType == targetType && x.Cycle == 1 && x.CompletedAt == null)
+            .ExecuteUpdateAsync(update => update.SetProperty(x => x.CompletedAt, completedAt.ToUniversalTime()), cancellationToken);
+    }
+
     private static SupportTicketSlaTarget Create(SupportTicket ticket, Guid policyId, int policyVersion,
         string targetType, int minutes, BusinessCalendarDefinition calendar) => new()
     {

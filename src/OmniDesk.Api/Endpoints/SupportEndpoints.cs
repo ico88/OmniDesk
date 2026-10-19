@@ -1007,15 +1007,19 @@ public static class SupportEndpoints
                 return Results.BadRequest(new { error = "L’assegnatario deve appartenere alla coda selezionata." });
             var priority = r.UpdatePriority ? updatedPriority! : ticket.Priority;
             var replyAdded = !string.IsNullOrEmpty(body) && (r.AddReply || body != ticket.Resolution);
+            var now = DateTimeOffset.UtcNow;
             var updated = await db.SupportTickets.Where(t => t.Id == id && t.Version == r.ExpectedVersion)
                 .ExecuteUpdateAsync(s => s.SetProperty(t => t.State, r.State).SetProperty(t => t.Resolution, resolution)
                     .SetProperty(t => t.Priority, priority).SetProperty(t => t.AssigneeId, assigneeId).SetProperty(t => t.QueueId, queueId)
-                    .SetProperty(t => t.UpdatedAt, DateTimeOffset.UtcNow).SetProperty(t => t.Version, t => t.Version + 1));
+                    .SetProperty(t => t.UpdatedAt, now).SetProperty(t => t.Version, t => t.Version + 1));
             if (updated == 0) return Results.Conflict(new {error="Il ticket e stato aggiornato. Ricarica la conversazione prima di salvare."});
             if(replyAdded) {
                 db.SupportMessages.Add(new SupportMessage {TicketId=id,ActorId=c.User.UserId(),Body=body!});
                 db.AuditEvents.Add(new AuditEvent {ActorId=c.User.UserId(),Action="ticket.reply",Target=id.ToString()});
+                await TicketSlaTargetService.CompleteTarget(db, id, "first_response", now, c.RequestAborted);
             }
+            if (r.State is "resolved" or "closed")
+                await TicketSlaTargetService.CompleteTarget(db, id, "resolution", now, c.RequestAborted);
             if(ticket.State!=r.State)db.SupportMessages.Add(new SupportMessage {TicketId=id,ActorId=c.User.UserId(),Kind="state_change",FromState=ticket.State,ToState=r.State});
             if (ticket.Priority != priority) db.AuditEvents.Add(new AuditEvent { ActorId = c.User.UserId(), Action = "ticket.priority.update", Target = id.ToString() });
             if (ticket.AssigneeId != assigneeId) db.AuditEvents.Add(new AuditEvent { ActorId = c.User.UserId(), Action = "ticket.assignee.update", Target = id.ToString() });
