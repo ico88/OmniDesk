@@ -34,6 +34,7 @@ public sealed class SlaPolicyScenario(ApiFactory factory) : IClassFixture<ApiFac
             var role = new IdentityRole(roleName);
             Assert.True((await roles.CreateAsync(role)).Succeeded);
             db.RolePermissions.Add(new RolePermission { RoleId = role.Id, Permission = "tickets.sla.manage" });
+            db.RolePermissions.Add(new RolePermission { RoleId = role.Id, Permission = "tickets.view" });
             await db.SaveChangesAsync();
             var user = new AppUser { UserName = userName, Email = userName };
             var users = scope.ServiceProvider.GetRequiredService<UserManager<AppUser>>();
@@ -151,6 +152,26 @@ public sealed class SlaPolicyScenario(ApiFactory factory) : IClassFixture<ApiFac
             Assert.Equal(2, await db.AuditEvents.AsNoTracking().CountAsync(x =>
                 x.Action == "ticket.sla.target.breached" && x.Target == fallbackTicket.Id.ToString()));
             Assert.False(await SlaBreachWorker.MarkNextBreach(db));
+
+            var alertTicket = new SupportTicket
+            {
+                Id = Guid.NewGuid(), DeviceId = deviceId, SiteId = siteId, RequestId = Guid.NewGuid(),
+                RequesterKey = new string('c', 64), Subject = "SLA notification fixture", Description = "Fixture",
+                AssigneeId = publisher.Id, CreatedAt = createdAt, UpdatedAt = createdAt
+            };
+            db.SupportTickets.Add(alertTicket);
+            await TicketSlaTargetService.ApplyInitialTargets(db, alertTicket);
+            await db.SaveChangesAsync();
+            await db.SupportTicketSlaTargets.Where(x => x.TicketId == alertTicket.Id && x.TargetType == "first_response")
+                .ExecuteUpdateAsync(update => update.SetProperty(x => x.DueAt, overdueAt));
+            Assert.True(await SlaBreachWorker.MarkNextBreach(db));
+            var breachEvent = await db.CoreOutboxEvents.AsNoTracking()
+                .SingleAsync(x => x.EventType == "ticket.sla.breached" && x.AggregateId == alertTicket.Id);
+            await TicketNotificationWorker.ProjectNotifications(db, new PermissionService(db), breachEvent,
+                DateTimeOffset.UtcNow, CancellationToken.None);
+            await db.SaveChangesAsync();
+            Assert.Contains(await db.UserNotifications.AsNoTracking().Where(x => x.EventId == breachEvent.Id).ToArrayAsync(),
+                notification => notification.UserId == publisher.Id && notification.Kind == "ticket.sla.breached");
             await tx.RollbackAsync();
         }
     }
