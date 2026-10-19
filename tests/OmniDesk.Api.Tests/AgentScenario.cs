@@ -116,6 +116,15 @@ public static class AgentScenario
         await RemoteAgentUpdateScenario.Run(factory, admin, scoped, agent, () => Assertion(key), id);
         await DeviceManagementScenario.Run(factory, admin, scoped, scopedId, agent, () => Assertion(key), id, group);
         Assert.Equal(HttpStatusCode.NoContent, (await admin.PostAsync($"/api/admin/devices/{id}/revoke", null)).StatusCode);
+        var revokedDiagnostics = await admin.PostAsJsonAsync($"/api/devices/{id}/diagnostics/processes", new DiagnosticRequest(Guid.NewGuid()));
+        Assert.Equal(HttpStatusCode.Conflict, revokedDiagnostics.StatusCode);
+        Assert.Equal("agent_credential_unavailable", (await revokedDiagnostics.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
+        var revokedServices = await admin.PostAsJsonAsync($"/api/devices/{id}/services/actions", new ServiceControlRequest(Guid.NewGuid(), "Spooler", "stop"));
+        Assert.Equal(HttpStatusCode.Conflict, revokedServices.StatusCode);
+        Assert.Equal("agent_credential_unavailable", (await revokedServices.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
+        var revokedProcesses = await admin.PostAsJsonAsync($"/api/devices/{id}/processes/actions", new ProcessControlRequest(Guid.NewGuid(), 12345, "notepad.exe", DateTimeOffset.UtcNow.AddSeconds(-10)));
+        Assert.Equal(HttpStatusCode.Conflict, revokedProcesses.StatusCode);
+        Assert.Equal("agent_credential_unavailable", (await revokedProcesses.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
         agent.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Assertion(key));
         Assert.Equal(HttpStatusCode.Unauthorized, (await agent.PostAsJsonAsync("/api/agent/metrics", metrics)).StatusCode);
         status = await scoped.GetFromJsonAsync<JsonElement>($"/api/devices/{id}/status");
