@@ -603,6 +603,9 @@ mostra nome, tipo, MAC e tutti gli IP unicast per ciascuna interfaccia, così
 Wi-Fi ed Ethernet possono comparire contemporaneamente e i dati si aggiornano
 con la telemetria. Il contratto è opzionale per mantenere compatibilità con
 Agent precedenti e l’API applica limiti alla quantità e alla forma dei dati.
+Il riquadro Rete compare appena arriva un heartbeat, anche prima del primo
+inventario; Sistema e Archiviazione appaiono quando i rispettivi dati sono
+disponibili.
 L’avviso della console remota distingue il caricamento lento dell’iframe da un
 errore del motore; la sessione incorporata resta attiva e l’avviso scompare al
 caricamento. Suite API/PostgreSQL 95/95, Vitest 6/6, build API/dashboard,
