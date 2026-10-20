@@ -5,6 +5,15 @@ inviata a Microsoft e nessun verdetto di falso positivo acquisito.
 
 ## Evidenza del collaudo
 
+Aggiornamento 20 ottobre 2026: il pilota ha riportato una nuova quarantena con
+lo stesso rilevamento e ID `2147970383` alle 11:19 locali, questa volta con
+intelligence `1.461.115.0`; la segnalazione non è scomparsa dopo l'aggiornamento
+delle definizioni. Tra le 12:13 e le 12:15 l'Agent ha continuato a registrare
+`UnauthorizedAccessException` durante il provisioning remoto. Il servizio
+`OmniDeskAgent` è presente, mentre Defender ha rimosso il motore/servizio remoto.
+L'hash del campione locale resta quello registrato sotto; non prova innocuità.
+Il campione non è stato inviato e non è disponibile un esito Microsoft.
+
 Windows 10, eventi Defender 1116/1117 del 19 ottobre 2026, ore locali 09:23:
 - Nome: HackTool:Win32/Meshagent.MBZ!MTB; threat ID 2147970383.
 - Rilevamento in tempo reale, gravita Alta, azione quarantena completata.

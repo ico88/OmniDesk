@@ -2119,6 +2119,14 @@ modificato; ogni nuova estensione attende la propria CI sul push.
 - Test Vitest `deviceNetwork.test.ts`: soglie 0.8.11/0.8.12, versioni successive, versione nulla e valore non valido. Build TypeScript/Vite riuscita; suite dashboard 12/12; `git diff --check` passato.
 - Modifica nel branch, non ancora distribuita sulla dashboard LAN; nessun container o servizio riavviato. La visualizzazione dopo l’aggiornamento del PC pilota resta da verificare nel browser reale.
 
+### Diagnostica del motore remoto e blocco Defender — 2026-10-20
+
+- I log del PC Windows confermano che Defender ha messo in quarantena `MeshService64.exe` (`HackTool:Win32/Meshagent.MBZ!MTB`, threat ID `2147970383`, eventi 1116/1117); i log Agent successivi riportano `UnauthorizedAccessException`. Il heartbeat OmniDesk può restare attivo mentre il nodo MeshCentral è offline: il desktop remoto non è quindi verificato operativo.
+- L'Agent ora classifica gli errori remoti comuni (accesso negato, binario assente, servizio assente, rete/timeout) e scrive indicazioni con codice evento, limitando la ripetizione a un messaggio ogni cinque minuti per codice. Nessuna regola Defender viene creata o modificata dal servizio o dall'installer.
+- `./scripts/test.sh` passato: suite API/PostgreSQL, build TypeScript/Vite e test dashboard. Cross-publish Agent self-contained `win-x64` passato nel container .NET SDK. `git diff --check` passato.
+- Questi controlli attestano compilazione e test automatizzati, non installazione o funzionamento sul PC Windows. Il binario resta in quarantena secondo l'ultima evidenza fornita; non è stato inviato a Microsoft e non è stato ottenuto un verdetto. Il dossier è in [remote-engine-defender-review.md](remote-engine-defender-review.md).
+- Per la prova di laboratorio l'amministratore può verificare il file e la provenienza, quindi valutare manualmente il ripristino/consenso tramite Protection History; Microsoft avverte che consentire un elemento realmente malevolo può esporre il dispositivo. La soluzione per la distribuzione resta revisione Microsoft e rilascio firmato, non auto-esclusione.
+
 ### Feedback aggiornamento Agent e accesso remoto prioritario — 2026-10-20
 
 - La pagina dispositivo apre su Desktop remoto e la scheda è prima nell'ordine; la gestione/configurazione amministrativa è in fondo al workspace.
