@@ -121,6 +121,7 @@ public sealed class SupportTicket
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
     public byte[]? Screenshot { get; set; }
+    public bool ContentPurged { get; set; }
 }
 
 public sealed class PortalDeviceAccess
@@ -143,6 +144,7 @@ public sealed class SupportMessage
     public string? ToState { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public bool IsImported { get; set; }
+    public bool ContentPurged { get; set; }
 }
 
 public sealed class SupportTicketDevice

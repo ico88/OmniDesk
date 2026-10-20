@@ -1333,6 +1333,9 @@ namespace OmniDesk.Api.Migrations
                         .HasMaxLength(8000)
                         .HasColumnType("character varying(8000)");
 
+                    b.Property<bool>("ContentPurged")
+                        .HasColumnType("boolean");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -1568,6 +1571,9 @@ namespace OmniDesk.Api.Migrations
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("ContentPurged")
+                        .HasColumnType("boolean");
 
                     b.Property<string>("Description")
                         .IsRequired()

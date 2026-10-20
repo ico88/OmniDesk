@@ -6,7 +6,7 @@ import { TicketParticipants } from './TicketParticipants';
 import { TicketAttachments } from './TicketAttachments';
 import './sla.css';
 
-type Ticket = { id:string; number:number; deviceId:string; siteId:string; deviceName:string|null; siteName:string|null; subject:string; description:string; state:string; stateLabel?:string; priority:string; category:string; origin:string; queueId:string|null; queueName:string|null; assigneeId:string|null; assigneeEmail:string|null; canManage:boolean; resolution:string|null; version:number; createdAt:string; hasScreenshot:boolean };
+type Ticket = { id:string; number:number; deviceId:string; siteId:string; deviceName:string|null; siteName:string|null; subject:string; description:string; contentPurged:boolean; state:string; stateLabel?:string; priority:string; category:string; origin:string; queueId:string|null; queueName:string|null; assigneeId:string|null; assigneeEmail:string|null; canManage:boolean; resolution:string|null; version:number; createdAt:string; hasScreenshot:boolean };
 type TicketSummary = { total:number; open:number; inProgress:number; urgent:number };
 type Assignee = { id:string; email:string };
 type Queue = { id:string; name:string; siteId?:string|null };
@@ -14,7 +14,7 @@ type TicketDevice = {deviceId:string;name:string;siteId:string;siteName:string;i
 type SlaTarget = {targetType:'first_response'|'resolution';policyVersion:number;cycle:number;dueAt:string;completedAt:string|null;breachedAt:string|null;pausedAt:string|null;accumulatedPauseSeconds:number;isPastDue:boolean};
 type TicketSla = {ticketId:string;targets:SlaTarget[]|null};
 type LinkableDevice = {deviceId:string;name:string;siteId:string;siteName:string|null};
-type Message = {id:number;kind:string;visibility:'public'|'internal';body:string;fromState:string|null;toState:string|null;createdAt:string;isImported:boolean};
+type Message = {id:number;kind:string;visibility:'public'|'internal';body:string;contentPurged:boolean;fromState:string|null;toState:string|null;createdAt:string;isImported:boolean};
 type Thread = {version:number;state:string;resolution:string|null;allowedStates:string[];stateLabels:Record<string,string>;canReply:boolean;canNote:boolean;hasMore:boolean;oldestId:number|null;messages:Message[]};
 const labels: Record<string,string> = {open:'Aperto',in_progress:'In lavorazione',resolved:'Risolto',closed:'Chiuso'};
 const priorities: Record<string,string> = {p1:'P1 · Critica',p2:'P2 · Alta',p3:'P3 · Normale',p4:'P4 · Bassa'};
@@ -164,12 +164,12 @@ export function SupportDesk({visibleDeviceIds,onOpenDevice,deviceId,sites=[],dev
       </section>
       {error&&<p role="alert">{error}</p>}
       <div className="conversation-log" role="log" aria-label="Messaggi del ticket" aria-live="polite">
-        <article className="chat-message requester"><div className="chat-meta"><strong>{selected.origin==='operator'?'Ticket inserito da assistenza':'Richiesta dell’utente'}</strong><time>{date(selected.createdAt)}</time></div><p>{selected.description}</p>
+        <article className="chat-message requester"><div className="chat-meta"><strong>{selected.origin==='operator'?'Ticket inserito da assistenza':'Richiesta dell’utente'}</strong><time>{date(selected.createdAt)}</time></div><p>{selected.contentPurged?'Contenuto rimosso secondo la policy di conservazione.':selected.description}</p>
           {selected.hasScreenshot&&<button className="chat-image-button" type="button" onClick={()=>preview.current?.showModal()} aria-label="Ingrandisci screenshot"><img src={`/api/support/${selected.id}/screenshot?inline=true`} alt="Screenshot allegato alla richiesta" loading="lazy"/><span><Icon name="search" size={14}/>Ingrandisci screenshot</span></button>}
         </article>
         {!thread&&<p>Caricamento conversazione…</p>}
         {thread?.hasMore&&<button className="secondary compact" disabled={busy} onClick={()=>void work(()=>loadThread(selected,thread.oldestId!))}>Carica messaggi precedenti</button>}
-        {thread?.messages.map(m=>m.kind==='state_change'?<p className="chat-event" key={m.id}><Icon name="check" size={14}/>{labels[m.fromState??'']??m.fromState} → {labels[m.toState??'']??m.toState}<time>{date(m.createdAt)}</time></p>:<article className={`chat-message ${m.visibility==='internal'?'internal-note':'staff'}`} key={m.id}><div className="chat-meta"><strong>{m.visibility==='internal'?'Nota interna':m.isImported?'Risposta precedente':'Assistenza IT'}</strong><time>{m.isImported?'Ultima modifica: ':''}{date(m.createdAt)}</time></div><p>{m.body}</p></article>)}
+        {thread?.messages.map(m=>m.kind==='state_change'?<p className="chat-event" key={m.id}><Icon name="check" size={14}/>{labels[m.fromState??'']??m.fromState} → {labels[m.toState??'']??m.toState}<time>{date(m.createdAt)}</time></p>:<article className={`chat-message ${m.visibility==='internal'?'internal-note':'staff'}`} key={m.id}><div className="chat-meta"><strong>{m.visibility==='internal'?'Nota interna':m.isImported?'Risposta precedente':'Assistenza IT'}</strong><time>{m.isImported?'Ultima modifica: ':''}{date(m.createdAt)}</time></div><p>{m.contentPurged?'Contenuto rimosso secondo la policy di conservazione.':m.body}</p></article>)}
       </div>
       {thread&&<div className="conversation-toolbar"><span className="status-pill offline">{thread.stateLabels?.[selected.state]??selected.stateLabel??labels[selected.state]??selected.state}</span><button className="secondary compact" disabled={busy} onClick={()=>void work(()=>loadThread(selected))}><Icon name="refresh" size={15}/>Aggiorna messaggi</button></div>}
       {thread?.canReply?<form className="chat-composer" onSubmit={e=>{

@@ -7,4 +7,5 @@ public sealed class RetentionOptions
     public int ProcessedEmailIntakesDays { get; set; } = 180;
     public int PendingEmailIntakesDays { get; set; } = 30;
     public int ResolvedTicketAttachmentsDays { get; set; }
+    public int ResolvedTicketContentDays { get; set; }
 }

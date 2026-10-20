@@ -37,8 +37,8 @@ public sealed record PortalTicketCreate(Guid RequestId, Guid DeviceId, string Su
 public sealed record PortalTicketReply(long ExpectedVersion, string Body);
 public sealed record PortalTicketView(Guid Id, long Number, Guid DeviceId, string DeviceName, string SiteName,
     string Subject, string State, string Category, long Version, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt,
-    bool HasScreenshot = false);
-public sealed record PortalMessageView(long Id, string Kind, string Body, string? FromState, string? ToState, DateTimeOffset CreatedAt);
+    bool HasScreenshot = false, bool ContentPurged = false);
+public sealed record PortalMessageView(long Id, string Kind, string Body, string? FromState, string? ToState, DateTimeOffset CreatedAt, bool ContentPurged = false);
 public static class SupportEndpoints
 {
     private static readonly Dictionary<string, string> PriorityAliases = new(StringComparer.OrdinalIgnoreCase)
@@ -52,7 +52,7 @@ public static class SupportEndpoints
     private static string? CanonicalPriority(string? priority) => priority is not null && PriorityAliases.TryGetValue(priority.Trim(), out var value) ? value : null;
     private static bool ValidKey(string? key) => key is { Length: 64 } && key.All(Uri.IsHexDigit);
     private static SupportTicketView View(SupportTicket t) => new(t.Id, t.Number, t.DeviceId, t.Subject, t.Description, t.State,
-        t.Resolution, t.Version, t.CreatedAt, t.UpdatedAt, t.Screenshot != null, t.Category, t.Origin);
+        t.Resolution, t.Version, t.CreatedAt, t.UpdatedAt, t.Screenshot != null, t.Category, t.Origin, t.ContentPurged);
     private static SupportAttachmentView AttachmentView(SupportAttachment item) => new(item.Id, item.OriginalFileName,
         item.MediaType, item.SizeBytes, item.Visibility, item.ScanState, item.CreatedAt);
     private static string SafeAttachmentName(string? name)
@@ -93,7 +93,7 @@ public static class SupportEndpoints
             var deviceId = Guid.Parse(c.User.UserId());
             var rows = await db.SupportTickets.AsNoTracking().Where(t => t.DeviceId == deviceId && t.RequesterKey == requesterKey)
                 .OrderByDescending(t => t.CreatedAt).Take(10)
-                .Select(t => new SupportTicketView(t.Id,t.Number,t.DeviceId,t.Subject,"",t.State,t.Resolution,t.Version,t.CreatedAt,t.UpdatedAt,t.Screenshot != null,t.Category)).ToArrayAsync();
+                .Select(t => new SupportTicketView(t.Id,t.Number,t.DeviceId,t.Subject,"",t.State,t.Resolution,t.Version,t.CreatedAt,t.UpdatedAt,t.Screenshot != null,t.Category,t.Origin,t.ContentPurged)).ToArrayAsync();
             return Results.Ok(rows);
         });
         machine.MapGet("/{requesterKey}/{ticketId:guid}/messages", async (string requesterKey, Guid ticketId, HttpContext c, AppDbContext db) => {
@@ -103,8 +103,8 @@ public static class SupportEndpoints
             if (ticket is null) return Results.NotFound();
             if (!await db.DeviceCredentials.AnyAsync(x => x.DeviceId == deviceId && x.RevokedAt == null)) return Results.Unauthorized();
             var replies = await db.SupportMessages.AsNoTracking().Where(m => m.TicketId == ticketId && m.Visibility == "public")
-                .OrderBy(m => m.Id).Select(m => new SupportRequesterMessageView(m.Id, m.Kind, m.Body, m.FromState, m.ToState, m.CreatedAt)).ToArrayAsync();
-            var messages = new[] { new SupportRequesterMessageView(0, "request", ticket.Description, null, null, ticket.CreatedAt) }
+                .OrderBy(m => m.Id).Select(m => new SupportRequesterMessageView(m.Id, m.Kind, m.Body, m.FromState, m.ToState, m.CreatedAt, m.ContentPurged)).ToArrayAsync();
+            var messages = new[] { new SupportRequesterMessageView(0, "request", ticket.Description, null, null, ticket.CreatedAt, ticket.ContentPurged) }
                 .Concat(replies).ToArray();
             c.Response.Headers.CacheControl = "no-store";
             return Results.Ok(new SupportRequesterConversation(ticket.Id, ticket.Version, ticket.State, messages));
@@ -212,7 +212,7 @@ public static class SupportEndpoints
                     db.DeviceCredentials.Any(credential => credential.DeviceId == ticket.DeviceId && credential.RevokedAt == null)
                 orderby ticket.UpdatedAt descending
                 select new PortalTicketView(ticket.Id, ticket.Number, ticket.DeviceId, device.Name, site.Name,
-                    ticket.Subject, ticket.State, ticket.Category, ticket.Version, ticket.CreatedAt, ticket.UpdatedAt, ticket.Screenshot != null))
+                    ticket.Subject, ticket.State, ticket.Category, ticket.Version, ticket.CreatedAt, ticket.UpdatedAt, ticket.Screenshot != null, ticket.ContentPurged))
                 .Take(100).ToArrayAsync();
             c.Response.Headers.CacheControl = "no-store";
             return Results.Ok(tickets);
@@ -227,16 +227,16 @@ public static class SupportEndpoints
                     db.PortalDeviceAccesses.Any(access => access.UserId == userId && access.DeviceId == item.DeviceId) &&
                     db.DeviceCredentials.Any(credential => credential.DeviceId == item.DeviceId && credential.RevokedAt == null)
                 select new PortalTicketView(item.Id, item.Number, item.DeviceId, device.Name, site.Name,
-                    item.Subject, item.State, item.Category, item.Version, item.CreatedAt, item.UpdatedAt, item.Screenshot != null))
+                    item.Subject, item.State, item.Category, item.Version, item.CreatedAt, item.UpdatedAt, item.Screenshot != null, item.ContentPurged))
                 .SingleOrDefaultAsync();
             if (ticket is null) return Results.NotFound();
             var request = await db.SupportTickets.AsNoTracking().Where(x => x.Id == id)
-                .Select(x => new { x.Description, x.CreatedAt }).SingleAsync();
+                .Select(x => new { x.Description, x.CreatedAt, x.ContentPurged }).SingleAsync();
             var replies = await db.SupportMessages.AsNoTracking().Where(message => message.TicketId == id && message.Visibility == "public")
                 .OrderBy(message => message.Id)
-                .Select(message => new PortalMessageView(message.Id, message.Kind, message.Body, message.FromState, message.ToState, message.CreatedAt))
+                .Select(message => new PortalMessageView(message.Id, message.Kind, message.Body, message.FromState, message.ToState, message.CreatedAt, message.ContentPurged))
                 .ToArrayAsync();
-            var messages = new[] { new PortalMessageView(0, "request", request.Description, null, null, request.CreatedAt) }
+            var messages = new[] { new PortalMessageView(0, "request", request.Description, null, null, request.CreatedAt, request.ContentPurged) }
                 .Concat(replies).ToArray();
             c.Response.Headers.CacheControl = "no-store";
             return Results.Ok(new { ticket, messages });
@@ -274,7 +274,7 @@ public static class SupportEndpoints
                 return previous.Subject == subject && previous.Description == description && previous.Category == r.Category &&
                     (previous.Screenshot ?? []).SequenceEqual(screenshot ?? [])
                     ? Results.Ok(new PortalTicketView(previous.Id, previous.Number, device.Id, device.Name, device.SiteName,
-                        previous.Subject, previous.State, previous.Category, previous.Version, previous.CreatedAt, previous.UpdatedAt, previous.Screenshot is not null))
+                        previous.Subject, previous.State, previous.Category, previous.Version, previous.CreatedAt, previous.UpdatedAt, previous.Screenshot is not null, previous.ContentPurged))
                     : Results.Conflict();
             var cutoff = DateTimeOffset.UtcNow.AddMinutes(-5);
             if (await db.SupportTickets.CountAsync(ticket => ticket.RequesterUserId == userId && ticket.CreatedAt > cutoff) >= 10)
@@ -305,7 +305,7 @@ public static class SupportEndpoints
             await tx.CommitAsync();
             return Results.Created($"/api/portal/tickets/{ticket.Id}", new PortalTicketView(ticket.Id, ticket.Number,
                 device.Id, device.Name, device.SiteName, ticket.Subject, ticket.State, category,
-                ticket.Version, ticket.CreatedAt, ticket.UpdatedAt, ticket.Screenshot is not null));
+                ticket.Version, ticket.CreatedAt, ticket.UpdatedAt, ticket.Screenshot is not null, ticket.ContentPurged));
         });
         portal.MapGet("/tickets/{id:guid}/screenshot", async (Guid id, HttpContext c, AppDbContext db) => {
             var userId = c.User.UserId();
@@ -902,11 +902,11 @@ public static class SupportEndpoints
             var assigneeTerm=assignee?.Trim().ToLowerInvariant();
             if(!string.IsNullOrEmpty(assigneeTerm))query=query.Where(t=>t.AssigneeId!=null&&db.Users.Any(u=>u.Id==t.AssigneeId&&u.Email!=null&&u.Email.ToLower()==assigneeTerm));
             var rows=await query.OrderByDescending(t => t.CreatedAt).Take(100)
-                .Select(t => new {t.Id,t.Number,t.DeviceId,t.SiteId,deviceName=db.Devices.Where(d=>d.Id==t.DeviceId).Select(d=>d.Name).FirstOrDefault(),siteName=db.Sites.Where(s=>s.Id==t.SiteId).Select(s=>s.Name).FirstOrDefault(),t.Subject,t.Description,t.State,t.WorkflowId,t.WorkflowVersion,t.Priority,t.Category,t.Origin,t.QueueId,queueName=t.QueueId==null?null:db.SupportQueues.Where(q=>q.Id==t.QueueId).Select(q=>q.Name).FirstOrDefault(),t.AssigneeId,assigneeEmail=t.AssigneeId==null?null:db.Users.Where(u=>u.Id==t.AssigneeId).Select(u=>u.Email).FirstOrDefault(),canManage=manageGlobal||manageGrants.Any(g=>g.SiteId==t.SiteId||g.DeviceId==t.DeviceId||(g.GroupId!=null&&db.Devices.Any(d=>d.Id==t.DeviceId&&d.GroupId==g.GroupId))),t.Resolution,t.Version,t.CreatedAt,t.UpdatedAt,hasScreenshot=t.Screenshot != null}).ToArrayAsync();
+                .Select(t => new {t.Id,t.Number,t.DeviceId,t.SiteId,deviceName=db.Devices.Where(d=>d.Id==t.DeviceId).Select(d=>d.Name).FirstOrDefault(),siteName=db.Sites.Where(s=>s.Id==t.SiteId).Select(s=>s.Name).FirstOrDefault(),t.Subject,t.Description,t.ContentPurged,t.State,t.WorkflowId,t.WorkflowVersion,t.Priority,t.Category,t.Origin,t.QueueId,queueName=t.QueueId==null?null:db.SupportQueues.Where(q=>q.Id==t.QueueId).Select(q=>q.Name).FirstOrDefault(),t.AssigneeId,assigneeEmail=t.AssigneeId==null?null:db.Users.Where(u=>u.Id==t.AssigneeId).Select(u=>u.Email).FirstOrDefault(),canManage=manageGlobal||manageGrants.Any(g=>g.SiteId==t.SiteId||g.DeviceId==t.DeviceId||(g.GroupId!=null&&db.Devices.Any(d=>d.Id==t.DeviceId&&d.GroupId==g.GroupId))),t.Resolution,t.Version,t.CreatedAt,t.UpdatedAt,hasScreenshot=t.Screenshot != null}).ToArrayAsync();
             var workflowIds=rows.Where(t=>t.WorkflowId.HasValue&&t.WorkflowVersion.HasValue).Select(t=>t.WorkflowId!.Value).Distinct().ToArray();
             var workflowVersions=await db.SupportWorkflowVersions.AsNoTracking().Where(v=>workflowIds.Contains(v.WorkflowId)).ToArrayAsync();
             var definitions=workflowVersions.ToDictionary(v=>(v.WorkflowId,v.Version),v=>TicketWorkflowPolicy.Deserialize(v.DefinitionJson));
-            return Results.Ok(rows.Select(t=>new {t.Id,t.Number,t.DeviceId,t.SiteId,t.deviceName,t.siteName,t.Subject,t.Description,t.State,
+            return Results.Ok(rows.Select(t=>new {t.Id,t.Number,t.DeviceId,t.SiteId,t.deviceName,t.siteName,t.Subject,t.Description,t.ContentPurged,t.State,
                 stateLabel=t.WorkflowId.HasValue&&t.WorkflowVersion.HasValue&&definitions.TryGetValue((t.WorkflowId.Value,t.WorkflowVersion.Value),out var definition)&&definition is not null
                     ?TicketWorkflowPolicy.Label(definition,t.State):TicketWorkflowPolicy.Label(TicketWorkflowDefinition.Default,t.State),
                 t.Priority,t.Category,t.Origin,t.QueueId,t.queueName,t.AssigneeId,t.assigneeEmail,t.canManage,t.Resolution,t.Version,t.CreatedAt,t.UpdatedAt,t.hasScreenshot}));
@@ -1342,7 +1342,7 @@ public static class SupportEndpoints
             var query=db.SupportMessages.AsNoTracking().Where(m=>m.TicketId==id && (m.Visibility=="public" || (canViewInternal && m.Kind!="rmm_intervention")));
             if(before.HasValue)query=query.Where(m=>m.Id<before.Value);
             var rows=await query.OrderByDescending(m=>m.Id).Take(100)
-                .Select(m=>new {m.Id,m.Kind,m.Visibility,m.Body,m.FromState,m.ToState,m.CreatedAt,m.IsImported}).ToArrayAsync();
+                .Select(m=>new {m.Id,m.Kind,m.Visibility,m.Body,m.ContentPurged,m.FromState,m.ToState,m.CreatedAt,m.IsImported}).ToArrayAsync();
             c.Response.Headers.CacheControl="no-store";
             var oldest=rows.Length>0?rows[^1].Id:(long?)null;
             var hasMore=oldest.HasValue&&await query.AnyAsync(m=>m.Id<oldest.Value);

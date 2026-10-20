@@ -20,6 +20,7 @@ public sealed class CoreOutboxRetentionWorker(
             throw new InvalidOperationException("Retention:DeliveredOutboxDays must be between 0 and 36500.");
         ValidateEmailIntakeRetention();
         ValidateTicketAttachmentRetention();
+        ValidateTicketContentRetention();
         if (retention.DeliveredOutboxDays == 0)
             logger.LogInformation("Delivered outbox event retention is disabled.");
 
@@ -60,6 +61,17 @@ public sealed class CoreOutboxRetentionWorker(
                         }
                     }
                     if (attachmentsRemoved > 0) logger.LogInformation("Retention purged {Count} resolved-ticket attachments and screenshots.", attachmentsRemoved);
+                    var contentTicketsPurged = 0;
+                    if (retention.ResolvedTicketContentDays > 0)
+                    {
+                        for (var batch = 0; batch < MaxBatchesPerRun; batch++)
+                        {
+                            var count = await PurgeResolvedTicketContentBatchAsync(stoppingToken);
+                            contentTicketsPurged += count;
+                            if (count < BatchSize) break;
+                        }
+                    }
+                    if (contentTicketsPurged > 0) logger.LogInformation("Retention redacted content for {Count} resolved tickets.", contentTicketsPurged);
                     await timer.WaitForNextTickAsync(stoppingToken);
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
@@ -148,6 +160,55 @@ public sealed class CoreOutboxRetentionWorker(
     }
 
     private const int AttachmentBatchSize = 50;
+    private const int TicketContentBatchSize = 250;
+
+    public async Task<int> PurgeResolvedTicketContentBatchAsync(CancellationToken cancellationToken = default)
+    {
+        ValidateTicketContentRetention();
+        if (retention.ResolvedTicketContentDays == 0) return 0;
+        var now = DateTimeOffset.UtcNow;
+        var cutoff = now.AddDays(-retention.ResolvedTicketContentDays);
+        using var scope = scopes.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        var tickets = await db.SupportTickets.FromSqlInterpolated($"""
+            SELECT * FROM "SupportTickets"
+            WHERE "ContentPurged" = FALSE AND "State" IN ('resolved','closed') AND "UpdatedAt" < {cutoff}
+            ORDER BY "UpdatedAt", "Id"
+            FOR UPDATE SKIP LOCKED
+            LIMIT {TicketContentBatchSize}
+            """).ToListAsync(cancellationToken);
+        if (tickets.Count == 0)
+        {
+            await transaction.CommitAsync(cancellationToken);
+            return 0;
+        }
+
+        var ticketIds = tickets.Select(ticket => ticket.Id).ToArray();
+        foreach (var ticket in tickets)
+        {
+            ticket.Subject = $"Ticket #{ticket.Number}";
+            ticket.Description = "";
+            ticket.Resolution = null;
+            ticket.ContentPurged = true;
+        }
+        var messages = await db.SupportMessages.Where(message => ticketIds.Contains(message.TicketId) && !message.ContentPurged &&
+                (message.Kind == "reply" || message.Kind == "requester_reply" || message.Kind == "portal_reply" || message.Kind == "internal_note"))
+            .ToListAsync(cancellationToken);
+        foreach (var message in messages)
+        {
+            message.Body = "";
+            message.ContentPurged = true;
+        }
+        db.AuditEvents.Add(new AuditEvent
+        {
+            Action = "retention.ticket-content.purged",
+            Target = $"tickets={tickets.Count};messages={messages.Count}"
+        });
+        await db.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return tickets.Count;
+    }
 
     public async Task<int> PurgeResolvedTicketAttachmentsBatchAsync(CancellationToken cancellationToken = default)
     {
@@ -266,5 +327,11 @@ public sealed class CoreOutboxRetentionWorker(
     {
         if (retention.ResolvedTicketAttachmentsDays is < 0 or > 36500)
             throw new InvalidOperationException("Retention:ResolvedTicketAttachmentsDays must be between 0 and 36500.");
+    }
+
+    private void ValidateTicketContentRetention()
+    {
+        if (retention.ResolvedTicketContentDays is < 0 or > 36500)
+            throw new InvalidOperationException("Retention:ResolvedTicketContentDays must be between 0 and 36500.");
     }
 }
