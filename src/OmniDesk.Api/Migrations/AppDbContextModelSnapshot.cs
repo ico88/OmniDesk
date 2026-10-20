@@ -534,6 +534,22 @@ namespace OmniDesk.Api.Migrations
                     b.ToTable("DeviceMetrics");
                 });
 
+            modelBuilder.Entity("OmniDesk.Api.Data.DevicePresence", b =>
+                {
+                    b.Property<Guid>("DeviceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("ChangedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsOnline")
+                        .HasColumnType("boolean");
+
+                    b.HasKey("DeviceId");
+
+                    b.ToTable("DevicePresence");
+                });
+
             modelBuilder.Entity("OmniDesk.Api.Data.EnrollmentToken", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2020,6 +2036,15 @@ namespace OmniDesk.Api.Migrations
                     b.HasOne("OmniDesk.Api.Data.Device", null)
                         .WithOne()
                         .HasForeignKey("OmniDesk.Api.Data.DeviceMetrics", "DeviceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("OmniDesk.Api.Data.DevicePresence", b =>
+                {
+                    b.HasOne("OmniDesk.Api.Data.Device", null)
+                        .WithOne()
+                        .HasForeignKey("OmniDesk.Api.Data.DevicePresence", "DeviceId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

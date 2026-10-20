@@ -70,6 +70,8 @@ builder.Services.AddHostedService<RemoteProvisioningGuard>();
 builder.Services.AddHostedService<TicketNotificationWorker>();
 builder.Services.AddHostedService<SlaBreachWorker>();
 builder.Services.AddHostedService<SlaEscalationWorker>();
+builder.Services.Configure<DevicePresenceOptions>(builder.Configuration.GetSection(DevicePresenceOptions.SectionName));
+builder.Services.AddHostedService<DevicePresenceWorker>();
 builder.Services.Configure<RetentionOptions>(builder.Configuration.GetSection(RetentionOptions.SectionName));
 builder.Services.AddHostedService<CoreOutboxRetentionWorker>();
 builder.Services.AddAuthorization();

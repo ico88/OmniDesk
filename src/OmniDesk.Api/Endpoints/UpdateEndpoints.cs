@@ -5,7 +5,9 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using OmniDesk.Api.Data;
 using OmniDesk.Api.Security;
+using OmniDesk.Api.Maintenance;
 using OmniDesk.Contracts;
+using Microsoft.Extensions.Options;
 namespace OmniDesk.Api.Endpoints;
 public static class UpdateEndpoints
 {
@@ -15,13 +17,13 @@ public static class UpdateEndpoints
         var adminUpdates = app.MapGroup("/api/admin/devices/{id:guid}/agent-update").RequireAuthorization().AddEndpointFilter(async (c, next) =>
             (await c.HttpContext.RequestServices.GetRequiredService<PermissionService>().Global(c.HttpContext.User.UserId())).Contains("administration")
                 ? await next(c) : Results.Forbid());
-        adminUpdates.MapPost("", async (Guid id, AgentUpdateRequest request, HttpContext c, AppDbContext db, IConfiguration config) => {
+        adminUpdates.MapPost("", async (Guid id, AgentUpdateRequest request, HttpContext c, AppDbContext db, IConfiguration config, IOptions<DevicePresenceOptions> presence) => {
             if (request.RequestId == Guid.Empty) return Results.BadRequest();
             var release = DownloadEndpoints.ReadRelease(config);
             if (release?.MsiSha256 is null || release.MsiSize is null) return Results.Conflict(new { code = "release_unavailable", message = "La release Windows pubblicata non include metadati MSI verificabili." });
             var metrics = await db.DeviceMetrics.AsNoTracking().SingleOrDefaultAsync(x => x.DeviceId == id);
             var deviceVersion = metrics is null ? null : JsonSerializer.Deserialize<MetricsRequest>(metrics.Payload)?.AgentVersion;
-            if (metrics is null || metrics.ReceivedAt < DateTimeOffset.UtcNow.AddMinutes(-3)) return Results.Conflict(new { code = "device_offline", message = "Il dispositivo non invia heartbeat recenti." });
+            if (metrics is null || metrics.ReceivedAt < DevicePresenceOptions.Cutoff(DateTimeOffset.UtcNow, presence.Value)) return Results.Conflict(new { code = "device_offline", message = "Il dispositivo non invia heartbeat recenti." });
             if (!Version.TryParse(deviceVersion, out var installed) || !Version.TryParse(release.Version, out var target)) return Results.Conflict(new { code = "agent_version_unknown", message = "La versione Agent non è nota; aggiorna il dispositivo con MSI una volta." });
             if (installed < MinimumUpdaterVersion) return Results.Conflict(new { code = "updater_unavailable", message = "Questa versione Agent non include l’aggiornatore remoto; installa una volta l’MSI 0.8.1 o successivo." });
             if (installed >= target) return Results.Conflict(new { code = "already_current", message = "L’Agent installato è già aggiornato." });

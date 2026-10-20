@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using OmniDesk.Api.Data;
 using OmniDesk.Api.Security;
+using OmniDesk.Api.Maintenance;
+using Microsoft.Extensions.Options;
 
 namespace OmniDesk.Api.Endpoints;
 public sealed record BrandingRequest(string Name, string LogoUrl, string PrimaryColor, string Theme);
@@ -24,8 +26,8 @@ public static class ManagementEndpoints
     public static void MapManagementEndpoints(this WebApplication app)
     {
         var api = app.MapGroup("/api").RequireAuthorization();
-        api.MapGet("/devices", async (HttpContext c, PermissionService p, AppDbContext db) => {
-            var cutoff = DateTimeOffset.UtcNow.AddMinutes(-3);
+        api.MapGet("/devices", async (HttpContext c, PermissionService p, AppDbContext db, IOptions<DevicePresenceOptions> presence) => {
+            var cutoff = DevicePresenceOptions.Cutoff(DateTimeOffset.UtcNow, presence.Value);
             var visible = p.VisibleDevices(c.User.UserId()).AsNoTracking();
             var devices = await visible.Select(x => new {
                 x.Id, x.Name, x.GroupId, x.SiteId,

@@ -5,6 +5,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using OmniDesk.Api.Data;
 using OmniDesk.Api.Security;
+using OmniDesk.Api.Maintenance;
+using Microsoft.Extensions.Options;
 using OmniDesk.Contracts;
 
 namespace OmniDesk.Api.Endpoints;
@@ -101,7 +103,7 @@ public static class AgentEndpoints
             return Results.NoContent();
         });
         var read = app.MapGroup("/api/devices").RequireAuthorization();
-        read.MapGet("/{id:guid}/status", async (Guid id, HttpContext c, AppDbContext db, PermissionService p) => {
+        read.MapGet("/{id:guid}/status", async (Guid id, HttpContext c, AppDbContext db, PermissionService p, IOptions<DevicePresenceOptions> presence) => {
             if (!await p.Allows(c.User.UserId(), "view", id)) return Results.Forbid();
             var device = await db.Devices.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id); if (device is null) return Results.NotFound();
             var metrics = await db.DeviceMetrics.AsNoTracking().SingleOrDefaultAsync(x => x.DeviceId == id);
@@ -110,7 +112,7 @@ public static class AgentEndpoints
             var capabilities = new List<string>();
             foreach (var capability in Permissions.All) if (await p.Allows(c.User.UserId(), capability, id)) capabilities.Add(capability);
             return Results.Ok(new { device.Id, device.Name, device.GroupId, device.SiteId, revoked, capabilities,
-                lastSeen = metrics?.ReceivedAt, online = !revoked && metrics?.ReceivedAt > DateTimeOffset.UtcNow.AddMinutes(-3),
+                lastSeen = metrics?.ReceivedAt, online = !revoked && metrics?.ReceivedAt > DevicePresenceOptions.Cutoff(DateTimeOffset.UtcNow, presence.Value),
                 metrics = metrics is null ? null : JsonSerializer.Deserialize<MetricsRequest>(metrics.Payload),
                 inventoryAt = inventory?.ReceivedAt, inventory = inventory is null ? null : JsonSerializer.Deserialize<InventoryRequest>(inventory.Payload) });
         });

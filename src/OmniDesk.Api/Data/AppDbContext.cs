@@ -8,6 +8,7 @@ public sealed class AppUser : IdentityUser { public bool IsDisabled { get; set; 
 public sealed class DeviceGroup { public Guid Id { get; set; } public string Name { get; set; } = ""; }
 public sealed class Site { public Guid Id { get; set; } = Guid.NewGuid(); public string Name { get; set; } = ""; public bool IsArchived { get; set; } public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow; }
 public sealed class Device { public Guid Id { get; set; } public string Name { get; set; } = ""; public Guid? GroupId { get; set; } public Guid SiteId { get; set; } }
+public sealed class DevicePresence { public Guid DeviceId { get; set; } public bool IsOnline { get; set; } public DateTimeOffset ChangedAt { get; set; } }
 public sealed class RolePermission { public string RoleId { get; set; } = ""; public string Permission { get; set; } = ""; }
 public sealed class ScopeGrant
 {
@@ -57,6 +58,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
     public DbSet<DeviceGroup> DeviceGroups => Set<DeviceGroup>();
     public DbSet<Site> Sites => Set<Site>();
     public DbSet<Device> Devices => Set<Device>();
+    public DbSet<DevicePresence> DevicePresence => Set<DevicePresence>();
     public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
     public DbSet<ScopeGrant> ScopeGrants => Set<ScopeGrant>();
     public DbSet<Branding> Branding => Set<Branding>();
@@ -241,6 +243,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
         b.Entity<DeviceMetrics>().HasKey(x => x.DeviceId);
         b.Entity<DeviceMetrics>().Property(x => x.Payload).HasColumnType("jsonb");
         b.Entity<DeviceMetrics>().HasOne<Device>().WithOne().HasForeignKey<DeviceMetrics>(x => x.DeviceId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<DevicePresence>().HasKey(x => x.DeviceId);
+        b.Entity<DevicePresence>().HasOne<Device>().WithOne().HasForeignKey<DevicePresence>(x => x.DeviceId).OnDelete(DeleteBehavior.Cascade);
         b.Entity<DeviceInventory>().HasKey(x => x.DeviceId);
         b.Entity<DeviceInventory>().Property(x => x.Payload).HasColumnType("jsonb");
         b.Entity<DeviceInventory>().HasOne<Device>().WithOne().HasForeignKey<DeviceInventory>(x => x.DeviceId).OnDelete(DeleteBehavior.Cascade);
