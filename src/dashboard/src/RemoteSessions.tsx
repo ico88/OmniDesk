@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from './api';
 import { Icon } from './Icon';
 
-type Session = {id:string;capability:string;state:string;createdAt:string;expiresAt:string|null;consentRequired:boolean};
+type Session = {id:string;operatorName:string|null;capability:string;state:string;createdAt:string;expiresAt:string|null;consentRequired:boolean};
 type Availability = {configured:boolean;mapped:boolean;revoked:boolean;enabled:boolean;nodeId:string|null;unattendedAllowed:boolean};
 export function RemoteSessions({deviceId,admin,onAvailability}:{deviceId:string;admin:boolean;onAvailability:(ready:boolean)=>void}) {
   const [sessions,setSessions]=useState<Session[]>([]);
@@ -43,13 +43,21 @@ export function RemoteSessions({deviceId,admin,onAvailability}:{deviceId:string;
         void work(async()=>{await api(`/admin/devices/${deviceId}/remote-provisioning/access-policy`,'PUT',{unattendedAllowed:next,expectedVersion:policy.accessPolicyVersion});await load();setMessage('Policy salvata. Chiusura delle sessioni precedenti in corso; avvia una nuova sessione.');});
       }}>{policy.unattendedAllowed?'Richiedi sempre conferma locale':'Abilita accesso non presidiato'}</button>
     </div>}
+    {admin&&sessions.filter(session=>session.capability==='remote.control'&&session.state==='active').map(session=><div className="panel remote-live-session" key={`live-${session.id}`}>
+      <strong>Desktop remoto attivo · {session.operatorName||'Operatore'}</strong>
+      <p>Puoi interrompere il collegamento corrente mantenendo valido il lease; l’operatore potrà riconnettersi fino alla scadenza.</p>
+      <button className="secondary compact" disabled={busy} onClick={()=>{
+        if(!confirm(`Disconnettere temporaneamente ${session.operatorName||'l’operatore'}? La sessione resta valida e l’operatore potrà riconnettersi fino alla scadenza.`))return;
+        void work(async()=>{await api(`/devices/${deviceId}/remote-sessions/${session.id}/disconnect`,'POST');await load();setMessage(`Sessione interrotta. ${session.operatorName||'L’operatore'} può riconnettersi fino alla scadenza del lease.`);});
+      }}><Icon name="close" size={15}/>Disconnetti temporaneamente</button>
+    </div>)}
     {admin&&<details className="advanced"><summary>Associazione manuale avanzata</summary><form onSubmit={e=>{e.preventDefault();if(!confirm('Confermi che questo nodo MeshCentral appartiene al dispositivo selezionato?'))return;void work(async()=>{await api(`/admin/devices/${deviceId}/mesh`,'PUT',{nodeId:node});await load();});}}>
       <label>Identificativo nodo MeshCentral<input value={node} maxLength={128} required onChange={e=>setNode(e.target.value)} placeholder="node//..."/></label><button disabled={busy}>Associa nodo remoto</button>
       <p>Verifica l'identità del nodo: le sessioni saranno dirette a questo dispositivo.</p>
     </form></details>}
     <details className="advanced"><summary><Icon name="clock"/>Storico sessioni <span className="count">{sessions.length}</span></summary>
     {!sessions.length&&<p>Nessuna sessione registrata.</p>}
-    {sessions.map(s=><p key={s.id}>{new Date(s.createdAt).toLocaleString('it-IT')} · {s.capability} · {s.state} · {s.consentRequired?'Con consenso locale':'Non presidiata'}
+    {sessions.map(s=><p key={s.id}>{new Date(s.createdAt).toLocaleString('it-IT')} · {s.operatorName||'Operatore'} · {s.capability} · {s.state} · {s.consentRequired?'Con consenso locale':'Non presidiata'}
       {['active','revocation_pending'].includes(s.state)&&<button disabled={busy} onClick={()=>void work(async()=>{
         const response=await api<{state:string}|undefined>(`/devices/${deviceId}/remote-sessions/${s.id}`,'DELETE');await load();
         setMessage(response?.state==='revocation_pending'?'Chiusura in attesa di conferma del motore.':'Revoca confermata dal motore.');

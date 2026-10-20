@@ -34,7 +34,7 @@ public static class RemoteEndpoints
         devices.MapGet("", async (Guid id, HttpContext c, AppDbContext db, PermissionService p) => {
             if (!await p.Allows(c.User.UserId(), "view", id)) return Results.Forbid();
             return Results.Ok(await db.RemoteSessions.AsNoTracking().Where(x => x.DeviceId == id).OrderByDescending(x => x.CreatedAt).Take(100)
-                .Select(x => new { x.Id, x.ActorId, x.Capability, x.State, x.CreatedAt, x.ExpiresAt, x.EndedAt, x.ConsentRequired }).ToListAsync());
+                .Select(x => new { x.Id, operatorName = db.Users.Where(user => user.Id == x.ActorId).Select(user => user.DisplayName).FirstOrDefault(), x.Capability, x.State, x.CreatedAt, x.ExpiresAt, x.EndedAt, x.ConsentRequired }).ToListAsync());
         });
         devices.MapPost("", async (Guid id, RemoteRequest r, HttpContext c, AppDbContext db, UserManager<AppUser> users, PermissionService p, IMeshCentralClient mesh, ILoggerFactory logs) => {
             if (!Capabilities.Contains(r.Capability)) return Results.BadRequest();
