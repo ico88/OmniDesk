@@ -1,13 +1,14 @@
 # Roadmap
 
-### Windows Agent — scelta identità esistente — in sviluppo
+### Windows Agent — scelta identità esistente — 0.8.15 pubblicato
 
 Setup 0.8.15 rileva l'identità protetta locale e chiede se conservarla per
 aggiornare l'Agent oppure revocarla sul server d'origine prima di registrare il
 PC come nuovo. La revoca deve riuscire prima di rimuovere l'identità locale; se
 il server d'origine non è raggiungibile, Setup interrompe la sostituzione e
-conserva l'identità. Compilazione e collaudo Windows CI in attesa; non ancora
-pubblicato né verificato su un PC reale.
+conserva l'identità. Windows CI 39429881906 ha passato build, prove MSI e
+upgrade dai baseline 0.6.0/0.7.0; il kit è pubblicato nella console. La
+sostituzione su un PC reale resta da verificare.
 
 ### Dashboard — console Desktop remoto e gestione server — 2026-10-20
 
