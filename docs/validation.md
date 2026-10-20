@@ -2039,3 +2039,9 @@ modificato; ogni nuova estensione attende la propria CI sul push.
 - `docker run --rm -v "$PWD/modules/remote-meshcentral:/workspace" -w /workspace node:22-alpine npm audit --omit=dev` — eseguito sul lockfile del checkout. Esito non pulito: due vulnerabilità high transitive su `node-forge`, incluse da MeshCentral; npm dichiara `No fix available`.
 - `docker run --rm node:22-alpine npm view meshcentral version dependencies.node-forge` e `npm view node-forge version` — il registro riporta MeshCentral `1.2.5`, `node-forge` `1.4.0` come dipendenza e `1.4.0` come ultima versione pubblicata.
 - Il risultato conferma il gate già descritto in [remote-engine-defender-review](remote-engine-defender-review.md): nessun override/fork crittografico locale e nessun rilascio pubblico del motore finché upstream non pubblica una versione corretta da ricostruire e rivalidare. Nessun servizio LAN modificato.
+
+### Integrità DB ticket-dispositivo — 2026-10-20
+
+- `./scripts/test.sh` — passato su database PostgreSQL effimero: 95/95 test API; la regressione in `SupportScenario` verifica che inserire un ticket senza link e rimuovere direttamente l'ultimo `SupportTicketDevice` falliscano al commit con SQLSTATE `23514` e constraint `CK_SupportTicket_HasDevice`. I normali collegamenti, i ticket multipli e le fixture di retention restano validi. Build dashboard e Vitest 6/6 passati.
+- La suite ha applicato la migrazione `20261020090000_TicketDeviceBindingIntegrity`; `MigrationTests` elimina link storici su schema precedente e verifica che il nuovo upgrade li ricrei dal device primario, poi verifica ticket/link creati dopo l'upgrade. `docker compose config --quiet` e `docker compose build api` passati.
+- `./scripts/smoke.sh --browser` — passato su stack isolato, incluso Chromium e restore runtime completo DB/blob/Identity/CA. Nessun servizio LAN modificato o migrazione applicata al database live. CI e deploy restano da eseguire.

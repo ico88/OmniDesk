@@ -1,5 +1,22 @@
 # Roadmap
 
+### Integrità dei collegamenti ticket-dispositivo
+
+La migrazione `20261020090000_TicketDeviceBindingIntegrity` aggiunge trigger
+PostgreSQL differibili a fine transazione: API e scritture dirette possono
+creare un ticket e il suo link nello stesso commit, ma un ticket senza alcun
+device o la cancellazione dell'ultimo link falliscono con il vincolo
+`CK_SupportTicket_HasDevice`. Aggiornamenti dei link controllano sia il ticket
+origine sia quello di destinazione; l'upgrade controlla i record esistenti e
+usa il device primario per colmare eventuali link mancanti solo quando le FK
+device/sede sono valide. La regressione SQL diretta verifica sia l'inserimento di
+un ticket orfano sia la rimozione del suo ultimo link in `SupportScenario`;
+`MigrationTests` verifica anche il backfill legacy;
+95/95 test API/PostgreSQL, build dashboard, 6/6 Vitest, build Docker API,
+configurazione Compose e smoke Chromium/restore isolato passano. CI per questo
+incremento resta da eseguire; nessun deploy LAN effettuato. Dettagli in
+[validation.md](validation.md).
+
 ### CI Windows — timeout del test MSI
 
 Le verifiche MSI avevano timeout per installazione e SCM, ma l'interrogazione
