@@ -31,21 +31,33 @@ function Invoke-Msi {
 }
 function Get-RemoteNodeId {
     param([string]$Executable)
-    $tempRoot = if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { [IO.Path]::GetTempPath() }
-    $stdout = Join-Path $tempRoot ('OmniDesk-nodeid-' + [Guid]::NewGuid().ToString('N') + '.out')
-    $stderr = "$stdout.err"
-    $process = Start-Process -FilePath $Executable -ArgumentList @('-nodeid') -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+    $startInfo = [Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = $Executable
+    $startInfo.Arguments = '-nodeid'
+    $startInfo.UseShellExecute = $false
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    $startInfo.CreateNoWindow = $true
+    $process = [Diagnostics.Process]::new()
+    $process.StartInfo = $startInfo
     try {
+        if (-not $process.Start()) { throw 'Avvio del processo node ID fallito.' }
+        $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+        $stderrTask = $process.StandardError.ReadToEndAsync()
         if (-not $process.WaitForExit(15000)) {
-            try { $process.Kill() } catch { }
+            try { $process.Kill(); $null = $process.WaitForExit(5000) } catch { }
             throw 'Timeout interrogando il node ID del motore remoto.'
         }
-        $process.Refresh()
-        if ($process.ExitCode -ne 0) { throw "Lettura node ID fallita: $($process.ExitCode)" }
-        return (Get-Content -LiteralPath $stdout -Raw).Trim()
+        $output = $stdoutTask.GetAwaiter().GetResult().Trim()
+        $errorOutput = $stderrTask.GetAwaiter().GetResult().Trim()
+        if ($process.ExitCode -ne 0) {
+            $detail = if ($errorOutput) { $errorOutput.Substring(0, [Math]::Min(300, $errorOutput.Length)) } else { 'nessun dettaglio stderr' }
+            throw "Lettura node ID fallita con exit code $($process.ExitCode): $detail"
+        }
+        return $output
     }
     finally {
-        Remove-Item -LiteralPath $stdout,$stderr -Force -ErrorAction SilentlyContinue
+        $process.Dispose()
     }
 }
 $installLog = Join-Path (Get-Location) 'artifacts/msi-install.log'
