@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -12,6 +13,7 @@ using OmniDesk.Api.Attachments;
 using OmniDesk.Api.Maintenance;
 using OmniDesk.Api.Security;
 using OmniDesk.Api.ServiceDesk;
+using OmniDesk.Api.Endpoints;
 using OmniDesk.Remote.MeshCentral;
 using Xunit;
 
@@ -206,6 +208,48 @@ public sealed class SecurityTests : IClassFixture<ApiFactory>, IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, (await scoped.PutAsJsonAsync("/api/auth/profile", new { displayName = "Federico Operatore" })).StatusCode);
         await RemoteScenario.Run(factory, admin, viewer, scoped, device, factory.Mesh);
         await AgentScenario.Run(factory, admin, scoped, scopedId);
+        var emailPayload = JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            messageId = "<" + Guid.NewGuid().ToString("N") + "@security.example.test>",
+            mailbox = "support@example.test",
+            sender = "unverified@example.test",
+            subject = "Email intake promotion security fixture",
+            textBody = "The sender has not been authenticated.",
+            receivedAt = DateTimeOffset.UtcNow
+        });
+        File.WriteAllBytes(factory.EmailIntakeSigningKeyFile, factory.EmailIntakeSigningKey);
+        var emailTimestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(System.Globalization.CultureInfo.InvariantCulture);
+        using var signedEmailRequest = new HttpRequestMessage(HttpMethod.Post, "/api/email/intake") { Content = new ByteArrayContent(emailPayload) };
+        signedEmailRequest.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+        signedEmailRequest.Headers.Add("X-OmniDesk-Mail-Timestamp", emailTimestamp);
+        signedEmailRequest.Headers.Add("X-OmniDesk-Mail-Signature", EmailIntakeSignature.Sign(factory.EmailIntakeSigningKey, long.Parse(emailTimestamp), emailPayload));
+        using var stagedEmail = await anon.SendAsync(signedEmailRequest);
+        Assert.Equal(HttpStatusCode.Accepted, stagedEmail.StatusCode);
+        var emailIntakeId = (await stagedEmail.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+        var promotion = new EmailIntakePromotion(device, "Reviewed email intake", "Operator summary; sender not verified.", "account", "p2", true);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anon.PostAsJsonAsync($"/api/admin/email-intakes/{emailIntakeId}/promote", promotion)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await viewer.PostAsJsonAsync($"/api/admin/email-intakes/{emailIntakeId}/promote", promotion)).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await admin.PostAsJsonAsync($"/api/admin/email-intakes/{emailIntakeId}/promote", promotion with { ConfirmUnverifiedSender = false })).StatusCode);
+        using var promoted = await admin.PostAsJsonAsync($"/api/admin/email-intakes/{emailIntakeId}/promote", promotion);
+        Assert.Equal(HttpStatusCode.Created, promoted.StatusCode);
+        var promotedResult = await promoted.Content.ReadFromJsonAsync<JsonElement>();
+        var promotedTicketId = promotedResult.GetProperty("ticketId").GetGuid();
+        using var repeatedPromotion = await admin.PostAsJsonAsync($"/api/admin/email-intakes/{emailIntakeId}/promote", promotion);
+        Assert.Equal(HttpStatusCode.OK, repeatedPromotion.StatusCode);
+        Assert.True((await repeatedPromotion.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("duplicate").GetBoolean());
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var emailTicket = await db.SupportTickets.SingleAsync(ticket => ticket.Id == promotedTicketId);
+            Assert.Equal("email", emailTicket.Origin);
+            Assert.Equal(device, emailTicket.DeviceId);
+            Assert.Null(emailTicket.RequesterUserId);
+            var intake = await db.SupportEmailIntakes.SingleAsync(row => row.Id == emailIntakeId);
+            Assert.Equal("promoted", intake.State);
+            Assert.Equal(promotedTicketId, intake.PromotedTicketId);
+            Assert.Equal(adminId, intake.QualifiedBy);
+            Assert.Contains(await db.AuditEvents.ToArrayAsync(), item => item.Action == "ticket.email.intake.promoted" && item.Target == emailIntakeId.ToString());
+        }
         await UserLifecycleScenario.Run(factory, admin, viewer, Password, device);
         await AccountScenario.Run(factory, admin, viewer, Password);
         await KnowledgeScenario.Run(factory, admin, viewer, Password);

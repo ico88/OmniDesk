@@ -110,28 +110,28 @@ public sealed class EmailIntakeScenario(ApiFactory factory) : IClassFixture<ApiF
         Assert.Equal(HttpStatusCode.Conflict, conflictingReplay.StatusCode);
 
         Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync("/api/admin/email-intakes")).StatusCode);
-        using var admin = Client();
-        await Login(admin);
-        var inbox = await admin.GetFromJsonAsync<JsonElement[]>("/api/admin/email-intakes");
+        using var operatorClient = Client();
+        await Login(operatorClient);
+        var inbox = await operatorClient.GetFromJsonAsync<JsonElement[]>("/api/admin/email-intakes");
         Assert.NotNull(inbox);
         var item = Assert.Single(inbox!, x => x.GetProperty("id").GetGuid() == id);
         Assert.Equal("requester@example.net", item.GetProperty("senderAddress").GetString());
         Assert.Equal("pending", item.GetProperty("state").GetString());
 
-        await AddCsrf(admin);
-        Assert.Equal(HttpStatusCode.NoContent, (await admin.PostAsync($"/api/admin/email-intakes/{id}/discard", null)).StatusCode);
-        var afterDiscard = await admin.GetFromJsonAsync<JsonElement[]>("/api/admin/email-intakes");
+        await AddCsrf(operatorClient);
+        Assert.Equal(HttpStatusCode.NoContent, (await operatorClient.PostAsync($"/api/admin/email-intakes/{id}/discard", null)).StatusCode);
+        var afterDiscard = await operatorClient.GetFromJsonAsync<JsonElement[]>("/api/admin/email-intakes");
         Assert.DoesNotContain(afterDiscard!, x => x.GetProperty("id").GetGuid() == id);
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            Assert.False(await db.SupportTickets.AnyAsync(x => x.Subject == "Cannot sign in" && x.Origin == "email"));
             var intake = await db.SupportEmailIntakes.SingleAsync(x => x.Id == id);
             Assert.Equal("discarded", intake.State);
             Assert.Equal(userId, intake.QualifiedBy);
             var audit = await db.AuditEvents.Where(x => x.Target == id.ToString()).Select(x => x.Action).ToArrayAsync();
             Assert.Contains("ticket.email.intake.received", audit);
             Assert.Contains("ticket.email.intake.discarded", audit);
+            Assert.False(await db.SupportTickets.AnyAsync(x => x.Subject == "Cannot sign in" && x.Origin == "email"));
         }
     }
 

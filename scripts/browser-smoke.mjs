@@ -186,6 +186,29 @@ try {
  const agentAssertion=()=>{const now=Math.floor(Date.now()/1000);const claims=Buffer.from(JSON.stringify({iss:fixtureDevice,sub:fixtureDevice,aud:'omnidesk-agent',iat:now,nbf:now-5,exp:now+60,jti:randomBytes(16).toString('hex')})).toString('base64url');const unsigned=header+'.'+claims;return unsigned+'.'+sign('RSA-SHA256',Buffer.from(unsigned),fixtureKeys.privateKey).toString('base64url');};
  const heartbeat=await context.request.post('https://omnidesk.test/api/agent/metrics',{headers:{Authorization:'Bearer '+agentAssertion()},data:{cpuPercent:12.5,totalMemoryBytes:16000000000,availableMemoryBytes:8000000000,networkReceivedBytes:100,networkSentBytes:200,uptimeSeconds:3600,disks:[{name:'C:',totalBytes:100000,freeBytes:50000}],agentVersion:'0.8.1'}});
  assert.equal(heartbeat.status(),204,'Signed fixture heartbeat accepted');
+ await page.reload(); await page.getByRole('heading',{name:'Panoramica',exact:true}).waitFor();
+ await page.getByRole('button',{name:'Dispositivi',exact:true}).click();
+ await page.getByRole('cell',{name:fixtureName,exact:true}).waitFor();
+ const promoteEmailSubject='Promoted email '+randomBytes(5).toString('hex');
+ const promoteEmailPayload=Buffer.from(JSON.stringify({messageId:`<${randomBytes(8).toString('hex')}@smoke.example.test>`,mailbox:'support@example.test',sender:'unverified-sender@example.test',subject:promoteEmailSubject,textBody:'The sender is not verified; operator must review this request.',receivedAt:new Date().toISOString()}));
+ const promoteEmailTimestamp=Math.floor(Date.now()/1000).toString();
+ const promoteEmailSignature=createHmac('sha256',readFileSync('/run/secrets/email_intake_key')).update(promoteEmailTimestamp+'.').update(promoteEmailPayload).digest('hex');
+ const promoteEmailAccepted=await context.request.post('https://omnidesk.test/api/email/intake',{data:promoteEmailPayload,headers:{'Content-Type':'application/json','X-OmniDesk-Mail-Timestamp':promoteEmailTimestamp,'X-OmniDesk-Mail-Signature':'sha256='+promoteEmailSignature}});
+ assert.equal(promoteEmailAccepted.status(),202,'Second signed email waits for operator qualification');
+ await page.getByRole('button',{name:'Email da valutare',exact:true}).click();
+ const promoteEmailCard=page.locator('.email-intake-item').filter({hasText:promoteEmailSubject});
+ await promoteEmailCard.getByRole('button',{name:'Crea ticket',exact:true}).click();
+ await promoteEmailCard.locator('label').filter({hasText:'Dispositivo'}).locator('select').selectOption(fixtureDevice);
+ const curatedSubject='Manual review '+promoteEmailSubject;
+ await promoteEmailCard.getByLabel('Oggetto ticket',{exact:true}).fill(curatedSubject);
+ await promoteEmailCard.getByLabel('Ho esaminato il messaggio. Il mittente non è verificato e non verrà associato a un account.',{exact:true}).check();
+ await promoteEmailCard.getByRole('button',{name:'Conferma e crea ticket',exact:true}).click();
+ await page.getByRole('heading',{name:'Assistenza',level:1,exact:true}).waitFor();
+ const promotedTickets=await (await context.request.get('https://omnidesk.test/api/support?search='+encodeURIComponent(curatedSubject))).json();
+ const promotedTicket=promotedTickets.find(ticket=>ticket.subject===curatedSubject);
+ assert.ok(promotedTicket,'Operator confirmation creates a ticket from the email intake');
+ assert.equal(promotedTicket.origin,'email','Promoted ticket retains email origin');
+ assert.equal(promotedTicket.deviceId,fixtureDevice,'Operator-selected device is bound to the ticket');
  const csrfToken=(await (await context.request.get('https://omnidesk.test/api/auth/csrf')).json()).token;
  const csrfHeaders={'X-CSRF-TOKEN':csrfToken};
  const adminUsers=await (await context.request.get('https://omnidesk.test/api/admin/users')).json();
@@ -318,8 +341,8 @@ try {
  await newTicketNotification.click();
  await page.getByRole('heading',{name:ticketSubject,exact:true}).waitFor();
  await page.getByRole('button',{name:'Assistenza',exact:true}).click();
- await page.waitForFunction(()=>document.querySelector('.ticket-summary article strong')?.textContent==='2');
- assert.equal(await page.locator('.ticket-summary article').nth(0).locator('strong').textContent(),'2','Scoped ticket summary includes customer portal and Agent tickets');
+ await page.waitForFunction(()=>document.querySelector('.ticket-summary article strong')?.textContent==='3');
+ assert.equal(await page.locator('.ticket-summary article').nth(0).locator('strong').textContent(),'3','Scoped ticket summary includes customer portal, email-origin and Agent tickets');
  assert.deepEqual(await page.getByLabel('Filtra priorità ticket',{exact:true}).locator('option').evaluateAll(options=>options.map(option=>option.value)),['','p1','p2','p3','p4'],'Ticket filters use canonical P1-P4 priorities');
  await page.getByRole('row').filter({has:page.getByRole('cell',{name:ticketSubject,exact:true})}).getByRole('button',{name:fixtureName,exact:true}).waitFor();
  assert.equal(await page.getByRole('table').innerText().then(text=>text.includes(fixtureDevice)),false,'Ticket table shows computer name, not enrollment device UUID');
@@ -480,5 +503,5 @@ try {
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true,'No horizontal page overflow on mobile');
  await page.screenshot({path:'/previews/devices-mobile.png',fullPage:true});
  assert.deepEqual(errors,[],'No browser JavaScript exceptions');
- console.log('PASS: Chromium signed email intake review/discard and plain-text rendering, account/grant flows, favicon/shared brand mark, portal screenshot consent/chat/isolation/revocation, signed-heartbeat online badge, scoped ticket participants, SLA target display/completion, ticket notifications and RMM intervention correlation, device management and viewer permissions');
+ console.log('PASS: Chromium signed email intake review/discard, plain-text rendering and explicitly confirmed ticket promotion, account/grant flows, favicon/shared brand mark, portal screenshot consent/chat/isolation/revocation, signed-heartbeat online badge, scoped ticket participants, SLA target display/completion, ticket notifications and RMM intervention correlation, device management and viewer permissions');
 } finally {await browser.close();}
