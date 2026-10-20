@@ -1,5 +1,11 @@
 # Stato e verifiche — 18 ottobre 2026
 
+### Timeout diagnosi MSI — 2026-10-20
+
+- Le run Windows recenti hanno mostrato tempi lunghi nel lifecycle MSI. Il test installazione aveva già timeout su `msiexec` e SCM, ma invocava senza limite `MeshService64.exe -nodeid`; aggiunto un limite di 15 secondi, output temporaneo e pulizia anche in caso di errore. La chiamata non può più lasciare bloccato il job all'infinito.
+- Verifica locale: `git diff --check` passato. Non è disponibile PowerShell sull'host, quindi parsing ed esecuzione Windows sono demandati al workflow Windows sul commit successivo.
+- Al momento della modifica, le run `39371440706`, `39370263899` e `39369087920` erano ancora attive. La correzione non le interrompe né modifica i processi già in corso; il suo effetto si potrà verificare solo su una nuova run.
+
 ### Migrazione GitHub Actions a Node 24 — 2026-10-20
 
 - Migrazione workflow: `actions/checkout@v7`, `actions/setup-dotnet@v6`, `actions/setup-node@v7` e `actions/upload-artifact@v7`. L'auto-cache npm è disattivata esplicitamente (`package-manager-cache: false`). Riferimenti upstream: [checkout](https://github.com/actions/checkout/releases), [setup-dotnet](https://github.com/actions/setup-dotnet/releases), [setup-node](https://github.com/actions/setup-node/releases), [upload-artifact](https://github.com/actions/upload-artifact/releases). Le release Node 24 richiedono runner Actions 2.327.1 o successivo.

@@ -1,5 +1,14 @@
 # Roadmap
 
+### CI Windows — timeout del test MSI
+
+Le verifiche MSI avevano timeout per installazione e SCM, ma l'interrogazione
+`MeshService64.exe -nodeid` poteva bloccare il job senza limite. Il test ora
+termina quella chiamata dopo 15 secondi e rimuove gli output temporanei. La
+correzione è in attesa di una nuova run Windows; le run già attive non sono
+state interrotte e non possono validare il cambiamento. Vedi
+[validation.md](validation.md) per gli ID e il limite delle prove.
+
 ### Backup — convalida automatica prima del marker READY
 
 `scripts/backup.sh` esegue ora `verify-backup.sh --staging`: checksum, riferimenti
