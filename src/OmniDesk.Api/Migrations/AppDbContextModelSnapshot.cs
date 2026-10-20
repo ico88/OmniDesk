@@ -1117,6 +1117,9 @@ namespace OmniDesk.Api.Migrations
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");
 
+                    b.Property<long?>("MessageId")
+                        .HasColumnType("bigint");
+
                     b.Property<DateTimeOffset>("NextScanAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -1173,6 +1176,8 @@ namespace OmniDesk.Api.Migrations
                         .IsUnique();
 
                     b.HasIndex("UploaderId");
+
+                    b.HasIndex("MessageId");
 
                     b.HasIndex("TicketId", "CreatedAt");
 
@@ -2253,6 +2258,11 @@ namespace OmniDesk.Api.Migrations
 
             modelBuilder.Entity("OmniDesk.Api.Data.SupportAttachment", b =>
                 {
+                    b.HasOne("OmniDesk.Api.Data.SupportMessage", null)
+                        .WithMany()
+                        .HasForeignKey("MessageId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("OmniDesk.Api.Data.SupportTicket", null)
                         .WithMany()
                         .HasForeignKey("TicketId")

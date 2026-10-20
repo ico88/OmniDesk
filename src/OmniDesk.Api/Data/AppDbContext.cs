@@ -117,6 +117,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
         b.Entity<SupportEmailIntake>().HasOne<AppUser>().WithMany().HasForeignKey(x => x.QualifiedBy).OnDelete(DeleteBehavior.SetNull);
         b.Entity<SupportEmailIntake>().HasOne<SupportTicket>().WithMany().HasForeignKey(x => x.PromotedTicketId).OnDelete(DeleteBehavior.SetNull);
         b.Entity<SupportAttachment>().HasOne<SupportTicket>().WithMany().HasForeignKey(x => x.TicketId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<SupportAttachment>().HasOne<SupportMessage>().WithMany().HasForeignKey(x => x.MessageId).OnDelete(DeleteBehavior.SetNull);
         b.Entity<SupportAttachment>().HasOne<AppUser>().WithMany().HasForeignKey(x => x.UploaderId).OnDelete(DeleteBehavior.SetNull);
         b.Entity<SupportAttachment>().Property(x => x.StorageKey).HasMaxLength(32);
         b.Entity<SupportAttachment>().Property(x => x.OriginalFileName).HasMaxLength(255);
@@ -134,6 +135,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
         });
         b.Entity<SupportAttachment>().HasIndex(x => x.StorageKey).IsUnique();
         b.Entity<SupportAttachment>().HasIndex(x => new { x.TicketId, x.CreatedAt });
+        b.Entity<SupportAttachment>().HasIndex(x => x.MessageId);
         b.Entity<SupportAttachment>().HasIndex(x => new { x.ScanState, x.NextScanAt, x.ScanLeaseUntil });
         b.Entity<SupportInterventionSummary>().HasOne<SupportTicket>().WithMany().HasForeignKey(x => x.TicketId).OnDelete(DeleteBehavior.Cascade);
         b.Entity<SupportInterventionSummary>().HasOne<Device>().WithMany().HasForeignKey(x => x.DeviceId).OnDelete(DeleteBehavior.Restrict);

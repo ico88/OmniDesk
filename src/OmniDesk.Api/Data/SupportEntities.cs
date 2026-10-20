@@ -188,6 +188,7 @@ public sealed class SupportAttachment
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     public Guid TicketId { get; set; }
+    public long? MessageId { get; set; }
     public string? UploaderId { get; set; }
     public string StorageKey { get; set; } = "";
     public string OriginalFileName { get; set; } = "";
