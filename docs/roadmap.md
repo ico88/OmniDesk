@@ -7,7 +7,9 @@ Le verifiche MSI avevano timeout per installazione e SCM, ma l'interrogazione
 termina quella chiamata dopo 15 secondi. La prima sonda in CI è fallita perché
 `Start-Process` non ha restituito un codice uscita leggibile; ora usa
 `System.Diagnostics.Process` con stream asincroni e diagnostica d'errore limitata.
-La correzione aggiornata attende una nuova run Windows. Vedi
+La prima run con questa implementazione è rimasta oltre il tempo atteso nello
+step MSI; ora anche la lettura di ciascuno stream ha un limite di 5 secondi.
+La run live non viene interrotta e non include quest'ultima correzione. Vedi
 [validation.md](validation.md) per gli ID e il limite delle prove.
 
 ### Backup — convalida automatica prima del marker READY
