@@ -25,21 +25,25 @@ public sealed class WindowsCollector
         if (!GlobalMemoryStatusEx(ref memory)) throw new InvalidOperationException("Cannot read physical memory metrics.");
         long received = 0, sent = 0;
         var networkAdapters = new List<NetworkAdapterItem>();
-        foreach (var adapter in NetworkInterface.GetAllNetworkInterfaces()
-                     .Where(x => x.OperationalStatus == OperationalStatus.Up && x.NetworkInterfaceType != NetworkInterfaceType.Loopback)
-                     .Take(32))
+        foreach (var adapter in NetworkInterface.GetAllNetworkInterfaces())
         {
             try
             {
-                var stats = adapter.GetIPStatistics(); received += stats.BytesReceived; sent += stats.BytesSent;
-                var addresses = adapter.GetIPProperties().UnicastAddresses
+                var properties = adapter.GetIPProperties();
+                var unicastAddresses = properties.UnicastAddresses
                     .Select(x => x.Address)
                     .Where(x => !System.Net.IPAddress.IsLoopback(x) && !x.Equals(System.Net.IPAddress.Any) && !x.Equals(System.Net.IPAddress.IPv6Any))
+                    .ToArray();
+                var gateways = properties.GatewayAddresses.Select(x => x.Address).ToArray();
+                if (!NetworkAdapterSelection.IsActiveConnection(adapter.OperationalStatus, adapter.NetworkInterfaceType, unicastAddresses, gateways)) continue;
+                var stats = adapter.GetIPStatistics(); received += stats.BytesReceived; sent += stats.BytesSent;
+                var addresses = unicastAddresses
                     .Select(x => x.ToString())
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .Take(32)
                     .ToArray();
                 networkAdapters.Add(new(Limit(adapter.Name, 256)!, adapter.NetworkInterfaceType.ToString(), adapter.GetPhysicalAddress().ToString(), addresses));
+                if (networkAdapters.Count == 32) break;
             }
             catch (NetworkInformationException) { /* Adapter removed during snapshot. */ }
         }
