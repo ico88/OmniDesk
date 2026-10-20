@@ -40,6 +40,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
     public DbSet<SupportMessage> SupportMessages => Set<SupportMessage>();
     public DbSet<SupportTicketDevice> SupportTicketDevices => Set<SupportTicketDevice>();
     public DbSet<SupportTicketParticipant> SupportTicketParticipants => Set<SupportTicketParticipant>();
+    public DbSet<SupportEmailIntake> SupportEmailIntakes => Set<SupportEmailIntake>();
     public DbSet<SupportAttachment> SupportAttachments => Set<SupportAttachment>();
     public DbSet<SupportInterventionSummary> SupportInterventionSummaries => Set<SupportInterventionSummary>();
     public DbSet<PortalDeviceAccess> PortalDeviceAccesses => Set<PortalDeviceAccess>();
@@ -100,6 +101,18 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
         b.Entity<SupportTicketParticipant>().HasOne<AppUser>().WithMany().HasForeignKey(x => x.AddedBy).OnDelete(DeleteBehavior.SetNull);
         b.Entity<SupportTicketParticipant>().HasIndex(x => new { x.TicketId, x.UserId }).IsUnique();
         b.Entity<SupportTicketParticipant>().HasIndex(x => new { x.UserId, x.AddedAt });
+        b.Entity<SupportEmailIntake>().Property(x => x.MailboxAddress).HasMaxLength(320);
+        b.Entity<SupportEmailIntake>().Property(x => x.MessageId).HasMaxLength(512);
+        b.Entity<SupportEmailIntake>().Property(x => x.SenderAddress).HasMaxLength(320);
+        b.Entity<SupportEmailIntake>().Property(x => x.Subject).HasMaxLength(200);
+        b.Entity<SupportEmailIntake>().Property(x => x.BodyText).HasMaxLength(20000);
+        b.Entity<SupportEmailIntake>().Property(x => x.PayloadSha256).HasMaxLength(64);
+        b.Entity<SupportEmailIntake>().Property(x => x.State).HasMaxLength(20);
+        b.Entity<SupportEmailIntake>().Property(x => x.QualifiedBy).HasMaxLength(450);
+        b.Entity<SupportEmailIntake>().HasIndex(x => new { x.MailboxAddress, x.MessageId }).IsUnique();
+        b.Entity<SupportEmailIntake>().HasIndex(x => new { x.State, x.ReceivedAt });
+        b.Entity<SupportEmailIntake>().HasOne<AppUser>().WithMany().HasForeignKey(x => x.QualifiedBy).OnDelete(DeleteBehavior.SetNull);
+        b.Entity<SupportEmailIntake>().HasOne<SupportTicket>().WithMany().HasForeignKey(x => x.PromotedTicketId).OnDelete(DeleteBehavior.SetNull);
         b.Entity<SupportAttachment>().HasOne<SupportTicket>().WithMany().HasForeignKey(x => x.TicketId).OnDelete(DeleteBehavior.Cascade);
         b.Entity<SupportAttachment>().HasOne<AppUser>().WithMany().HasForeignKey(x => x.UploaderId).OnDelete(DeleteBehavior.SetNull);
         b.Entity<SupportAttachment>().Property(x => x.StorageKey).HasMaxLength(32);

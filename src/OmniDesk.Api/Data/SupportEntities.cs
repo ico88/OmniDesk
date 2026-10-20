@@ -165,6 +165,23 @@ public sealed class SupportTicketParticipant
     public DateTimeOffset AddedAt { get; set; } = DateTimeOffset.UtcNow;
 }
 
+public sealed class SupportEmailIntake
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string MailboxAddress { get; set; } = "";
+    public string MessageId { get; set; } = "";
+    public string SenderAddress { get; set; } = "";
+    public string Subject { get; set; } = "";
+    public string BodyText { get; set; } = "";
+    public string PayloadSha256 { get; set; } = "";
+    public DateTimeOffset MessageReceivedAt { get; set; }
+    public DateTimeOffset ReceivedAt { get; set; } = DateTimeOffset.UtcNow;
+    public string State { get; set; } = "pending";
+    public DateTimeOffset? QualifiedAt { get; set; }
+    public string? QualifiedBy { get; set; }
+    public Guid? PromotedTicketId { get; set; }
+}
+
 public sealed class SupportAttachment
 {
     public Guid Id { get; set; } = Guid.NewGuid();

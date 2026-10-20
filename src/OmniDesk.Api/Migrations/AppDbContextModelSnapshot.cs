@@ -1132,6 +1132,77 @@ namespace OmniDesk.Api.Migrations
                         });
                 });
 
+            modelBuilder.Entity("OmniDesk.Api.Data.SupportEmailIntake", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("BodyText")
+                        .IsRequired()
+                        .HasMaxLength(20000)
+                        .HasColumnType("character varying(20000)");
+
+                    b.Property<string>("MailboxAddress")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)");
+
+                    b.Property<string>("MessageId")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<DateTimeOffset>("MessageReceivedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PayloadSha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid?>("PromotedTicketId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("QualifiedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("QualifiedBy")
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.Property<DateTimeOffset>("ReceivedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("SenderAddress")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PromotedTicketId");
+
+                    b.HasIndex("QualifiedBy");
+
+                    b.HasIndex("MailboxAddress", "MessageId")
+                        .IsUnique();
+
+                    b.HasIndex("State", "ReceivedAt");
+
+                    b.ToTable("SupportEmailIntakes");
+                });
+
             modelBuilder.Entity("OmniDesk.Api.Data.SupportInterventionSummary", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2101,6 +2172,19 @@ namespace OmniDesk.Api.Migrations
                     b.HasOne("OmniDesk.Api.Data.AppUser", null)
                         .WithMany()
                         .HasForeignKey("UploaderId")
+                        .OnDelete(DeleteBehavior.SetNull);
+                });
+
+            modelBuilder.Entity("OmniDesk.Api.Data.SupportEmailIntake", b =>
+                {
+                    b.HasOne("OmniDesk.Api.Data.SupportTicket", null)
+                        .WithMany()
+                        .HasForeignKey("PromotedTicketId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("OmniDesk.Api.Data.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("QualifiedBy")
                         .OnDelete(DeleteBehavior.SetNull);
                 });
 

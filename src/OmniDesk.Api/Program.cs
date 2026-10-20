@@ -145,7 +145,9 @@ app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 app.Use(async (c, next) => {
-    if (c.Request.Method is not ("GET" or "HEAD" or "OPTIONS") && c.GetEndpoint()?.Metadata.GetMetadata<MachineRequest>() is null)
+    if (c.Request.Method is not ("GET" or "HEAD" or "OPTIONS") &&
+        c.GetEndpoint()?.Metadata.GetMetadata<MachineRequest>() is null &&
+        c.GetEndpoint()?.Metadata.GetMetadata<SignedWebhookRequest>() is null)
     {
         try { await c.RequestServices.GetRequiredService<IAntiforgery>().ValidateRequestAsync(c); }
         catch (AntiforgeryValidationException) { c.Response.StatusCode = 400; await c.Response.WriteAsJsonAsync(new { error = "Invalid CSRF token" }); return; }
@@ -174,5 +176,6 @@ app.MapKnowledgeEndpoints();
 app.MapNotificationEndpoints();
 app.MapTicketWorkflowEndpoints();
 app.MapSlaPolicyEndpoints();
+app.MapEmailIntakeEndpoints();
 app.Run();
 public partial class Program { }
