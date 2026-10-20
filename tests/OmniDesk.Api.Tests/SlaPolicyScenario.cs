@@ -65,8 +65,10 @@ public sealed class SlaPolicyScenario(ApiFactory factory) : IClassFixture<ApiFac
             new SlaPolicyCreate("Cross-site", Guid.NewGuid(), Definition()))).StatusCode);
 
         var version = await manager.PostAsJsonAsync($"/api/admin/support-sla/policies/{created.Id}/versions",
-            new SlaPolicyVersionCreate(1, "Site SLA revised", Definition(120, 600, ["waiting_customer"])));
+            new SlaPolicyVersionCreate(1, "Site SLA revised", Definition(120, 600, ["waiting_customer"], [1, 5])));
         Assert.Equal(HttpStatusCode.OK, version.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await manager.PostAsJsonAsync($"/api/admin/support-sla/policies/{created.Id}/versions",
+            new SlaPolicyVersionCreate(2, "Unsorted escalation", Definition(120, 600, ["waiting_customer"], [5, 1])))).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await manager.PostAsJsonAsync($"/api/admin/support-sla/policies/{created.Id}/versions",
             new SlaPolicyVersionCreate(1, "Stale", Definition()))).StatusCode);
 
@@ -256,17 +258,53 @@ public sealed class SlaPolicyScenario(ApiFactory factory) : IClassFixture<ApiFac
             await db.SaveChangesAsync();
             Assert.Contains(await db.UserNotifications.AsNoTracking().Where(x => x.EventId == breachEvent.Id).ToArrayAsync(),
                 notification => notification.UserId == publisher.Id && notification.Kind == "ticket.sla.breached");
+            var alertTarget = await db.SupportTicketSlaTargets.AsNoTracking().SingleAsync(x =>
+                x.TicketId == alertTicket.Id && x.TargetType == "first_response");
+            await db.SupportTicketSlaTargets.Where(x => x.Id != alertTarget.Id && x.BreachedAt != null && x.CompletedAt == null)
+                .ExecuteUpdateAsync(update => update.SetProperty(x => x.CompletedAt, DateTimeOffset.UtcNow));
+            Assert.Equal(1, await db.SupportTicketSlaTargets.CountAsync(x => x.BreachedAt != null && x.CompletedAt == null));
+            var escalationDefinitionJson = await db.SupportSlaPolicyVersions.AsNoTracking()
+                .Where(x => x.PolicyId == alertTarget.PolicyId && x.Version == alertTarget.PolicyVersion)
+                .Select(x => x.DefinitionJson).SingleAsync();
+            using (var escalationDefinition = JsonDocument.Parse(escalationDefinitionJson))
+                Assert.Equal(new[] { 1, 5 }, escalationDefinition.RootElement.GetProperty("escalationMinutes")
+                    .EnumerateArray().Select(item => item.GetInt32()).ToArray());
+            var breachAt = alertTarget.BreachedAt!.Value;
+            Assert.False(await SlaEscalationWorker.MarkNextEscalation(db, breachAt.AddSeconds(59)));
+            Assert.True(await SlaEscalationWorker.MarkNextEscalation(db, breachAt.AddMinutes(1)));
+            var firstEscalationSteps = await db.SupportTicketSlaEscalations.AsNoTracking()
+                .Where(x => x.TargetId == alertTarget.Id).Select(x => x.StepMinutes).ToArrayAsync();
+            Assert.Equal(new[] { 1 }, firstEscalationSteps);
+            Assert.False(await SlaEscalationWorker.MarkNextEscalation(db, breachAt.AddMinutes(1).AddSeconds(1)),
+                "A due escalation step is emitted only once across repeated worker passes.");
+            Assert.True(await SlaEscalationWorker.MarkNextEscalation(db, breachAt.AddMinutes(5)));
+            Assert.False(await SlaEscalationWorker.MarkNextEscalation(db, breachAt.AddMinutes(6)));
+            var escalationSteps = await db.SupportTicketSlaEscalations.AsNoTracking()
+                .Where(x => x.TargetId == alertTarget.Id).OrderBy(x => x.StepMinutes).Select(x => x.StepMinutes).ToArrayAsync();
+            Assert.Equal(new[] { 1, 5 }, escalationSteps);
+            Assert.Equal(2, await db.CoreOutboxEvents.AsNoTracking()
+                .CountAsync(x => x.EventType == "ticket.sla.escalated" && x.AggregateId == alertTicket.Id));
+            var escalationEvents = await db.CoreOutboxEvents.AsNoTracking()
+                .Where(x => x.EventType == "ticket.sla.escalated" && x.AggregateId == alertTicket.Id).ToArrayAsync();
+            foreach (var escalationEvent in escalationEvents)
+                await TicketNotificationWorker.ProjectNotifications(db, new PermissionService(db), escalationEvent,
+                    DateTimeOffset.UtcNow, CancellationToken.None);
+            await db.SaveChangesAsync();
+            Assert.Equal(2, await db.UserNotifications.AsNoTracking().CountAsync(x =>
+                escalationEvents.Select(evt => evt.Id).Contains(x.EventId) && x.UserId == publisher.Id &&
+                x.Kind == "ticket.sla.escalated"));
             await tx.RollbackAsync();
         }
     }
 
-    private static SlaPolicyDefinition Definition(int firstResponse = 60, int resolution = 480, string[]? pauseStates = null) => new(
+    private static SlaPolicyDefinition Definition(int firstResponse = 60, int resolution = 480, string[]? pauseStates = null,
+        int[]? escalationMinutes = null) => new(
         firstResponse,
         resolution,
         new SlaCalendarInput("UTC", new Dictionary<DayOfWeek, BusinessTimeRange[]>
         {
             [DayOfWeek.Monday] = [new BusinessTimeRange(new TimeOnly(9, 0), new TimeOnly(17, 0))]
-        }, [])) { PauseStates = pauseStates ?? [] };
+        }, [])) { PauseStates = pauseStates ?? [], EscalationMinutes = escalationMinutes ?? [] };
 
     private static WebApplicationFactoryClientOptions ClientOptions() => new() { BaseAddress = new Uri("https://localhost"), AllowAutoRedirect = false };
 
