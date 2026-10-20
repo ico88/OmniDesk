@@ -369,9 +369,9 @@ try {
  await page.waitForFunction(()=>document.querySelector('main.content')?.getAttribute('aria-busy')==='false');
  const deviceId=(await (await context.request.get('https://omnidesk.test/api/devices')).json()).find(d=>d.name===renamed).id;
  let rustdeskConnectRequests=0;
- await page.route(`**/api/devices/${deviceId}/rustdesk`,route=>route.fulfill({json:{configured:true,mapped:true,peerId:'123456789',idServer:'omnidesk.cricatania.it:21116',relayServer:'omnidesk.cricatania.it:21117',apiServer:null,publicKey:'test-public-key'}}));
- await page.route(`**/api/devices/${deviceId}/rustdesk/connect`,async route=>{
-  if(route.request().method()==='POST'){rustdeskConnectRequests++;return route.fulfill({json:{url:'rustdesk://connection/new?peer=123456789'}});}
+ await page.route(`**/api/devices/${deviceId}/rustdesk**`,async route=>{
+  if(route.request().url().endsWith('/rustdesk/connect')&&route.request().method()==='POST'){rustdeskConnectRequests++;return route.fulfill({json:{url:'rustdesk://connection/new?peer=123456789'}});}
+  if(route.request().url().endsWith('/rustdesk')&&route.request().method()==='GET')return route.fulfill({json:{configured:true,mapped:true,peerId:'123456789',idServer:'omnidesk.cricatania.it:21116',relayServer:'omnidesk.cricatania.it:21117',apiServer:null,publicKey:'test-public-key'}});
   return route.continue();
  });
  await page.getByRole('tab',{name:'Desktop remoto',exact:true}).click();
