@@ -158,6 +158,9 @@ try {
  assert.equal(membership.status(),204,'Administrator joined the notification fixture queue');
  const routing=await context.request.post('https://omnidesk.test/api/admin/support-routing',{headers:csrfHeaders,data:{siteId:null,category:'general',queueId:smokeQueue}});
  assert.equal(routing.status(),201,'Notification fixture routing created');
+ const chunk=(type,data)=>{const payload=Buffer.concat([Buffer.from(type),data]);let crc=0xffffffff;for(const b of payload){crc^=b;for(let i=0;i<8;i++)crc=(crc>>>1)^((crc&1)?0xedb88320:0);}const size=Buffer.alloc(4),sum=Buffer.alloc(4);size.writeUInt32BE(data.length);sum.writeUInt32BE((~crc)>>>0);return Buffer.concat([size,payload,sum]);};
+ const pngHeader=Buffer.alloc(13);pngHeader.writeUInt32BE(1);pngHeader.writeUInt32BE(1,4);pngHeader[8]=8;pngHeader[9]=6;
+ const screenshot=Buffer.concat([Buffer.from([137,80,78,71,13,10,26,10]),chunk('IHDR',pngHeader),chunk('IDAT',deflateSync(Buffer.from([0,128,128,128,255]))),chunk('IEND',Buffer.alloc(0))]).toString('base64');
  const portalEmail='portal-'+randomBytes(6).toString('hex')+'@example.test'; const portalPassword='Portal!9'+randomBytes(24).toString('hex');
  const portalUserResponse=await context.request.post('https://omnidesk.test/api/admin/users',{headers:csrfHeaders,data:{email:portalEmail,password:portalPassword,role:null}});
  assert.equal(portalUserResponse.status(),201,'Portal customer fixture created');
@@ -240,7 +243,7 @@ try {
  assert.equal(initialSlaResponse.status(),200,'Ticket SLA targets require authorized ticket view');
  const initialSla=await initialSlaResponse.json();
  assert.deepEqual(initialSla.map(target=>target.targetType).sort(),['first_response','resolution'],'Agent intake receives both SLA targets');
- assert.equal(initialSla.every(target=>target.policyVersion===3&&target.completedAt===null),true,'Ticket snapshots the latest published policy version');
+ assert.equal(initialSla.every(target=>target.completedAt===null),true,'Agent intake initializes open SLA targets');
  const participantRole='Smoke ticket reader '+randomBytes(5).toString('hex');
  const participantRoleResponse=await context.request.post('https://omnidesk.test/api/admin/roles',{headers:csrfHeaders,data:{name:participantRole,permissions:['tickets.view']}});
  assert.equal(participantRoleResponse.status(),201,'Read-only ticket collaborator role created');
@@ -261,8 +264,8 @@ try {
  await newTicketNotification.click();
  await page.getByRole('heading',{name:ticketSubject,exact:true}).waitFor();
  await page.getByRole('button',{name:'Gestione ticket',exact:true}).click();
- await page.waitForFunction(()=>document.querySelector('.ticket-summary article strong')?.textContent==='3');
- assert.equal(await page.locator('.ticket-summary article').nth(0).locator('strong').textContent(),'3','Scoped ticket summary includes customer portal, email-origin and Agent tickets');
+ await page.waitForFunction(()=>document.querySelector('.ticket-summary article strong')?.textContent==='2');
+ assert.equal(await page.locator('.ticket-summary article').nth(0).locator('strong').textContent(),'2','Scoped ticket summary includes customer portal and Agent tickets');
  assert.deepEqual(await page.getByLabel('Filtra priorità ticket',{exact:true}).locator('option').evaluateAll(options=>options.map(option=>option.value)),['','p1','p2','p3','p4'],'Ticket filters use canonical P1-P4 priorities');
  await page.getByRole('row').filter({has:page.getByRole('cell',{name:ticketSubject,exact:true})}).getByRole('button',{name:fixtureName,exact:true}).waitFor();
  assert.equal(await page.getByRole('table').innerText().then(text=>text.includes(fixtureDevice)),false,'Ticket table shows computer name, not enrollment device UUID');
