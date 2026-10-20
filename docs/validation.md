@@ -1,5 +1,11 @@
 # Stato e verifiche — 18 ottobre 2026
 
+### Gate dipendenza MeshCentral/node-forge — 2026-10-20
+
+- `docker run --rm -v "$PWD/modules/remote-meshcentral:/work:ro" -w /work node:22-alpine npm audit --omit=dev --json` — riscontro: MeshCentral 1.2.5 → node-forge 1.4.0; advisory GHSA-86w9-cpqp-85rv severity high, range `<=1.4.0`, `fixAvailable: false`. Il codice di uscita 1 è l'esito atteso del controllo vulnerabilità.
+- `npm view meshcentral version dependencies.node-forge` — registro: 1.2.5 con node-forge 1.4.0; `npm view node-forge version` — 1.4.0. L'advisory GitHub al controllo odierno non elenca release corrette e il [PR di correzione upstream #1152](https://github.com/digitalbazaar/forge/pull/1152) è aperto.
+- Nessuna dipendenza o sorgente crittografica modificata. Il motore MeshCentral resta escluso dalle release pubbliche fino a una versione mantenuta e verificata; la build di laboratorio non chiude il gate. Nessuna installazione LAN effettuata.
+
 ### Presenza persistente dell'Agent — 2026-10-20
 
 - `./scripts/test.sh` — passato: 91 test API/PostgreSQL, build dashboard e 6/6 Vitest. Il flusso Agent inizializza la baseline senza audit sintetico, emette un audit offline una sola volta su sweep ripetuti e registra il ritorno online al successivo heartbeat. L'audit contiene solo l'ID dispositivo e l'azione; credenziali e payload non vengono registrati.

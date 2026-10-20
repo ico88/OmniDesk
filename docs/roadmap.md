@@ -51,6 +51,8 @@ verifica che non vi siano sessioni remote o job mutanti attivi.
 - M4 (coda/API testate, worker cross-compilato; collaudo WUA Windows ancora aperto): Windows Update scan/install, job firmati/idempotenti, reboot policy, scheduling e report.
 - M5 (console cross-compilata, TOTP e layout testati; flag TOTP inizialmente false): console Windows WebView2 della stessa UI, dashboard layout per utente, TOTP setup/challenge/recovery/cifratura implementati e testati; hardening, retention, restore, upgrade e release firmata ancora aperti.
 
+Gate dipendenza desktop remoto, verificato il 2026-10-20: `modules/remote-meshcentral/package-lock.json` risolve `meshcentral` 1.2.5 e `node-forge` 1.4.0. `npm audit --omit=dev` segnala GHSA-86w9-cpqp-85rv come high e `fixAvailable: false`; il registro npm non pubblica una versione MeshCentral successiva né node-forge oltre 1.4.0. Il [pull request upstream per il fix](https://github.com/digitalbazaar/forge/pull/1152) risulta aperto e l'[advisory GitHub](https://github.com/advisories/GHSA-86w9-cpqp-85rv) non elenca versioni corrette. Il gate release del motore rimane bloccante; non viene introdotta una patch crittografica locale.
+
 Release candidata 0.8.3: raccolta on-demand processi/servizi/eventi con permesso
 `diagnostics.view`; versione MSI e workflow Windows aggiornati. Build Linux e test locali passati; workflow Windows run 39242100048 riuscito. Il kit 0.8.3 ha superato CI Windows/Linux; nessun deploy di quella release sul server LAN registrato qui.
 
