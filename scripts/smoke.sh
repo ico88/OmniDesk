@@ -84,6 +84,6 @@ if [[ "${1:-}" == --browser ]]; then
     find attachments -type f -print0 | sort -z | xargs -0 -r sha256sum > attachments.sha256
     find . -type f ! -name files.sha256 ! -name READY -print0 | sort -z | xargs -0 -r sha256sum > files.sha256
   )
+  bash scripts/verify-backup.sh --staging "$restore_fixture"
   touch "$restore_fixture/READY"
-  bash scripts/verify-backup.sh "$restore_fixture"
 fi
