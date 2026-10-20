@@ -2,7 +2,7 @@
 
 ### Telemetria — transizioni di presenza Agent
 
-Lo stato operativo Online/Offline continua a derivare dall'ultimo heartbeat firmato; un worker persistente ora inizializza la baseline senza creare eventi retroattivi e registra una sola voce audit al cambio, con target device e senza dati telemetrici. Dispositivi revocati sono esclusi. La soglia (180 secondi) e la frequenza (30 secondi) sono configurabili e allineate alle API di stato e aggiornamento. Migrazione versionata e verifiche PostgreSQL 91/91, dashboard 6/6, smoke Chromium/restore e build Docker sono passati in locale. Rimangono allarmi e notifiche operatore, retention della telemetria e pubblicazione LAN.
+Lo stato operativo Online/Offline continua a derivare dall'ultimo heartbeat firmato; un worker persistente ora inizializza la baseline senza creare eventi retroattivi e registra una sola voce audit al cambio, con target device e senza dati telemetrici. Dispositivi revocati sono esclusi. La soglia (180 secondi) e la frequenza (30 secondi) sono configurabili e allineate alle API di stato e aggiornamento. La campanella mostra i dispositivi offline e collega alla scheda dispositivo; la query è filtrata in database per i dispositivi visibili all'utente e l'allarme sparisce al ripristino. Verifiche PostgreSQL 91/91, dashboard 6/6, smoke Chromium/restore e build Docker sono passati in locale. Rimangono canali esterni/email per gli allarmi, retention della telemetria e pubblicazione LAN.
 
 ### Privacy — retention dei record intake email
 

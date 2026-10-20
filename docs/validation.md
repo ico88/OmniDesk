@@ -5,7 +5,14 @@
 - `./scripts/test.sh` — passato: 91 test API/PostgreSQL, build dashboard e 6/6 Vitest. Il flusso Agent inizializza la baseline senza audit sintetico, emette un audit offline una sola volta su sweep ripetuti e registra il ritorno online al successivo heartbeat. L'audit contiene solo l'ID dispositivo e l'azione; credenziali e payload non vengono registrati.
 - Migrazione EF Core `20261020013520_DevicePresenceAudit` generata e applicata nello smoke isolato. `./scripts/smoke.sh --browser` — passato con API/worker, PostgreSQL, ClamAV, Chromium e restore completo database/blob/chiavi Identity/CA. Il worker hosted è partito nello stack; gli assert di transizione sono eseguiti direttamente contro PostgreSQL nella suite d'integrazione.
 - `docker compose config --quiet`, `docker compose -f compose.test.yaml config --quiet`, `docker compose build api dashboard` e `git diff --check` — passati. Un tentativo di validare `compose.smoke.yaml` senza `SMOKE_SECRETS` non è applicabile fuori dallo script che genera i segreti temporanei; lo smoke completo sopra lo configura correttamente.
-- Nessun servizio LAN modificato. Le notifiche degli allarmi, la retention telemetria e il deploy LAN sono ancora da fare.
+- Nessun servizio LAN modificato. La retention della telemetria e il deploy LAN sono ancora da fare; gli allarmi email/esterni restano fuori da questo incremento.
+
+### Campanella con allarmi dispositivo scoped — 2026-10-20
+
+- `./scripts/test.sh` — passato: 91 test API/PostgreSQL, build production dashboard e 6/6 Vitest. Il test Agent verifica che la campanella contenga un dispositivo offline autorizzato e non riveli un dispositivo offline fuori dallo scope dell'operatore.
+- `docker compose build api dashboard` — passato sulle modifiche correnti. Dopo la build `./scripts/smoke.sh --browser` — passato: l'endpoint autenticato `/api/notifications/devices` risponde con lista, la UI aggiornata mostra le notifiche ticket e dispositivo, Chromium completa i flussi ticket, e il restore integrale di 46 migrazioni/database/blob/chiavi/CA riesce.
+- Un primo smoke è stato avviato prima di ricostruire le immagini e ha restituito 404 sull'endpoint nuovo; è stato corretto eseguendo la build Docker delle immagini e ripetendo lo smoke completo, che ha passato tutti i controlli.
+- Le notifiche sono in-app e limitate al perimetro `view`; email/integrazioni esterne e distribuzione LAN non sono incluse. Nessun servizio LAN è stato modificato.
 
 Documento cronologico: le sezioni M1 descrivono la prima consegna; M2–M5 registrano gli avanzamenti successivi. Lo stato corrente è nel riepilogo finale.
 
