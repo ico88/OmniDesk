@@ -16,6 +16,12 @@ passa 96/96 API/PostgreSQL e 6/6 Vitest con build dashboard; CI e collaudo
 interattivo Windows sono ancora da eseguire. Il pacchetto 0.8.11 non è pubblicato
 sulla LAN: il download web sul server resta 0.8.9.
 
+Verifica CI aggiornata: Linux `39386842860` è passato su 0.8.11, includendo test,
+build API/dashboard, Compose e smoke Chromium/restore. Windows `39386842846` ha
+compilato Agent/Tray/MSI e superato install/recovery/uninstall; la matrice
+upgrade/repair/rollback è ancora in corso. Download Tray e flusso end-to-end
+restano da provare interattivamente sul PC Windows pilota.
+
 | Parte | Implementazione | Verifica disponibile | Gate rimanente |
 | --- | --- | --- | --- |
 | Presenza e audit Agent | Online/Offline da heartbeat firmato; baseline persistente e audit deduplicato delle transizioni, revocati esclusi, soglia/poll configurabili; campanella e inbox notificano solo dispositivi visibili; email offline opzionale con consenso e rivalidazione scope; retention opt-in configurabile per audit, metriche e inventario (default disattivata) | Test integrato PostgreSQL controlla isolamento device e consegna SMTP fake; suite 95/95, dashboard 6/6 Vitest, smoke Chromium/restore e build Docker passano localmente | Revisione non pubblicata sulla LAN; SMTP reale, altri canali esterni, policy normative prima di abilitare retention in produzione restano aperte |

@@ -1,5 +1,11 @@
 # Stato e verifiche — 18 ottobre 2026
 
+### Tray Windows — download allegati ticket puliti — 2026-10-20
+
+- Versione Agent/Tray/Setup/MSI 0.8.11. `./scripts/test.sh` passa: 96/96 test API/PostgreSQL, build TypeScript/Vite e 6/6 Vitest. `docker compose config --quiet` e `git diff --check` passano.
+- CI Linux [run 39386842860](https://github.com/ico88/OmniDesk/actions/runs/39386842860) è verde, incluse build API/dashboard Docker e smoke Chromium con restore isolato. CI Windows [run 39386842846](https://github.com/ico88/OmniDesk/actions/runs/39386842846) è ancora attiva sulla matrice MSI da baseline; build MSI e install/recovery/uninstall sono passati.
+- Il test interattivo della Tray su PC Windows resta da fare. Nessun artefatto è stato promosso al download LAN e nessun servizio live è stato modificato.
+
 ### Tray Windows — allegati contestuali ticket — 2026-10-20
 
 - L'endpoint macchina associa alla conversazione solo metadati pubblici di allegati collegati a messaggi dello stesso ticket e non redatti. La Tray mostra nome/dimensione per file puliti e indicazioni generiche durante scansione, in caso di errore o file bloccato; nessuna chiave storage o URL firmato transita nell'IPC.

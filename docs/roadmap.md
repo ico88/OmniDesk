@@ -9,8 +9,10 @@ autorizzare ogni download; il server ricontrolla ticket, dispositivo, visibilit�
 messaggio non redatto, credenziale attiva e stato clean. Il trasferimento è
 limitato a 10 MiB, non viene memorizzato in cache e i messaggi IPC hanno un limite
 dedicato. Versione Agent/Tray/Setup/MSI 0.8.11. La suite API/PostgreSQL passa
-96/96; build TypeScript/Vite e Vitest 6/6 passano. CI Windows/MSI e Linux da
-verificare dopo il push. Nessun deploy LAN effettuato. Il riepilogo della scheda
+96/96; build TypeScript/Vite e Vitest 6/6 passano. CI Linux `39386842860` è
+verde con build container e smoke Chromium/restore isolato; Windows/MSI
+`39386842846` è ancora nella matrice upgrade/repair/rollback dopo build MSI e
+install/recovery/uninstall riusciti. Nessun deploy LAN effettuato. Il riepilogo della scheda
 Rete già mostra tutti gli IP e i MAC degli adattatori attivi per dispositivo.
 
 ### Tray Windows — allegati nella conversazione
