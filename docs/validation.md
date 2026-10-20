@@ -2004,3 +2004,10 @@ modificato; ogni nuova estensione attende la propria CI sul push.
 - La revisione PowerShell richiede il runner Windows della CI; nessun parser PowerShell è disponibile localmente. La nuova pipeline deve verificare le modifiche e l'esito install/recovery/upgrade.
 - Run Windows `39370170700` ha poi completato con successo l'intera matrice MSI, ma precede l'introduzione dei timeout. Nella run `39370263899` con i timeout, parse, build MSI, installazione, recovery, uninstall e console sono passati; upgrade/repair/rollback è ancora in esecuzione. La run precedente `39369087920` risulta ancora attiva e non è stata interrotta.
 - Lo step baseline ora ha timeout dedicato di 20 minuti e stampa il baseline in corso, gli avvii degli MSI e i relativi exit code. La pipeline live è precedente a questa diagnostica e resta intatta; una nuova run deve confermarne parsing ed esecuzione.
+
+### Portale — notifiche delle risposte pubbliche — 2026-10-20
+
+- `./scripts/test.sh` — passato: 95/95 test API/PostgreSQL; lo scenario portale verifica notifica al richiedente, lettura consentita, isolamento di un altro utente, email generica solo con consenso e revoca immediata della visibilità/notifica.
+- Build dashboard TypeScript/Vite e Vitest — passate, 6/6. `docker build -t omnidesk-api:local -f src/OmniDesk.Api/Dockerfile .` e build dashboard — passate.
+- `./scripts/smoke.sh --browser` — passato nello stack isolato: Chromium crea un ticket portale, riceve risposta pubblica, mostra e apre la notifica in “I miei ticket”, verifica la revoca; passano inoltre ClamAV/EICAR, worker SLA/escalation e restore completo DB/blob/Identity/CA. Il primo tentativo usava immagini locali precedenti al codice; dopo rebuild, la smoke completa è passata. Nessun servizio LAN modificato.
+- `git diff --check` — passato. Nessuna migrazione necessaria. SMTP è verificato tramite transport fake; nessun invio a provider reale, deploy LAN o test con account cliente reale.
