@@ -170,10 +170,18 @@ l'installer in uno strumento di esclusione. Stato al 20 ottobre 2026:
 | Eccezioni Defender | Non vengono create automaticamente; la quarantena attuale è un blocco confermato | L'UI documenta Protection History/console Intune e registra che l'azione deve essere dell'amministratore. Una futura eccezione mirata passa dalla milestone Endpoint Security e dagli strumenti supportati, con motivazione/scadenza; mai tramite bootstrap MSI |
 | GPO, Intune, Tamper Protection | Il codice Agent non le aggira | Rilevare/riportare il blocco come ownership esterna; nessuna scrittura registro, disabilitazione o fallback locale che contraddica la policy |
 
-La versione 0.8.13 è stata compilata e il test MSI install/recovery/uninstall è
-passato nella CI Windows `39408495812`; test upgrade/repair/rollback sono ancora
-in corso. Il kit 0.8.12 rimane pubblicato fino al completamento dei gate 0.8.13.
-Il deploy del nuovo pacchetto non è attestato in questa nota.
+La versione 0.8.13 è stata compilata e ha superato nella CI Windows `39408495812`
+build, install/recovery/uninstall e upgrade/repair/rollback da baseline 0.6.0 e
+0.7.0. La CI Linux/browser `39408495830` è passata. Il bundle 0.8.13 è promosso
+al download autenticato nel volume `/packages`; il bundle 0.8.12 e la relativa
+manifestazione sono conservati per rollback. SHA-256 ZIP
+`63b2711c51950b7cc8dabd1e508a756de089b38eea25aac6345c88468de345b7`; MSI
+`fa46d9dda4aa4e6e7095981c2138a096847300ab3d86c02d395066f37c930ab3`.
+Il container API ha letto la nuova manifestazione, il checksum nel volume
+corrisponde, readiness HTTPS è 200 e il download anonimo resta 401. Non è stato
+riavviato alcun servizio. La build rimane unsigned da laboratorio, contiene lo
+stesso motore MeshCentral rilevato da Defender e non è stata installata sul PC
+pilota: CI verde non equivale a un test runtime Defender/desktop.
 
 ### Flusso proposto per l'aggiornamento
 

@@ -16,8 +16,11 @@ La specifica confronta anche il lifecycle MSI: firma Authenticode quando
 disponibile, verifica hash/firma, diagnostica Defender in dashboard, interventi
 solo amministrativi sugli strumenti Windows, health check dopo MSI e rollback
 bounded. Il kit 0.8.12 è ancora pubblicato; 0.8.13 è in test Windows, non ancora
-promosso né installato sul PC. La firma manca e i blocchi Defender non sono
-ancora classificati nella dashboard.
+promosso né installato sul PC. La versione 0.8.13 è ora promossa al download
+autenticato del server; resta unsigned da laboratorio e non è stata installata
+sul client Windows. La firma manca e i blocchi Defender non sono ancora
+classificati nella dashboard. Il cambiamento diagnostico non rimuove la
+quarantena del motore MeshCentral.
 
 ### Backup — retention locale opt-in
 

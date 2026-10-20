@@ -2131,7 +2131,14 @@ modificato; ogni nuova estensione attende la propria CI sul push.
 
 - Aggiunta la specifica architetturale/API/modello dati/UI in `docs/endpoint-security-defender.md` e l'incremento progettato nella roadmap. Fonti primarie consultate: `Get-MpComputerStatus`, panoramica esclusioni, `Add-MpPreference`/`Remove-MpPreference`, policy Intune/GPO e Tamper Protection.
 - Stato: solo progetto e documentazione. Nessuna rotta, migrazione, interfaccia o operazione Agent Defender implementata; non sono state aggiunte/rimosse esclusioni né cambiate policy Windows. Il lavoro operativo richiede milestone distinta e test dedicati su Windows.
-- `git diff --check` — passato per la specifica e la roadmap. `./scripts/test.sh` e pipeline Windows non sono parte di questa sola modifica documentale; la build/upgrade 0.8.13 resta in corso.
+- `git diff --check` — passato per la specifica e la roadmap. Pipeline Linux/browser e Windows 0.8.13 concluse con successo: dettagli e limiti sotto.
+
+### Promozione Agent Windows 0.8.13 al download server — 2026-10-20
+
+- CI Linux/browser [`39408495830`](https://github.com/ico88/OmniDesk/actions/runs/39408495830) e Windows [`39408495812`](https://github.com/ico88/OmniDesk/actions/runs/39408495812) passate sul sorgente Windows `693fb87ea38366e7cfc84802f439b0ed9b51f3ac`. Windows ha eseguito build MSI, installazione/recovery/disinstallazione e upgrade/repair/rollback dalle baseline 0.6.0 e 0.7.0.
+- Artifact `omnidesk-agent-unsigned` verificato da `SHA256SUMS.txt`; `scripts/package-lan-kit.py` ha confezionato il kit 0.8.13 con CA pubblica. ZIP SHA-256 `63b2711c51950b7cc8dabd1e508a756de089b38eea25aac6345c88468de345b7` (116102118 byte), MSI SHA-256 `fa46d9dda4aa4e6e7095981c2138a096847300ab3d86c02d395066f37c930ab3` (70643712 byte). `unzip -t` passato.
+- Promosso `OmniDesk.Windows.LAN-0.8.13.zip` e manifest con sostituzione atomica in `artifacts/windows-lan`, volume `/packages` montato nell'API; il bundle 0.8.12 e `windows-release.0.8.12.json` sono conservati. Il container API legge versione, commit, SHA-256 e dimensione attesi; checksum file nel mount coincide. HTTPS readiness 200; endpoint manifest anonimo 401 come previsto. Nessun container o servizio è stato riavviato.
+- Aggiornato il pacchetto Windows disponibile per gli amministratori. Il PC Windows non è stato aggiornato da remoto e non è stato eseguito un test desktop/runtime. Il pacchetto è unsigned da laboratorio e include il medesimo `MeshService64.exe` per cui il pilota ha segnalato la quarantena Defender; la release non risolve quel rilevamento né abilita esclusioni automatiche.
 
 ### Feedback aggiornamento Agent e accesso remoto prioritario — 2026-10-20
 
