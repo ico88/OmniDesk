@@ -376,6 +376,7 @@ try {
  });
  await page.getByRole('tab',{name:'Desktop remoto',exact:true}).click();
  await page.getByText('ID RustDesk associato:').waitFor();
+ await page.locator('details.rustdesk-settings').first().locator('summary').click();
  await page.getByText('test-public-key',{exact:true}).waitFor();
  page.once('dialog',dialog=>dialog.accept());
  const rustdeskLaunchResponse=page.waitForResponse(response=>response.url().endsWith(`/api/devices/${deviceId}/rustdesk/connect`)&&response.request().method()==='POST');
