@@ -1,7 +1,7 @@
 import { deflateSync } from 'node:zlib';
 import {chromium} from '/tmp/node_modules/playwright/index.mjs';
 import {readFileSync} from 'node:fs';
-import {randomBytes, generateKeyPairSync, sign} from 'node:crypto';
+import {randomBytes, generateKeyPairSync, sign, createHmac} from 'node:crypto';
 import assert from 'node:assert/strict';
 const browser=await chromium.launch({headless:true});
 async function readPolicyVersion(context,name,version){
@@ -25,6 +25,28 @@ try {
  await page.getByLabel('Password',{exact:true}).fill(readFileSync('/run/secrets/bootstrap_password','utf8').trim());
  await page.getByRole('button',{name:'Accedi',exact:true}).click();
  await page.getByRole('heading',{name:'Panoramica',exact:true}).waitFor();
+ const emailSubject='Browser email intake '+randomBytes(5).toString('hex');
+ const emailBody='Plain text only: <script>window.__emailIntakeInjected=true</script>';
+ const emailPayload=Buffer.from(JSON.stringify({messageId:`<${randomBytes(8).toString('hex')}@smoke.example.test>`,mailbox:'support@example.test',sender:'requester@example.test',subject:emailSubject,textBody:emailBody,receivedAt:new Date().toISOString()}));
+ const emailTimestamp=Math.floor(Date.now()/1000).toString();
+ const emailSignature=createHmac('sha256',readFileSync('/run/secrets/email_intake_key')).update(emailTimestamp+'.').update(emailPayload).digest('hex');
+ const emailAccepted=await context.request.post('https://omnidesk.test/api/email/intake',{data:emailPayload,headers:{'Content-Type':'application/json','X-OmniDesk-Mail-Timestamp':emailTimestamp,'X-OmniDesk-Mail-Signature':'sha256='+emailSignature}});
+ assert.equal(emailAccepted.status(),202,'Signed email webhook stages a message for review');
+ const emailIntakeId=(await emailAccepted.json()).id;
+ await page.getByRole('button',{name:'Email da valutare',exact:true}).click();
+ await page.getByRole('heading',{name:'Email da valutare',level:1,exact:true}).waitFor();
+ const emailCard=page.locator('.email-intake-item').filter({hasText:emailSubject});
+ await emailCard.waitFor();
+ await emailCard.getByText('Mostra testo del messaggio',{exact:true}).click();
+ assert.equal(await page.evaluate(()=>window.__emailIntakeInjected),undefined,'Untrusted email body is displayed as text, not executed');
+ assert.equal(await emailCard.locator('pre').innerText(),emailBody);
+ page.once('dialog',dialog=>dialog.accept());
+ await emailCard.getByRole('button',{name:'Scarta',exact:true}).click();
+ await emailCard.waitFor({state:'detached'});
+ const pendingEmailRows=await (await context.request.get('https://omnidesk.test/api/admin/email-intakes')).json();
+ assert.equal(pendingEmailRows.some(row=>row.id===emailIntakeId),false,'Discard removes the email from the pending inbox');
+ const emailAudit=await (await context.request.get('https://omnidesk.test/api/admin/audit')).json();
+ assert.equal(emailAudit.some(event=>event.action==='ticket.email.intake.discarded'&&event.target===emailIntakeId),true,'Email discard is auditable');
  await page.getByRole('button',{name:'Workflow ticket',exact:true}).click();
  await page.getByRole('heading',{name:'Workflow ticket',level:1,exact:true}).waitFor();
  await page.getByLabel('Nuovo workflow',{exact:true}).fill('Workflow smoke');
@@ -458,5 +480,5 @@ try {
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true,'No horizontal page overflow on mobile');
  await page.screenshot({path:'/previews/devices-mobile.png',fullPage:true});
  assert.deepEqual(errors,[],'No browser JavaScript exceptions');
- console.log('PASS: Chromium account/grant flows, favicon/shared brand mark, portal screenshot consent/chat/isolation/revocation, signed-heartbeat online badge, scoped ticket participants, SLA target display/completion, ticket notifications and RMM intervention correlation, device management and viewer permissions');
+ console.log('PASS: Chromium signed email intake review/discard and plain-text rendering, account/grant flows, favicon/shared brand mark, portal screenshot consent/chat/isolation/revocation, signed-heartbeat online badge, scoped ticket participants, SLA target display/completion, ticket notifications and RMM intervention correlation, device management and viewer permissions');
 } finally {await browser.close();}

@@ -37,9 +37,11 @@ services:
       Downloads__Directory: /packages
       Attachments__RootPath: /attachments
       Attachments__ClamAvHost: clamav
+      EmailIntake__SigningKeyFile: /run/secrets/email_intake_key
+      EmailIntake__AllowedMailboxes__0: support@example.test
     volumes:
       - ${SMOKE_SECRETS:?Set isolated secret directory}/downloads:/packages:ro
-    secrets: [db_password]
+    secrets: [db_password, email_intake_key]
     tmpfs:
       - /keys:uid=1654,gid=1654,mode=0700
       - /attachments:uid=1654,gid=1654,mode=0700
@@ -87,7 +89,7 @@ services:
     volumes:
       - ./scripts/browser-smoke.mjs:/work/browser-smoke.mjs:ro
       - ./artifacts/ui-preview:/previews
-    secrets: [bootstrap_password]
+    secrets: [bootstrap_password, email_intake_key]
     command: [sh, -c, 'cd /tmp && npm install --no-audit --no-fund --ignore-scripts playwright@1.58.2 && node /work/browser-smoke.mjs']
     depends_on: [caddy]
 secrets:
@@ -95,6 +97,8 @@ secrets:
     file: ${SMOKE_SECRETS:?Set isolated secret directory}/db_password
   bootstrap_password:
     file: ${SMOKE_SECRETS:?Set isolated secret directory}/bootstrap_password
+  email_intake_key:
+    file: ${SMOKE_SECRETS:?Set isolated secret directory}/email_intake_key
 
 volumes:
   clamav_data:

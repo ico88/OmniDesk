@@ -15,6 +15,9 @@ for name in ('db_password','bootstrap_password'):
     p=Path(os.environ['SMOKE_SECRETS'])/name
     p.write_text('Od!9'+secrets.token_urlsafe(32))
     p.chmod(0o444)
+email_key=Path(os.environ['SMOKE_SECRETS'])/'email_intake_key'
+email_key.write_bytes(secrets.token_bytes(32))
+email_key.chmod(0o444)
 folder=Path(os.environ['SMOKE_SECRETS'])/'downloads'
 folder.mkdir(mode=0o755)
 package=folder/'OmniDesk.Windows.LAN-0.0.1.zip'
