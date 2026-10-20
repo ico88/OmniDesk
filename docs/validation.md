@@ -5,6 +5,7 @@
 - Le run Windows recenti hanno mostrato tempi lunghi nel lifecycle MSI. Il test installazione aveva già timeout su `msiexec` e SCM, ma invocava senza limite `MeshService64.exe -nodeid`; aggiunto un limite di 15 secondi, output temporaneo e pulizia anche in caso di errore. La chiamata non può più lasciare bloccato il job all'infinito.
 - Verifica locale: `git diff --check` passato. Non è disponibile PowerShell sull'host, quindi parsing ed esecuzione Windows sono demandati al workflow Windows sul commit successivo.
 - Al momento della modifica, le run `39371440706`, `39370263899` e `39369087920` erano ancora attive. La correzione non le interrompe né modifica i processi già in corso; il suo effetto si potrà verificare solo su una nuova run.
+- Linux [run 39371440650](https://github.com/ico88/OmniDesk/actions/runs/39371440650) — passata sul commit `2a82a4f`: test applicativi, Compose, build API/dashboard e smoke Chromium con restore isolato. Non esercita il test MSI Windows.
 
 ### Migrazione GitHub Actions a Node 24 — 2026-10-20
 
