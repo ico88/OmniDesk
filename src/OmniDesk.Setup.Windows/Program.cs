@@ -33,18 +33,28 @@ internal static class Program
         private bool busy;
         public SetupForm()
         {
-            Text = "OmniDesk Setup"; Width = 640; Height = 340; MinimumSize = new Size(640, 340);
+            Text = "OmniDesk Setup"; Width = 640; Height = 390; MinimumSize = new Size(640, 390);
             using (var stream = typeof(Program).Assembly.GetManifestResourceStream("OmniDesk.Setup.Windows.Assets.OmniDesk.ico") ?? throw new InvalidOperationException("OmniDesk icon resource is missing."))
                 Icon = new Icon(stream);
             StartPosition = FormStartPosition.CenterScreen; FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false; MinimizeBox = false;
-            var layout = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(28), ColumnCount = 1, RowCount = 7 };
-            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            var layout = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(28), ColumnCount = 1, RowCount = 8 };
+            for (var row = 0; row < layout.RowCount; row++) layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             layout.Controls.Add(new Label { Text = "OmniDesk", Font = new Font(Font.FontFamily, 22, FontStyle.Bold), AutoSize = true });
             layout.Controls.Add(new Label { Text = "Agent di sistema e Tray per questa postazione", AutoSize = true, ForeColor = SystemColors.GrayText });
             layout.Controls.Add(new Label { Text = "Server", AutoSize = true, Padding = new Padding(0, 14, 0, 0) });
             layout.Controls.Add(new Label { Text = Server, AutoSize = true });
-            layout.Controls.Add(new Label { Text = "Token monouso · Console > Dispositivi > Registra un dispositivo", AutoSize = true, Padding = new Padding(0, 14, 0, 0) });
+            layout.Controls.Add(new Label
+            {
+                Text = File.Exists(Identity)
+                    ? "Identità locale già presente: potrai mantenerla oppure revocarla e registrare il PC come nuovo."
+                    : "Nuova registrazione: crea un token da Console > Dispositivi > Registra un dispositivo.",
+                AutoSize = true,
+                MaximumSize = new Size(550, 0),
+                ForeColor = SystemColors.GrayText,
+                Padding = new Padding(0, 14, 0, 0)
+            });
+            layout.Controls.Add(new Label { Text = "Token monouso · necessario solo per una nuova registrazione", AutoSize = true });
             token.Dock = DockStyle.Top; layout.Controls.Add(token);
             var footer = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, FlowDirection = FlowDirection.LeftToRight, Padding = new Padding(0, 14, 0, 0) };
             footer.Controls.Add(install); footer.Controls.Add(status); layout.Controls.Add(footer);
@@ -57,8 +67,20 @@ internal static class Program
             if (busy) return;
             var msi = Path.Combine(AppContext.BaseDirectory, "OmniDesk.Agent.msi");
             var isEnrolled = File.Exists(Identity);
+            var replaceIdentity = false;
+            if (isEnrolled)
+            {
+                var choice = MessageBox.Show(this,
+                    "Su questo PC è già presente un'identità OmniDesk.\n\n" +
+                    "Sì: revoca l'identità sul server d'origine e registra il PC come nuovo. Il server d'origine deve essere raggiungibile.\n\n" +
+                    "No: aggiorna OmniDesk mantenendo l'identità e la registrazione attuali.\n\n" +
+                    "Annulla: interrompe l'installazione.",
+                    "Identità OmniDesk già presente", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Warning);
+                if (choice == DialogResult.Cancel) return;
+                replaceIdentity = choice == DialogResult.Yes;
+            }
             var secret = token.Text.Trim();
-            if (!isEnrolled && !Regex.IsMatch(secret, "\\A[0-9A-Fa-f]{64}\\z"))
+            if ((!isEnrolled || replaceIdentity) && !Regex.IsMatch(secret, "\\A[0-9A-Fa-f]{64}\\z"))
             { status.Text = "Incolla il token di 64 caratteri generato dalla console."; token.Focus(); return; }
             if (!File.Exists(msi))
             { status.Text = "Nel kit manca OmniDesk.Agent.msi."; return; }
@@ -76,14 +98,20 @@ internal static class Program
                 status.Text = "Installazione dei componenti…";
                 var installResult = await RunAsync(Path.Combine(Environment.SystemDirectory, "msiexec.exe"), ["/i", msi, "/qn", "/norestart"]);
                 if (installResult.Code is not (0 or 3010)) throw new InvalidOperationException($"Windows Installer non ha completato l'installazione (codice {installResult.Code}).");
-                if (!isEnrolled)
+                if (replaceIdentity)
+                {
+                    status.Text = "Revoca dell'identità precedente sul server d'origine…";
+                    var revoke = await RunAsync(Agent, ["revoke"]);
+                    if (revoke.Code != 0) throw new InvalidOperationException($"Revoca non riuscita. L'identità locale è stata conservata. Verifica che il server d'origine sia raggiungibile. {DescribeFailure(revoke.Output)}");
+                }
+                if (!isEnrolled || replaceIdentity)
                 {
                     status.Text = "Registrazione protetta del dispositivo…";
                     var enrollResult = await RunAsync(Agent, ["enroll", "--server", Server, "--token-stdin"], secret);
-                    if (enrollResult.Code != 0) throw new InvalidOperationException("Registrazione non riuscita. Controlla che il token sia ancora valido e non sia già stato usato.");
+                    if (enrollResult.Code != 0) throw new InvalidOperationException($"Registrazione non riuscita. Controlla che il token sia valido e non sia già stato usato. {DescribeFailure(enrollResult.Output)}");
                 }
                 var verify = await RunAsync(Agent, ["verify-enrollment", "--server", Server]);
-                if (verify.Code != 0) throw new InvalidOperationException("Il dispositivo non ha completato la registrazione sul server.");
+                if (verify.Code != 0) throw new InvalidOperationException($"Verifica dell'identità non riuscita. {DescribeFailure(verify.Output)}");
                 using (var service = new System.ServiceProcess.ServiceController("OmniDeskAgent"))
                 {
                     service.Refresh();
@@ -93,9 +121,17 @@ internal static class Program
                 MessageBox.Show(this, "OmniDesk è installato. Il servizio continua a funzionare anche quando chiudi la Tray.", "Installazione completata", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 Close();
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or System.ComponentModel.Win32Exception or System.Security.Cryptography.CryptographicException)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or System.Net.Http.HttpRequestException or OperationCanceledException or System.ComponentModel.Win32Exception or System.Security.Cryptography.CryptographicException)
             { status.Text = ex.Message; }
             finally { secret = string.Empty; token.Clear(); token.Enabled = true; install.Enabled = true; busy = false; }
+        }
+
+        private static string DescribeFailure(string output)
+        {
+            var detail = output.Split(["\r\n", "\n"], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .FirstOrDefault(line => !line.StartsWith("at ", StringComparison.Ordinal) && !line.StartsWith("---", StringComparison.Ordinal));
+            if (string.IsNullOrWhiteSpace(detail)) return "Controlla i dettagli e riprova.";
+            return detail.Length > 240 ? detail[..240] : detail;
         }
     }
 
