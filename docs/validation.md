@@ -2078,3 +2078,10 @@ modificato; ogni nuova estensione attende la propria CI sul push.
 - CI Linux `39390505418` e Windows `39390505409` — passate sul codice 0.8.11. La matrice Windows ha completato build MSI, install/recovery/uninstall e upgrade/repair/rollback da baseline 0.6.0 e 0.7.0. Artifact unsigned di laboratorio, non promosso sulla LAN; prova interattiva Tray/download sul PC pilota ancora aperta.
 - Il run Windows precedente `39386842846` è ancora `in_progress` su un commit precedente; non è stato interrotto. La nuova matrice isolata è terminata con successo.
 
+### Backup — retention locale opt-in — 2026-10-20
+
+- `bash -n scripts/backup.sh scripts/prune-backups.sh tests/backup-retention-tests.sh` e `bash tests/backup-retention-tests.sh` — passati. Il test dimostra default disattivato, rimozione solo di backup vecchi diretti con `READY`, preservazione di staging, backup futuri e symlink, e rifiuto di soglie/percorso non validi.
+- `bash tests/backup-verification-tests.sh`, `docker compose config --quiet`, `git diff --check` e `./scripts/test.sh` — passati; suite API/PostgreSQL 96/96, build dashboard e Vitest 6/6.
+- Il backup invoca la pulizia solo dopo aver verificato e marcato `READY` il nuovo archivio. `OMNIDESK_BACKUP_RETENTION_DAYS` si configura nell'ambiente o nel `.env`; default `0`. La pulizia non è stata eseguita sui backup del repository/deployment. Nessuna migrazione o modifica LAN.
+- CI per il nuovo script e smoke operativo completo di backup sono ancora da eseguire dopo il push. La retention locale non aggiunge cifratura né copia off-site.
+

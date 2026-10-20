@@ -1,5 +1,15 @@
 # Roadmap
 
+### Backup — retention locale opt-in
+
+`scripts/backup.sh` ora può applicare una retention locale configurabile tramite
+`OMNIDESK_BACKUP_RETENTION_DAYS` (default `0`, disattivata). Dopo aver verificato
+il nuovo backup e scritto `READY`, elimina soltanto directory dirette in
+`.backups` con nome generato dal backup e marker regolare, più vecchie della
+soglia; staging e symlink sono preservati. Test shell dedicati e controlli
+`bash -n` passano. La cifratura e la copia off-site restano aperte; la policy non
+è stata attivata né applicata ai backup presenti.
+
 ### Tray Windows — download degli allegati ticket puliti
 
 La Tray consente ora di scaricare, con scelta esplicita del percorso, gli
