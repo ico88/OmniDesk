@@ -1,20 +1,21 @@
 import { useEffect, useState } from 'react';
-import { Activity, AlertTriangle, Cpu, HardDrive, MemoryStick, Monitor, Network, Server, ShieldCheck, Timer, Wrench } from 'lucide-react';
+import { Activity, AlertTriangle, Cpu, HardDrive, MemoryStick, Monitor, Network, Server, ShieldCheck, Timer } from 'lucide-react';
 import { api } from './api';
 import { DevicePanel, DeviceTabs, type DeviceTabId } from './DeviceTabs';
 import { DeviceManagement } from './DeviceManagement';
-import { RemoteConsole } from './RemoteConsole';
-import { RemoteSessions } from './RemoteSessions';
+import { RustDeskRemote } from './RustDeskRemote';
+import { RustDeskDownload } from './RustDeskDownload';
 import { SupportDesk } from './SupportDesk';
 import { Icon } from './Icon';
 import { reportsFilteredNetworkAdapters } from './deviceNetwork';
 
 type MetricDisk = { name: string; totalBytes: number; freeBytes: number };
+type SmartDisk = { name: string; status: 'unavailable' | 'predicted_failure' | 'no_failure_predicted' };
 type NetworkAdapter = { name: string; type: string; macAddress: string; ipAddresses: string[] };
 export type DeviceStatus = {
   id: string; name: string; groupId: string | null; siteId: string | null; capabilities: string[]; online: boolean; revoked: boolean; lastSeen: string | null;
-  metrics: { cpuPercent: number | null; totalMemoryBytes: number; availableMemoryBytes: number; networkReceivedBytes: number; networkSentBytes: number; uptimeSeconds: number; disks: MetricDisk[]; agentVersion?: string | null; networkAdapters?: NetworkAdapter[] | null } | null;
-  inventory: { operatingSystem: string; architecture: string; manufacturer: string | null; model: string | null; processor: string | null; logicalProcessors: number; software: { name: string; version: string | null; publisher: string | null }[]; warnings: string[] } | null;
+  metrics: { cpuPercent: number | null; totalMemoryBytes: number; availableMemoryBytes: number; networkReceivedBytes: number; networkSentBytes: number; uptimeSeconds: number; disks: MetricDisk[]; agentVersion?: string | null; networkAdapters?: NetworkAdapter[] | null; smartDisks?: SmartDisk[] | null } | null;
+  inventory: { operatingSystem: string; architecture: string; manufacturer: string | null; model: string | null; serialNumber: string | null; processor: string | null; logicalProcessors: number; software: { name: string; version: string | null; publisher: string | null }[]; warnings: string[] } | null;
 };
 type Group = { id: string; name: string };
 type UpdateItem = { UpdateId: string; Revision: number; Title: string; Kb: string[]; ResultCode: number | null };
@@ -30,6 +31,10 @@ const elapsed = (from: string, to = Date.now()) => {
   return seconds < 60 ? `${seconds} secondi` : `${Math.floor(seconds / 60)} min ${seconds % 60} sec`;
 };
 const byteCount = (bytes: number) => `${(bytes / 1073741824).toFixed(1)} GiB`;
+const usableSerial = (serial: string | null | undefined) => {
+  const value = serial?.trim();
+  return value && !['to be filled by o.e.m.', 'system serial number', 'default string', 'unknown', 'none', 'not specified'].includes(value.toLowerCase()) ? value : null;
+};
 const versionAtLeast = (value: string | null | undefined, minimum: string) => {
   if (!value) return false;
   const a = value.split('.').map(Number); const b = minimum.split('.').map(Number);
@@ -47,7 +52,6 @@ export function DeviceWorkspace({ device, admin, groups, sites, onDeviceChanged,
   onMessage: (message: string) => void;
 }) {
   const [activeTab, setActiveTab] = useState<DeviceTabId>('desktop');
-  const [remoteReady, setRemoteReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [jobs, setJobs] = useState<UpdateJob[]>([]);
@@ -66,7 +70,7 @@ export function DeviceWorkspace({ device, admin, groups, sites, onDeviceChanged,
     finally { setBusy(false); }
   }
 
-  async function loadJobs() { setJobs(await api<UpdateJob[]>(`/devices/${device.id}/updates`)); setSelectedUpdates([]); }
+  async function loadJobs() { setJobs((await api<UpdateJob[]>(`/devices/${device.id}/updates`)).filter(job => ['scan', 'install', 'agent.update'].includes(job.kind))); setSelectedUpdates([]); }
   async function loadDiagnostics() { setDiagnosticJobs(await api<DiagnosticJob[]>(`/devices/${device.id}/diagnostics`)); }
   async function loadServiceJobs() { setServiceJobs(await api<ServiceJob[]>(`/devices/${device.id}/services/jobs`)); }
   async function loadProcessJobs() { setProcessJobs(await api<ServiceJob[]>(`/devices/${device.id}/processes/jobs`)); }
@@ -88,19 +92,6 @@ export function DeviceWorkspace({ device, admin, groups, sites, onDeviceChanged,
 
   useEffect(() => {
     let active = true;
-    const loadAvailability = async () => {
-      try {
-        const state = await api<{ configured: boolean; mapped: boolean; revoked: boolean; enabled: boolean }>(`/devices/${device.id}/remote-sessions/availability`);
-        if (active) setRemoteReady(state.configured && state.mapped && !state.revoked && state.enabled);
-      } catch { if (active) setRemoteReady(false); }
-    };
-    void loadAvailability();
-    const timer = window.setInterval(() => void loadAvailability(), 15000);
-    return () => { active = false; window.clearInterval(timer); };
-  }, [device.id]);
-
-  useEffect(() => {
-    let active = true;
     if (admin) void api<WindowsDownload>('/admin/downloads/windows').then(value => { if (active) setWindowsRelease(value); }).catch(() => { if (active) setWindowsRelease({ available: false, release: null }); });
     else setWindowsRelease(null);
     return () => { active = false; };
@@ -116,7 +107,7 @@ export function DeviceWorkspace({ device, admin, groups, sites, onDeviceChanged,
     const refresh = async () => {
       try {
         const rows = await api<UpdateJob[]>(`/devices/${device.id}/updates`);
-        if (active) { setJobs(rows); setJobsCheckedAt(Date.now()); }
+        if (active) { setJobs(rows.filter(job => ['scan', 'install', 'agent.update'].includes(job.kind))); setJobsCheckedAt(Date.now()); }
       } catch { /* Keep the last known state; manual refresh reports errors. */ }
     };
     const timer = window.setInterval(() => void refresh(), 5000);
@@ -155,14 +146,6 @@ export function DeviceWorkspace({ device, admin, groups, sites, onDeviceChanged,
   const networkInventoryCurrent = reportsFilteredNetworkAdapters(metrics?.agentVersion);
   const inventory = device.inventory;
   const count = (capability: string) => device.capabilities.includes(capability);
-  const remoteProps = {
-    deviceId: device.id,
-    deviceName: device.name,
-    ready: remoteReady,
-    revoked: device.revoked,
-    onMessage,
-  };
-
   return <section className="panel device-detail device-workspace">
     <div className="section-heading device-workspace-heading">
       <div><span className="eyebrow">DISPOSITIVO</span><h2><Monitor size={22}/>{device.name}</h2><small>{inventory?.operatingSystem ?? 'Sistema operativo non disponibile'} · Agent {metrics?.agentVersion ?? 'non rilevato'} · Ultimo contatto {device.lastSeen ? new Date(device.lastSeen).toLocaleString('it-IT') : 'mai'}</small></div>
@@ -178,8 +161,8 @@ export function DeviceWorkspace({ device, admin, groups, sites, onDeviceChanged,
         <article><span><Timer size={16}/>Uptime</span><strong>{Math.floor(metrics.uptimeSeconds / 3600)} <small>ore</small></strong><small>Dall’ultimo avvio del sistema</small></article>
       </div> : <div className="remote-empty-state"><Activity size={20}/>Metriche non ancora ricevute dall’agente.</div>}
       {(inventory || metrics) && <div className="device-summary-grid">
-        {inventory && <article className="device-info-card"><h3><Server size={16}/>Sistema</h3><p>{inventory.operatingSystem} · {inventory.architecture}</p><p>{inventory.manufacturer ?? 'Produttore non rilevato'} {inventory.model ?? ''}</p><small>{inventory.processor ?? 'CPU non rilevata'} · {inventory.logicalProcessors} processori logici</small></article>}
-        {metrics && <article className="device-info-card"><h3><HardDrive size={16}/>Archiviazione</h3>{metrics.disks.length ? metrics.disks.map(d => <div className="disk-row" key={d.name}><span>{d.name}</span><strong>{byteCount(d.freeBytes)} liberi</strong><small>di {byteCount(d.totalBytes)}</small><div className="meter"><i style={{ width: `${Math.min(100, Math.max(0, (d.totalBytes - d.freeBytes) / d.totalBytes * 100))}%` }}/></div></div>) : <p>Dati disco non disponibili.</p>}</article>}
+        {inventory && <article className="device-info-card"><h3><Server size={16}/>Sistema</h3><p>{inventory.operatingSystem} · {inventory.architecture}</p><p>{inventory.manufacturer ?? 'Produttore non rilevato'} {inventory.model ?? ''}</p><small>{inventory.processor ?? 'CPU non rilevata'} · {inventory.logicalProcessors} processori logici</small><small className="serial-number">Numero di serie: {usableSerial(inventory.serialNumber) ?? 'non disponibile'}</small></article>}
+        {metrics && <article className="device-info-card"><h3><HardDrive size={16}/>Archiviazione</h3>{metrics.disks.length ? metrics.disks.map(d => <div className="disk-row" key={d.name}><span>{d.name}</span><strong>{byteCount(d.freeBytes)} liberi</strong><small>di {byteCount(d.totalBytes)}</small><div className="meter"><i style={{ width: `${Math.min(100, Math.max(0, (d.totalBytes - d.freeBytes) / d.totalBytes * 100))}%` }}/></div></div>) : <p>Dati disco non disponibili.</p>}<div className="smart-health"><strong>Stato SMART</strong>{metrics.smartDisks?.length ? metrics.smartDisks.map((disk,index)=>{const failure=disk.status==='predicted_failure';const unavailable=disk.status==='unavailable';return <div className="smart-health-row" key={`${disk.name}-${index}`}><span>{disk.name}</span><span className={`status-pill ${failure?'danger':unavailable?'offline':'online'}`}>{failure?'Guasto predetto':unavailable?'Non disponibile':'Nessun guasto predetto'}</span></div>;}) : <small>Non disponibile: dipende dal supporto di disco, controller e driver.</small>}<small>La previsione SMART è un indicatore del dispositivo, non una garanzia sullo stato del disco.</small></div></article>}
         {metrics && <article className="device-info-card"><h3><Network size={16}/>Rete</h3>
           {!networkInventoryCurrent ? <p className="network-stale-note"><AlertTriangle size={14}/>Agent {metrics?.agentVersion ?? 'installato'}: elenco rete non filtrato. Aggiorna alla versione 0.8.12 o successiva; i dati si aggiorneranno al prossimo heartbeat.</p> : metrics?.networkAdapters?.length ? <div className="network-adapter-list">{metrics.networkAdapters.map((adapter, index) => <div className="network-adapter" key={`${adapter.name}-${index}`}>
             <strong>{adapter.type === 'Wireless80211' ? 'Wi-Fi' : adapter.type.startsWith('Ethernet') ? 'Ethernet' : adapter.type} · {adapter.name}</strong>
@@ -195,21 +178,15 @@ export function DeviceWorkspace({ device, admin, groups, sites, onDeviceChanged,
 
     {activeTab === 'desktop' && <DevicePanel id="desktop"><div className="remote-workspace">
       <div className="remote-workspace-main">
-        <RemoteConsole {...remoteProps} capability="remote.control" allowed={count('remote.control')}/>
-        <details className="remote-management-details">
-          <summary><Wrench size={15}/>Stato motore e gestione sessioni</summary>
-          <RemoteSessions key={device.id} deviceId={device.id} admin={admin} onAvailability={setRemoteReady}/>
-        </details>
+        <RustDeskRemote deviceId={device.id} deviceName={device.name} admin={admin} allowed={count('remote.control')} revoked={device.revoked} onMessage={onMessage}/>
+        {admin&&<RustDeskDownload/>}
       </div>
       <aside className="remote-device-sidebar"><div className="device-sidebar-heading"><span className="eyebrow">DETTAGLI E DIAGNOSTICA</span><ShieldCheck size={18}/></div>
         <div className="sidebar-status"><span className={`connection-indicator ${device.online ? 'ready' : ''}`}/><strong>{device.online ? 'Agent online' : 'Agent offline'}</strong><small>{device.lastSeen ? `Ultimo heartbeat ${new Date(device.lastSeen).toLocaleTimeString('it-IT')}` : 'Nessun heartbeat ricevuto'}</small></div>
         <dl>{[['Sistema operativo', inventory?.operatingSystem], ['Modello', [inventory?.manufacturer, inventory?.model].filter(Boolean).join(' ')], ['CPU', inventory?.processor], ['Memoria', metrics ? `${byteCount(metrics.availableMemoryBytes)} liberi` : undefined]].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value || 'Dato non disponibile'}</dd></div>)}</dl>
-        <p className="sidebar-note">Lo stato online dell’Agent non equivale allo stato della connessione desktop MeshCentral.</p>
+        <p className="sidebar-note">Lo stato online dell’Agent non conferma la disponibilità di RustDesk su questo dispositivo.</p>
       </aside>
     </div></DevicePanel>}
-
-    {activeTab === 'terminal' && <DevicePanel id="terminal"><RemoteConsole {...remoteProps} capability="terminal" allowed={count('terminal')}/></DevicePanel>}
-    {activeTab === 'files' && <DevicePanel id="files"><RemoteConsole {...remoteProps} capability="files" allowed={count('files')}/></DevicePanel>}
 
     {activeTab === 'software' && <DevicePanel id="software"><div className="section-heading"><div><span className="eyebrow">INVENTARIO</span><h3>Software installato</h3></div><span className="count">{inventory?.software.length ?? 0}</span></div>
       {!inventory ? <p>Inventario non ancora ricevuto dall’agente.</p> : <div className="table-wrap"><table><thead><tr><th>Software</th><th>Versione</th><th>Produttore</th></tr></thead><tbody>{inventory.software.map((app, index) => <tr key={`${app.name}-${index}`}><td>{app.name}</td><td>{app.version || '—'}</td><td>{app.publisher || '—'}</td></tr>)}</tbody></table></div>}

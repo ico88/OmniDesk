@@ -75,7 +75,7 @@ export function TicketWorkflowAdmin({sites,onMessage}:{sites:{id:string;name:str
         <button disabled={busy||!newName.trim()}>Crea bozza</button>
       </form>
     </section>
-    <section className="panel settings">
+    <section className="panel settings workflow-editor">
       <label>Workflow<select aria-label="Workflow da modificare" value={selectedId} onChange={e=>setSelectedId(e.target.value)}><option value="">Seleziona un workflow</option>{workflows.map(w=><option key={w.id} value={w.id}>{w.name} · {w.siteName??'Globale'} · {w.activeVersion?`v${w.activeVersion} attiva`:'disattivato'}</option>)}</select></label>
       {!selected?<p>Nessun workflow personalizzato: i ticket usano la policy predefinita.</p>:<>
         <div className="section-heading"><div><h3>{selected.name}</h3><small>{selected.siteName??'Ambito globale'} · Bozza #{selected.version} · {selected.activeVersion?`Versione attiva ${selected.activeVersion}`:'Non attivo'}</small></div></div>

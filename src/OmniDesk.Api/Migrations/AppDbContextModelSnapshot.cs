@@ -556,6 +556,62 @@ namespace OmniDesk.Api.Migrations
                     b.ToTable("DevicePresence");
                 });
 
+            modelBuilder.Entity("OmniDesk.Api.Data.EmailLoginChallenge", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CodeHash")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("FailedAttempts")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("LastSentAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("SecurityStamp")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int>("SendCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTimeOffset?>("UsedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExpiresAt");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.HasIndex("UserId", "CreatedAt");
+
+                    b.ToTable("EmailLoginChallenges");
+                });
+
             modelBuilder.Entity("OmniDesk.Api.Data.EmailNotificationDelivery", b =>
                 {
                     b.Property<Guid>("NotificationId")
@@ -1026,6 +1082,24 @@ namespace OmniDesk.Api.Migrations
                         });
                 });
 
+            modelBuilder.Entity("OmniDesk.Api.Data.RustDeskDeviceMapping", b =>
+                {
+                    b.Property<Guid>("DeviceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("PeerId")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.HasKey("DeviceId");
+
+                    b.HasIndex("PeerId")
+                        .IsUnique();
+
+                    b.ToTable("RustDeskDeviceMappings");
+                });
+
             modelBuilder.Entity("OmniDesk.Api.Data.ScopeGrant", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1172,12 +1246,12 @@ namespace OmniDesk.Api.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("MessageId");
+
                     b.HasIndex("StorageKey")
                         .IsUnique();
 
                     b.HasIndex("UploaderId");
-
-                    b.HasIndex("MessageId");
 
                     b.HasIndex("TicketId", "CreatedAt");
 
@@ -1574,11 +1648,11 @@ namespace OmniDesk.Api.Migrations
                         .HasColumnType("character varying(32)")
                         .HasDefaultValue("general");
 
-                    b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
                     b.Property<bool>("ContentPurged")
                         .HasColumnType("boolean");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Description")
                         .IsRequired()
@@ -1953,6 +2027,9 @@ namespace OmniDesk.Api.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid?>("DeviceId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid>("EventId")
                         .HasColumnType("uuid");
 
@@ -1964,9 +2041,6 @@ namespace OmniDesk.Api.Migrations
                     b.Property<DateTimeOffset?>("ReadAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid?>("DeviceId")
-                        .HasColumnType("uuid");
-
                     b.Property<Guid?>("TicketId")
                         .HasColumnType("uuid");
 
@@ -1976,9 +2050,9 @@ namespace OmniDesk.Api.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("TicketId");
-
                     b.HasIndex("DeviceId");
+
+                    b.HasIndex("TicketId");
 
                     b.HasIndex("EventId", "UserId")
                         .IsUnique();
@@ -2110,6 +2184,15 @@ namespace OmniDesk.Api.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("OmniDesk.Api.Data.EmailLoginChallenge", b =>
+                {
+                    b.HasOne("OmniDesk.Api.Data.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("OmniDesk.Api.Data.EmailNotificationDelivery", b =>
                 {
                     b.HasOne("OmniDesk.Api.Data.UserNotification", null)
@@ -2222,6 +2305,15 @@ namespace OmniDesk.Api.Migrations
                     b.HasOne("Microsoft.AspNetCore.Identity.IdentityRole", null)
                         .WithMany()
                         .HasForeignKey("RoleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("OmniDesk.Api.Data.RustDeskDeviceMapping", b =>
+                {
+                    b.HasOne("OmniDesk.Api.Data.Device", null)
+                        .WithOne()
+                        .HasForeignKey("OmniDesk.Api.Data.RustDeskDeviceMapping", "DeviceId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
@@ -2504,6 +2596,11 @@ namespace OmniDesk.Api.Migrations
 
             modelBuilder.Entity("OmniDesk.Api.Data.UserNotification", b =>
                 {
+                    b.HasOne("OmniDesk.Api.Data.Device", null)
+                        .WithMany()
+                        .HasForeignKey("DeviceId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
                     b.HasOne("OmniDesk.Api.Data.CoreOutboxEvent", null)
                         .WithMany()
                         .HasForeignKey("EventId")
@@ -2513,11 +2610,6 @@ namespace OmniDesk.Api.Migrations
                     b.HasOne("OmniDesk.Api.Data.SupportTicket", null)
                         .WithMany()
                         .HasForeignKey("TicketId")
-                        .OnDelete(DeleteBehavior.Cascade);
-
-                    b.HasOne("OmniDesk.Api.Data.Device", null)
-                        .WithMany()
-                        .HasForeignKey("DeviceId")
                         .OnDelete(DeleteBehavior.Cascade);
 
                     b.HasOne("OmniDesk.Api.Data.AppUser", null)

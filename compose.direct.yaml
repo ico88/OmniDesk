@@ -1,8 +1,5 @@
 # Optional alternative only for a dedicated server without existing Nginx.
 services:
   caddy:
-    ports: !override
-      - "80:80"
-      - "443:443"
     volumes:
       - ./deploy/direct.Caddyfile:/etc/caddy/Caddyfile:ro

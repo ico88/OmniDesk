@@ -69,6 +69,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
     public DbSet<DeviceMetrics> DeviceMetrics => Set<DeviceMetrics>();
     public DbSet<DeviceInventory> DeviceInventories => Set<DeviceInventory>();
     public DbSet<MeshDeviceMapping> MeshDeviceMappings => Set<MeshDeviceMapping>();
+    public DbSet<RustDeskDeviceMapping> RustDeskDeviceMappings => Set<RustDeskDeviceMapping>();
     public DbSet<RemoteProvisioning> RemoteProvisionings => Set<RemoteProvisioning>();
     public DbSet<RemoteSession> RemoteSessions => Set<RemoteSession>();
     public DbSet<UpdateJob> UpdateJobs => Set<UpdateJob>();
@@ -77,6 +78,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
     public DbSet<CoreOutboxDelivery> CoreOutboxDeliveries => Set<CoreOutboxDelivery>();
     public DbSet<UserNotification> UserNotifications => Set<UserNotification>();
     public DbSet<EmailNotificationDelivery> EmailNotificationDeliveries => Set<EmailNotificationDelivery>();
+    public DbSet<EmailLoginChallenge> EmailLoginChallenges => Set<EmailLoginChallenge>();
     public DbSet<KnowledgeArticle> KnowledgeArticles => Set<KnowledgeArticle>();
     public DbSet<KnowledgeArticleRevision> KnowledgeArticleRevisions => Set<KnowledgeArticleRevision>();
     protected override void OnModelCreating(ModelBuilder b)
@@ -235,6 +237,10 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
         b.Entity<MeshDeviceMapping>().HasKey(x => x.DeviceId);
         b.Entity<MeshDeviceMapping>().HasIndex(x => x.NodeId).IsUnique();
         b.Entity<MeshDeviceMapping>().HasOne<Device>().WithOne().HasForeignKey<MeshDeviceMapping>(x => x.DeviceId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<RustDeskDeviceMapping>().HasKey(x => x.DeviceId);
+        b.Entity<RustDeskDeviceMapping>().Property(x => x.PeerId).HasMaxLength(32);
+        b.Entity<RustDeskDeviceMapping>().HasIndex(x => x.PeerId).IsUnique();
+        b.Entity<RustDeskDeviceMapping>().HasOne<Device>().WithOne().HasForeignKey<RustDeskDeviceMapping>(x => x.DeviceId).OnDelete(DeleteBehavior.Cascade);
         b.Entity<RemoteSession>().HasOne<Device>().WithMany().HasForeignKey(x => x.DeviceId).OnDelete(DeleteBehavior.Restrict);
         b.Entity<RemoteSession>().HasIndex(x => new { x.DeviceId, x.CreatedAt });
         b.Entity<EnrollmentToken>().HasIndex(x => x.TokenHash).IsUnique();
@@ -298,6 +304,15 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
         b.Entity<EmailNotificationDelivery>().Property(x => x.State).HasMaxLength(20);
         b.Entity<EmailNotificationDelivery>().Property(x => x.LastErrorType).HasMaxLength(64);
         b.Entity<EmailNotificationDelivery>().HasIndex(x => new { x.State, x.NextAttemptAt, x.LeaseUntil });
+        b.Entity<EmailLoginChallenge>().HasKey(x => x.Id);
+        b.Entity<EmailLoginChallenge>().Property(x => x.UserId).HasMaxLength(450);
+        b.Entity<EmailLoginChallenge>().Property(x => x.TokenHash).HasMaxLength(64);
+        b.Entity<EmailLoginChallenge>().Property(x => x.CodeHash).HasMaxLength(512);
+        b.Entity<EmailLoginChallenge>().Property(x => x.SecurityStamp).HasMaxLength(64);
+        b.Entity<EmailLoginChallenge>().HasOne<AppUser>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<EmailLoginChallenge>().HasIndex(x => x.TokenHash).IsUnique();
+        b.Entity<EmailLoginChallenge>().HasIndex(x => new { x.UserId, x.CreatedAt });
+        b.Entity<EmailLoginChallenge>().HasIndex(x => x.ExpiresAt);
         b.Entity<KnowledgeArticle>().Property(x => x.Slug).HasMaxLength(120);
         b.Entity<KnowledgeArticle>().Property(x => x.NormalizedSlug).HasMaxLength(120);
         b.Entity<KnowledgeArticle>().Property(x => x.Title).HasMaxLength(160);

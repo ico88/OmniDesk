@@ -1,0 +1,30 @@
+# Temporary pilot only. Native RustDesk clients use the standard OSS ports.
+services:
+  api:
+    environment:
+      RustDesk__IdServer: ${OMNIDESK_DOMAIN:?Set OMNIDESK_DOMAIN}
+      RustDesk__RelayServer: ${OMNIDESK_DOMAIN:?Set OMNIDESK_DOMAIN}
+      RustDesk__ApiServer: ""
+      RustDesk__PublicKey: ${OMNIDESK_RUSTDESK_PUBLIC_KEY:?Set OMNIDESK_RUSTDESK_PUBLIC_KEY}
+      RustDesk__InstallerDirectory: /rustdesk-packages
+    volumes:
+      - ${HOME:?Set HOME}/omnidesk-rustdesk-packages:/rustdesk-packages:ro
+  rustdesk:
+    image: rustdesk/rustdesk-server-s6:1.1.16@sha256:5974cd791a5aca6fbf01a167b37e7427db1d136e95b2710c33a34fdc9fea724c
+    restart: unless-stopped
+    environment:
+      RELAY: ${OMNIDESK_DOMAIN:?Set OMNIDESK_DOMAIN}
+      ALWAYS_USE_RELAY: "Y"
+      ENCRYPTED_ONLY: "1"
+      RUST_LOG: info
+    ports:
+      - "21115:21115/tcp"
+      - "21116:21116/tcp"
+      - "21116:21116/udp"
+      - "21117:21117/tcp"
+    volumes:
+      - rustdesk_pilot_data:/data
+    networks: [proxy]
+
+volumes:
+  rustdesk_pilot_data:

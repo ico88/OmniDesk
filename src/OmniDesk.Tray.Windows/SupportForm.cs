@@ -8,22 +8,24 @@ namespace OmniDesk.Tray.Windows;
 
 internal sealed class SupportForm : Form
 {
-    private readonly TextBox subject = new() { MaxLength = 200, Dock = DockStyle.Top, PlaceholderText = "Oggetto" };
-    private readonly ComboBox category = new() { Dock = DockStyle.Top, DropDownStyle = ComboBoxStyle.DropDownList };
-    private readonly TextBox description = new() { MaxLength = 8000, Multiline = true, Height = 130, Dock = DockStyle.Top, PlaceholderText = "Descrivi il problema" };
-    private readonly CheckBox consent = new() { Text = "Acconsento ad allegare l'immagine mostrata al team IT", AutoSize = true, Dock = DockStyle.Top };
-    private readonly PictureBox preview = new() { Height = 170, Dock = DockStyle.Top, SizeMode = PictureBoxSizeMode.Zoom };
+    private readonly TextBox subject = new() { MaxLength = 200, Dock = DockStyle.Fill, PlaceholderText = "Riassumi il problema in poche parole" };
+    private readonly ComboBox category = new() { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly TextBox description = new() { MaxLength = 8000, Multiline = true, Dock = DockStyle.Fill, ScrollBars = ScrollBars.Vertical, PlaceholderText = "Che cosa stavi facendo? Che cosa è successo?" };
+    private readonly CheckBox consent = new() { Text = "Acconsento ad allegare lo screenshot al team IT", AutoSize = true, Dock = DockStyle.Fill };
+    private readonly PictureBox preview = new() { Dock = DockStyle.Fill, SizeMode = PictureBoxSizeMode.Zoom, BorderStyle = BorderStyle.FixedSingle };
     private readonly ComboBox ticketPicker = new() { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly TextBox conversation = new() { ReadOnly = true, Multiline = true, ScrollBars = ScrollBars.Vertical, Dock = DockStyle.Fill };
     private readonly ComboBox attachmentPicker = new() { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
-    private readonly Button downloadAttachment = new() { Text = "Scarica allegato pulito", AutoSize = true, Enabled = false };
-    private readonly TextBox replyText = new() { MaxLength = 8000, Multiline = true, Dock = DockStyle.Fill, PlaceholderText = "Scrivi un aggiornamento per il team IT" };
-    private readonly Label result = new() { Dock = DockStyle.Bottom, Height = 45 };
-    private readonly Button send = new() { Text = "Invia richiesta", AutoSize = true };
-    private readonly Button capture = new() { Text = "Acquisisci schermata", AutoSize = true };
-    private readonly Button remove = new() { Text = "Rimuovi schermata", AutoSize = true };
-    private readonly Button refresh = new() { Text = "Aggiorna ticket", AutoSize = true };
-    private readonly Button reply = new() { Text = "Invia risposta", AutoSize = true };
+    private readonly Button downloadAttachment = new() { Text = "Scarica allegato", AutoSize = true, Enabled = false };
+    private readonly TextBox replyText = new() { MaxLength = 8000, Multiline = true, Dock = DockStyle.Fill, ScrollBars = ScrollBars.Vertical, PlaceholderText = "Scrivi un messaggio al team IT" };
+    private readonly Label result = new() { Dock = DockStyle.Bottom, Height = 42, Text = "Puoi inviare una richiesta o controllare i tuoi ticket." };
+    private readonly TabControl pages = new() { Dock = DockStyle.Fill };
+    private readonly Label ticketSummary = new() { Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true };
+    private readonly Button send = new() { Text = "Invia richiesta al team IT", AutoSize = true };
+    private readonly Button capture = new() { Text = "Acquisisci screenshot", AutoSize = true };
+    private readonly Button remove = new() { Text = "Rimuovi screenshot", AutoSize = true };
+    private readonly Button refresh = new() { Text = "Aggiorna elenco", AutoSize = true };
+    private readonly Button reply = new() { Text = "Invia messaggio", AutoSize = true, Enabled = false };
     private SupportTicketView? selectedTicket;
     private bool conversationCanReply;
     private bool attachmentDownloadAvailable;
@@ -34,21 +36,61 @@ internal sealed class SupportForm : Form
 
     public SupportForm()
     {
-        Text = "OmniDesk — Richiedi assistenza"; Width = 660; Height = 750; StartPosition = FormStartPosition.CenterScreen;
-        var buttons = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 65 };
-        buttons.Controls.AddRange([capture, remove, send, refresh, reply]);
-        var thread = new TableLayoutPanel { Dock = DockStyle.Bottom, Height = 285, ColumnCount = 1, RowCount = 4, Padding = new Padding(8) };
-        thread.RowStyles.Add(new RowStyle(SizeType.Absolute, 29)); thread.RowStyles.Add(new RowStyle(SizeType.Percent, 55));
-        thread.RowStyles.Add(new RowStyle(SizeType.Absolute, 35)); thread.RowStyles.Add(new RowStyle(SizeType.Percent, 45));
+        Text = "OmniDesk — Assistenza"; Width = 760; Height = 800; MinimumSize = new Size(640, 650); StartPosition = FormStartPosition.CenterScreen;
+        var requestPage = new TabPage("Nuova richiesta");
+        var ticketsPage = new TabPage("I miei ticket");
+        pages.TabPages.AddRange([requestPage, ticketsPage]);
+
+        var requestLayout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 9, Padding = new Padding(16) };
+        requestLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        requestLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 35));
+        requestLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 24)); requestLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+        requestLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 24)); requestLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+        requestLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 24)); requestLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        requestLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 160)); requestLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));
+        var requestHeading = new Label { Text = "Descrivi il problema: il team IT riceverà la richiesta collegata a questo computer.", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true };
+        var screenshotBox = new GroupBox { Text = "Screenshot facoltativo", Dock = DockStyle.Fill, Padding = new Padding(8) };
+        var screenshotLayout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 2 };
+        screenshotLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 48)); screenshotLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 52));
+        screenshotLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 65)); screenshotLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 35));
+        var screenshotActions = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = true, AutoScroll = true };
+        screenshotActions.Controls.Add(capture); screenshotActions.Controls.Add(remove);
+        screenshotLayout.Controls.Add(preview, 0, 0); screenshotLayout.SetRowSpan(preview, 2);
+        screenshotLayout.Controls.Add(screenshotActions, 1, 0); screenshotLayout.Controls.Add(consent, 1, 1);
+        screenshotBox.Controls.Add(screenshotLayout);
+        var sendPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(0, 7, 0, 0) };
+        sendPanel.Controls.Add(send);
+        requestLayout.Controls.Add(requestHeading, 0, 0);
+        requestLayout.Controls.Add(new Label { Text = "Oggetto", Dock = DockStyle.Fill, TextAlign = ContentAlignment.BottomLeft }, 0, 1); requestLayout.Controls.Add(subject, 0, 2);
+        requestLayout.Controls.Add(new Label { Text = "Categoria", Dock = DockStyle.Fill, TextAlign = ContentAlignment.BottomLeft }, 0, 3); requestLayout.Controls.Add(category, 0, 4);
+        requestLayout.Controls.Add(new Label { Text = "Descrizione", Dock = DockStyle.Fill, TextAlign = ContentAlignment.BottomLeft }, 0, 5); requestLayout.Controls.Add(description, 0, 6);
+        requestLayout.Controls.Add(screenshotBox, 0, 7); requestLayout.Controls.Add(sendPanel, 0, 8);
+        requestPage.Controls.Add(requestLayout);
+
+        var ticketLayout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 6, Padding = new Padding(12) };
+        ticketLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        ticketLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 42)); ticketLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
+        ticketLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); ticketLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
+        ticketLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 92)); ticketLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
+        var ticketHeading = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, AutoScroll = true, Padding = new Padding(0, 4, 0, 0) };
+        ticketHeading.Controls.Add(new Label { Text = "Seleziona una richiesta", AutoSize = true, Padding = new Padding(0, 7, 5, 0) });
+        ticketPicker.Width = 390; ticketHeading.Controls.Add(ticketPicker); ticketHeading.Controls.Add(refresh);
         var attachmentTools = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1 };
         attachmentTools.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 65)); attachmentTools.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 35));
         attachmentTools.Controls.Add(attachmentPicker, 0, 0); attachmentTools.Controls.Add(downloadAttachment, 1, 0);
-        thread.Controls.Add(ticketPicker, 0, 0); thread.Controls.Add(conversation, 0, 1); thread.Controls.Add(attachmentTools, 0, 2); thread.Controls.Add(replyText, 0, 3);
+        var replyPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(0, 6, 0, 0) };
+        replyPanel.Controls.Add(reply);
+        ticketLayout.Controls.Add(ticketHeading, 0, 0); ticketLayout.Controls.Add(ticketSummary, 0, 1);
+        ticketLayout.Controls.Add(conversation, 0, 2); ticketLayout.Controls.Add(attachmentTools, 0, 3);
+        ticketLayout.Controls.Add(replyText, 0, 4); ticketLayout.Controls.Add(replyPanel, 0, 5);
+        ticketsPage.Controls.Add(ticketLayout);
+
         category.Items.AddRange(["Generale", "Hardware", "Software", "Rete", "Account", "Altro"]); category.SelectedIndex = 0;
-        Controls.Add(buttons); Controls.Add(thread); Controls.Add(consent); Controls.Add(preview); Controls.Add(description); Controls.Add(category); Controls.Add(subject); Controls.Add(result);
+        Controls.Add(pages); Controls.Add(result);
         capture.Click += (_, _) => CaptureScreen(); remove.Click += (_, _) => ClearImage();
         send.Click += async (_, _) => await Send(); refresh.Click += async (_, _) => await List();
         reply.Click += async (_, _) => await Reply(); downloadAttachment.Click += async (_, _) => await DownloadAttachment(); ticketPicker.SelectedIndexChanged += TicketPickerChanged;
+        pages.SelectedIndexChanged += async (_, _) => { if (pages.SelectedTab == ticketsPage) await List(); };
         Shown += async (_, _) => await List();
     }
     private void ClearImage() { screenshot = null; preview.Image?.Dispose(); preview.Image = null; consent.Checked = false; pending = null; }
@@ -106,7 +148,7 @@ internal sealed class SupportForm : Form
     private async Task Work(Func<Task> action)
     {
         if (busy) return; busy = true;
-        send.Enabled = refresh.Enabled = capture.Enabled = remove.Enabled = subject.Enabled = description.Enabled = category.Enabled = consent.Enabled = reply.Enabled = ticketPicker.Enabled = attachmentPicker.Enabled = downloadAttachment.Enabled = false;
+        pages.Enabled = false;
         try { await action(); }
         catch (Exception e) when (!stop.IsCancellationRequested)
         {
@@ -124,37 +166,41 @@ internal sealed class SupportForm : Form
         finally
         {
             busy = false;
-            if (!IsDisposed) { send.Enabled = refresh.Enabled = capture.Enabled = remove.Enabled = subject.Enabled = description.Enabled = category.Enabled = consent.Enabled = ticketPicker.Enabled = attachmentPicker.Enabled = true; reply.Enabled = conversationCanReply; downloadAttachment.Enabled = attachmentDownloadAvailable; }
+            if (!IsDisposed) { pages.Enabled = true; reply.Enabled = conversationCanReply; downloadAttachment.Enabled = attachmentDownloadAvailable; }
         }
     }
-    private Task List() => Work(async () => {
+    private Task List() => Work(ListCore);
+    private async Task ListCore()
+    {
         var response = await Call(new(TrayProtocol.Version,Guid.NewGuid(),TrayProtocol.ListTicketsMethod));
         if (stop.IsCancellationRequested) return;
-        result.Text = response.Error ?? "Ticket aggiornati";
+        result.Text = response.Error ?? (response.Tickets.Length == 0 ? "Non hai ancora richieste. Puoi aprirne una nella scheda Nuova richiesta." : "Elenco richieste aggiornato.");
         if (response.Error is null)
         {
             var previousId = selectedTicket?.Id;
             ticketPicker.SelectedIndexChanged -= TicketPickerChanged;
             ticketPicker.Items.Clear();
-            foreach (var item in response.Tickets) ticketPicker.Items.Add(item);
+            foreach (var item in response.Tickets) ticketPicker.Items.Add(new TrayTicketChoice(item));
             selectedTicket = response.Tickets.FirstOrDefault(t => t.Id == previousId) ?? response.Tickets.FirstOrDefault();
-            if (selectedTicket is not null) ticketPicker.SelectedItem = selectedTicket;
+            if (selectedTicket is not null) ticketPicker.SelectedItem = ticketPicker.Items.Cast<TrayTicketChoice>().FirstOrDefault(choice => choice.Ticket.Id == selectedTicket.Id);
             ticketPicker.SelectedIndexChanged += TicketPickerChanged;
             await LoadConversationCore();
         }
-    });
+    }
     private async void TicketPickerChanged(object? sender, EventArgs e) => await LoadConversation();
     private Task LoadConversation() => Work(LoadConversationCore);
     private async Task LoadConversationCore()
     {
-        selectedTicket = ticketPicker.SelectedItem as SupportTicketView;
-        if (selectedTicket is null) { conversation.Clear(); conversationCanReply = attachmentDownloadAvailable = false; attachmentPicker.Items.Clear(); return; }
+        selectedTicket = (ticketPicker.SelectedItem as TrayTicketChoice)?.Ticket;
+        if (selectedTicket is null) { ticketSummary.Text = "Nessun ticket selezionato."; conversation.Clear(); conversationCanReply = attachmentDownloadAvailable = false; attachmentPicker.Items.Clear(); return; }
+        ticketSummary.Text = $"OD-{selectedTicket.Number:000000} · {TicketStateLabel(selectedTicket.State)} · aggiornato {selectedTicket.UpdatedAt.ToLocalTime():g}";
         conversation.Clear(); attachmentPicker.Items.Clear(); attachmentDownloadAvailable = false; downloadAttachment.Enabled = false;
         var response = await Call(new(TrayProtocol.Version,Guid.NewGuid(),TrayProtocol.TicketConversationMethod,TicketId:selectedTicket.Id));
         if (response.Error is not null) { result.Text = response.Error; return; }
         var thread = response.Conversation;
         if (thread is null) { result.Text = "Conversazione non disponibile."; return; }
         selectedTicket = selectedTicket with { Version = thread.Version, State = thread.State };
+        ticketSummary.Text = $"OD-{selectedTicket.Number:000000} · {TicketStateLabel(thread.State)} · aggiornato {selectedTicket.UpdatedAt.ToLocalTime():g}";
         conversationCanReply = thread.State is "open" or "in_progress";
         attachmentPicker.Items.Clear();
         foreach (var item in thread.Messages.Where(message => !message.ContentPurged).SelectMany(message => message.Attachments ?? []).Where(item => item.ScanState == "clean"))
@@ -176,6 +222,11 @@ internal sealed class SupportForm : Form
         _ => "📎 Allegato in quarantena o scansione in corso"
     };
     private static string FormatSize(long bytes) => bytes < 1024 ? $"{bytes} B" : bytes < 1024 * 1024 ? $"{bytes / 1024.0:0} KB" : $"{bytes / (1024.0 * 1024):0.0} MB";
+    private static string TicketStateLabel(string state) => state switch { "open" => "Aperto", "in_progress" => "In lavorazione", "resolved" => "Risolto", "closed" => "Chiuso", _ => state };
+    private sealed record TrayTicketChoice(SupportTicketView Ticket)
+    {
+        public override string ToString() => $"OD-{Ticket.Number:000000} · {TicketStateLabel(Ticket.State)} · {Ticket.Subject}";
+    }
     private sealed record TrayAttachmentChoice(Guid TicketId, SupportRequesterAttachmentView Attachment)
     {
         public override string ToString() => $"{Attachment.FileName} · {FormatSize(Attachment.SizeBytes)}";
@@ -226,8 +277,14 @@ internal sealed class SupportForm : Form
             pending = new(Guid.NewGuid(),subject.Text,description.Text,image,consent.Checked, category.SelectedIndex switch { 1 => "hardware", 2 => "software", 3 => "network", 4 => "account", 5 => "other", _ => "general" });
         var response = await Call(new(TrayProtocol.Version,Guid.NewGuid(),TrayProtocol.CreateTicketMethod,pending));
         if (stop.IsCancellationRequested) return;
-        result.Text = response.Error ?? $"Richiesta registrata: OD-{response.Tickets[0].Number:000000}";
-        if (response.Error is null) { pending = null; subject.Clear(); description.Clear(); ClearImage(); }
+        if (response.Error is not null) { result.Text = response.Error; return; }
+        selectedTicket = response.Tickets.FirstOrDefault();
+        pending = null; subject.Clear(); description.Clear(); ClearImage();
+        pages.SelectedIndex = 1;
+        await ListCore();
+        result.Text = selectedTicket is null
+            ? "Richiesta inviata. Puoi seguirne gli aggiornamenti nella scheda I miei ticket."
+            : $"Richiesta OD-{selectedTicket.Number:000000} inviata. Gli aggiornamenti appariranno in I miei ticket.";
     });
     protected override void Dispose(bool disposing)
     {

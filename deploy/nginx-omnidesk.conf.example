@@ -1,22 +1,2 @@
-# Merge into the existing Nginx configuration; replace rmm.example.com and certificate paths.
-# Never overwrite an existing vhost. Validate with nginx -t before an authorized reload.
-server {
-    listen 443 ssl;
-    server_name rmm.example.com;
-    ssl_certificate /etc/letsencrypt/live/rmm.example.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/rmm.example.com/privkey.pem;
-    client_max_body_size 2m;
-    location / {
-        proxy_pass https://192.168.1.233:8085;
-        proxy_http_version 1.1;
-        proxy_set_header Host rmm.example.com;
-        proxy_set_header X-Forwarded-Proto https;
-        proxy_ssl_server_name on;
-        proxy_ssl_name rmm.example.com;
-        # Copy the public Caddy CA certificate here using an authorized deployment step.
-        proxy_ssl_trusted_certificate /etc/nginx/certs/omnidesk-local-ca.crt;
-        proxy_ssl_verify on;
-        proxy_ssl_verify_depth 2;
-        proxy_read_timeout 90s;
-    }
-}
+# Storico: il deployment corrente usa Caddy direttamente su TCP 80/443.
+# Non usare un proxy Nginx verso i vecchi indirizzi LAN o certificati interni.

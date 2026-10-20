@@ -45,7 +45,7 @@ public static class UpdateEndpoints
             var id = Guid.Parse(c.HttpContext.Request.RouteValues["id"]!.ToString()!);
             return await c.HttpContext.RequestServices.GetRequiredService<PermissionService>().Allows(c.HttpContext.User.UserId(), "updates", id) ? await next(c) : Results.Forbid();
         });
-        management.MapGet("", async (Guid id, AppDbContext db) => Results.Ok(await db.UpdateJobs.AsNoTracking().Where(x => x.DeviceId == id).OrderByDescending(x => x.CreatedAt).Take(100)
+        management.MapGet("", async (Guid id, AppDbContext db) => Results.Ok(await db.UpdateJobs.AsNoTracking().Where(x => x.DeviceId == id && (x.Kind == "scan" || x.Kind == "install" || x.Kind == "agent.update")).OrderByDescending(x => x.CreatedAt).Take(100)
             .Select(x => new { x.Id, x.Kind, x.State, x.CreatedAt, x.CompletedAt, x.Result }).ToListAsync()));
         management.MapPost("/{kind}", async (Guid id, string kind, UpdateJobRequest r, HttpContext c, AppDbContext db, PermissionService permissions) => {
             if (kind is not ("scan" or "install") || r.RequestId == Guid.Empty ||

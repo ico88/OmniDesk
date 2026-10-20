@@ -22,7 +22,8 @@ if (string.IsNullOrWhiteSpace(connection))
 {
     var secretPath = builder.Configuration["Database:PasswordFile"] ?? "/run/secrets/db_password";
     var cs = new NpgsqlConnectionStringBuilder {
-        Host = builder.Configuration["Database:Host"] ?? "db", Database = "omnidesk", Username = "omnidesk",
+        Host = builder.Configuration["Database:Host"] ?? "db", Database = "omnidesk",
+        Username = builder.Configuration["Database:Username"] ?? "omnidesk",
         Password = File.Exists(secretPath) ? File.ReadAllText(secretPath).Trim() : ""
     };
     // Docker PostgreSQL uses password authentication, not optional Kerberos native libraries.
@@ -61,6 +62,9 @@ builder.Services.AddScoped<PermissionService>();
 builder.Services.Configure<OutboundEmailOptions>(builder.Configuration.GetSection(OutboundEmailOptions.SectionName));
 var outboundEmail = builder.Configuration.GetSection(OutboundEmailOptions.SectionName).Get<OutboundEmailOptions>() ?? new OutboundEmailOptions();
 if (!outboundEmail.IsValid()) throw new InvalidOperationException("Outbound email configuration is invalid; SMTP with TLS on port 465 or 587 is required.");
+if (builder.Configuration.GetValue<bool>("Security:EmailTwoFactorEnabled") &&
+    (!outboundEmail.Enabled || !outboundEmail.IsValid() || builder.Configuration.GetValue<bool>("Security:TotpEnabled")))
+    throw new InvalidOperationException("Email 2FA requires valid enabled SMTP and cannot be enabled together with TOTP.");
 builder.Services.AddSingleton<IOutboundEmailSender, SmtpOutboundEmailSender>();
 builder.Services.AddSingleton<AttachmentStorage>();
 builder.Services.AddSingleton<IAttachmentScanner, ClamAvAttachmentScanner>();
@@ -173,6 +177,7 @@ app.MapUserLifecycleEndpoints();
 app.MapAgentEndpoints();
 app.MapDeviceManagementEndpoints();
 app.MapRemoteEndpoints();
+app.MapRustDeskEndpoints();
 app.MapRemoteProvisioningEndpoints();
 app.MapSupportEndpoints();
 app.MapUpdateEndpoints();

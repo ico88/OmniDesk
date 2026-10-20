@@ -54,7 +54,7 @@ public sealed class WindowsCollector
             catch (IOException) { /* Offline drive is omitted, not represented as zero. */ }
         }
         return new(cpu, checked((long)memory.TotalPhysical), checked((long)memory.AvailablePhysical), received, sent,
-            checked((long)(GetTickCount64() / 1000)), disks.ToArray(), typeof(WindowsCollector).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion?.Split('+')[0], networkAdapters.ToArray());
+            checked((long)(GetTickCount64() / 1000)), disks.ToArray(), typeof(WindowsCollector).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion?.Split('+')[0], networkAdapters.ToArray(), CollectSmartStatus());
     }
     public InventoryRequest Inventory()
     {
@@ -97,7 +97,71 @@ public sealed class WindowsCollector
         var distinct = software.Distinct().OrderBy(x => x.Name).ToArray();
         if (distinct.Length > 2000) warnings.Add("Software inventory truncated to 2000 entries");
         return new(RuntimeInformation.OSDescription, RuntimeInformation.OSArchitecture.ToString(), hardware["Manufacturer"], hardware["Model"],
-            bios["SerialNumber"], processor["Name"], Environment.ProcessorCount, distinct.Take(2000).ToArray(), warnings.ToArray());
+            NormalizeSerial(bios["SerialNumber"]), processor["Name"], Environment.ProcessorCount, distinct.Take(2000).ToArray(), warnings.ToArray());
+    }
+    private static SmartDiskItem[]? CollectSmartStatus()
+    {
+        var models = new List<(string DeviceId, string Model)>();
+        try
+        {
+            using var disks = new ManagementObjectSearcher("SELECT PNPDeviceID, Model FROM Win32_DiskDrive");
+            using var rows = disks.Get();
+            foreach (ManagementObject disk in rows)
+            {
+                using (disk)
+                {
+                    var deviceId = disk["PNPDeviceID"]?.ToString();
+                    var model = disk["Model"]?.ToString();
+                    if (!string.IsNullOrWhiteSpace(deviceId) && !string.IsNullOrWhiteSpace(model)) models.Add((deviceId, Limit(model.Trim(), 256)!));
+                }
+            }
+        }
+        catch (Exception e) when (e is ManagementException or COMException or UnauthorizedAccessException) { /* SMART provider may be unavailable. */ }
+
+        try
+        {
+            var scope = new ManagementScope(@"\\.\root\wmi");
+            using var search = new ManagementObjectSearcher(scope, new ObjectQuery("SELECT InstanceName, Active, PredictFailure FROM MSStorageDriver_FailurePredictStatus"));
+            using var rows = search.Get();
+            var result = new List<SmartDiskItem>();
+            foreach (ManagementObject item in rows)
+            {
+                using (item)
+                {
+                    var instance = item["InstanceName"]?.ToString() ?? "";
+                    if (string.IsNullOrWhiteSpace(instance)) continue;
+                    var normalizedInstance = NormalizeDeviceId(instance);
+                    var model = models.FirstOrDefault(disk => NormalizeDeviceId(disk.DeviceId).Equals(normalizedInstance, StringComparison.OrdinalIgnoreCase)).Model;
+                    var name = string.IsNullOrWhiteSpace(model) ? SmartInstanceLabel(instance) : model;
+                    var active = bool.TryParse(item["Active"]?.ToString(), out var enabled) && enabled;
+                    var predictsFailure = bool.TryParse(item["PredictFailure"]?.ToString(), out var failure) && failure;
+                    result.Add(new(Limit(name, 256)!, !active ? "unavailable" : predictsFailure ? "predicted_failure" : "no_failure_predicted"));
+                    if (result.Count == 64) break;
+                }
+            }
+            return result.Count == 0 ? null : result.ToArray();
+        }
+        catch (Exception e) when (e is ManagementException or COMException or UnauthorizedAccessException) { return null; }
+    }
+    private static string NormalizeDeviceId(string value)
+    {
+        var normalized = value.Trim().TrimEnd('\\');
+        var suffix = normalized.LastIndexOf('_');
+        if (suffix >= 0 && normalized[(suffix + 1)..].All(char.IsDigit)) normalized = normalized[..suffix];
+        return normalized;
+    }
+    private static string SmartInstanceLabel(string instance)
+    {
+        var segment = instance.Split('\\', StringSplitOptions.RemoveEmptyEntries).Skip(1).FirstOrDefault() ?? "Disco fisico";
+        return segment.Replace("Disk&Ven_", "", StringComparison.OrdinalIgnoreCase)
+            .Replace("&Prod_", " ", StringComparison.OrdinalIgnoreCase).Replace('_', ' ').Trim();
+    }
+    private static string? NormalizeSerial(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var serial = value.Trim();
+        return new[] { "To Be Filled By O.E.M.", "System Serial Number", "Default string", "Unknown", "None", "Not Specified" }
+            .Contains(serial, StringComparer.OrdinalIgnoreCase) ? null : Limit(serial, 500);
     }
     private static string? Limit(string? s, int length) => s is null ? null : s[..Math.Min(s.Length, length)];
     [StructLayout(LayoutKind.Sequential)] private struct MemoryStatus

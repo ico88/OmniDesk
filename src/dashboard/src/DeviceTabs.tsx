@@ -1,13 +1,11 @@
-import { Activity, ClipboardList, Files, Gauge, LifeBuoy, Monitor, Package, ScrollText, ServerCog, Terminal, type LucideIcon } from 'lucide-react';
+import { Activity, ClipboardList, Gauge, LifeBuoy, Monitor, Package, ScrollText, ServerCog, type LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 
-export type DeviceTabId = 'overview' | 'desktop' | 'terminal' | 'files' | 'processes' | 'services' | 'software' | 'updates' | 'events' | 'tickets';
+export type DeviceTabId = 'overview' | 'desktop' | 'processes' | 'services' | 'software' | 'updates' | 'events' | 'tickets';
 
 const tabs: { id: DeviceTabId; label: string; icon: LucideIcon }[] = [
   { id: 'desktop', label: 'Desktop remoto', icon: Monitor },
   { id: 'overview', label: 'Panoramica', icon: Gauge },
-  { id: 'terminal', label: 'Terminale e PowerShell', icon: Terminal },
-  { id: 'files', label: 'Trasferimento file', icon: Files },
   { id: 'processes', label: 'Processi', icon: Activity },
   { id: 'services', label: 'Servizi Windows', icon: ServerCog },
   { id: 'software', label: 'Software installato', icon: Package },

@@ -54,13 +54,13 @@ export function AccessManagement({ currentUserId }: { currentUserId: string }) {
   useEffect(() => { void run(load); }, []);
   const targets = scope === 'group' ? groups : scope === 'device' ? devices : sites.filter(s => !s.isArchived);
   const selected = accounts.find(a => a.id === selectedId);
-  return <>
+  return <div className="access-management">
     {error && <p role="alert" className="error">{error}</p>}
     {message && <p role="status">{message}</p>}
     <section className="panel">
       <h2>Dispositivi visibili nel portale personale</h2>
       <p>Associa account e dispositivi dopo aver verificato il richiedente. L’associazione concede solo l’accesso ai ticket creati da quell’account; non assegna permessi RMM.</p>
-      <form className="settings" onSubmit={e=>{e.preventDefault();void run(async()=>{await api('/admin/portal-device-access','POST',{userId:portalUserId,deviceId:portalDeviceId});await load();setMessage('Dispositivo associato al portale');});}}>
+      <form className="settings access-form-grid" onSubmit={e=>{e.preventDefault();void run(async()=>{await api('/admin/portal-device-access','POST',{userId:portalUserId,deviceId:portalDeviceId});await load();setMessage('Dispositivo associato al portale');});}}>
         <label>Account<select required value={portalUserId} onChange={e=>setPortalUserId(e.target.value)}><option value="">Seleziona un account</option>{accounts.filter(account=>!account.isDisabled).map(account=><option key={account.id} value={account.id}>{account.email}</option>)}</select></label>
         <label>Dispositivo<select required value={portalDeviceId} onChange={e=>setPortalDeviceId(e.target.value)}><option value="">Seleziona un dispositivo</option>{portalDevices.map(device=><option key={device.id} value={device.id}>{device.name} · {device.siteName}</option>)}</select></label>
         <button disabled={busy||!portalUserId||!portalDeviceId||!portalDevices.length}>Associa dispositivo</button>
@@ -94,7 +94,7 @@ export function AccessManagement({ currentUserId }: { currentUserId: string }) {
         <p>Le concessioni locali restano attive. I permessi globali si applicano a tutti i dispositivi.</p><button disabled={busy}>Salva ruoli globali</button>
       </form>
     </section>}
-    <form className="panel settings" onSubmit={e => {
+    <form className="panel settings access-form-grid" onSubmit={e => {
       e.preventDefault(); const form = e.currentTarget; const values = new FormData(form);
       void run(async () => { await api('/admin/groups', 'POST', { name: values.get('name') }); form.reset(); await load(); setMessage('Gruppo creato'); });
     }}><h2>Crea un gruppo dispositivi</h2><label>Nome gruppo<input name="name" required maxLength={200}/></label><button disabled={busy}>Crea gruppo</button></form>
@@ -103,12 +103,12 @@ export function AccessManagement({ currentUserId }: { currentUserId: string }) {
       <div className="table-wrap"><table><thead><tr><th>Sede</th><th>Dispositivi</th><th>Ticket storici</th><th>Stato</th><th></th></tr></thead><tbody>{sites.map(site => <tr key={site.id}><td>{site.name}</td><td>{site.deviceCount}</td><td>{site.ticketCount}</td><td>{site.isArchived ? 'Archiviata' : 'Attiva'}</td><td>{!site.isArchived && <button className="secondary compact" disabled={busy || site.deviceCount > 0} title={site.deviceCount > 0 ? 'Sposta prima tutti i dispositivi' : undefined} onClick={() => void run(async () => { await api(`/admin/sites/${site.id}`, 'PUT', { name: site.name, expectedName: site.name, isArchived: true }); await load(); setMessage('Sede archiviata'); })}>Archivia</button>}</td></tr>)}</tbody></table></div>
     </section>
     <section className="panel"><h2>Code di assistenza</h2><p>Le code organizzano il lavoro senza cambiare i permessi di visibilità del ticket. Disattivare una coda non rimuove le assegnazioni storiche.</p>
-      <form className="settings" onSubmit={e => { e.preventDefault(); const form = e.currentTarget; const values = new FormData(form); void run(async () => { await api('/admin/support-queues', 'POST', { name: values.get('name'), siteId: values.get('site') || null }); form.reset(); await load(); setMessage('Coda creata'); }); }}><label>Nuova coda<input name="name" required maxLength={100}/></label><label>Sede<select name="site" defaultValue=""><option value="">Globale</option>{sites.filter(s=>!s.isArchived).map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label><button disabled={busy}>Crea coda</button></form>
+      <form className="settings access-form-grid" onSubmit={e => { e.preventDefault(); const form = e.currentTarget; const values = new FormData(form); void run(async () => { await api('/admin/support-queues', 'POST', { name: values.get('name'), siteId: values.get('site') || null }); form.reset(); await load(); setMessage('Coda creata'); }); }}><label>Nuova coda<input name="name" required maxLength={100}/></label><label>Sede<select name="site" defaultValue=""><option value="">Globale</option>{sites.filter(s=>!s.isArchived).map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label><button disabled={busy}>Crea coda</button></form>
       <div className="table-wrap"><table><thead><tr><th>Coda</th><th>Ambito</th><th>Ticket</th><th>Stato</th><th>Azioni</th></tr></thead><tbody>{supportQueues.map(queue => <tr key={queue.id}><td>{queue.name}</td><td>{queue.siteName||'Globale'}</td><td>{queue.ticketCount}</td><td>{queue.isActive ? 'Attiva' : 'Disattivata'}</td><td><button className="secondary compact" disabled={busy||!queue.isActive} onClick={() => void run(async () => { const data=await api<{version:number;members:QueueMember[]}>(`/admin/support-queues/${queue.id}/members`);setQueueMemberIds(data.members.filter(m=>!m.isDisabled).map(m=>m.id));setSelectedQueueVersion(data.version);setSelectedQueueId(queue.id); })}>Gestisci membri</button> <button className="secondary compact" disabled={busy} onClick={() => void run(async () => { await api(`/admin/support-queues/${queue.id}`, 'PUT', { name: queue.name, expectedName: queue.name, expectedVersion:queue.version, isActive: !queue.isActive }); await load(); setMessage(queue.isActive ? 'Coda disattivata' : 'Coda riattivata'); })}>{queue.isActive ? 'Disattiva' : 'Riattiva'}</button></td></tr>)}</tbody></table></div>
       {selectedQueueId&&<form className="settings" onSubmit={e=>{e.preventDefault();const queue=supportQueues.find(x=>x.id===selectedQueueId);if(!queue)return;void run(async()=>{await api(`/admin/support-queues/${queue.id}/members`,'PUT',{expectedVersion:selectedQueueVersion,userIds:queueMemberIds});await load();setSelectedQueueId('');setQueueMemberIds([]);setMessage('Membri della coda aggiornati');});}}><h3>Membri della coda {supportQueues.find(x=>x.id===selectedQueueId)?.name}</h3><p>L’appartenenza organizza il lavoro e limita gli assegnatari proposti; non concede accesso ai ticket o ai dispositivi.</p>{accounts.filter(a=>!a.isDisabled).map(a=><label key={a.id}><input type="checkbox" style={{width:'auto'}} disabled={busy} checked={queueMemberIds.includes(a.id)} onChange={e=>setQueueMemberIds(ids=>e.target.checked?[...ids,a.id]:ids.filter(id=>id!==a.id))}/>{a.email}</label>)}<button disabled={busy}>Salva membri</button><button className="secondary" type="button" disabled={busy} onClick={()=>{setSelectedQueueId('');setQueueMemberIds([]);}}>Annulla</button></form>}
     </section>
     <section className="panel"><h2>Routing automatico ticket</h2><p>Le nuove richieste ricevono una coda in base alla categoria. La regola specifica per sede prevale su quella globale; il routing non assegna operatori e non modifica i permessi.</p>
-      <form className="settings" onSubmit={e=>{e.preventDefault();const form=e.currentTarget;const values=new FormData(form);void run(async()=>{await api('/admin/support-routing','POST',{siteId:values.get('site')||null,category:values.get('category'),queueId:values.get('queue')});form.reset();setRoutingSite('');await load();setMessage('Regola di routing creata');});}}>
+      <form className="settings access-form-grid" onSubmit={e=>{e.preventDefault();const form=e.currentTarget;const values=new FormData(form);void run(async()=>{await api('/admin/support-routing','POST',{siteId:values.get('site')||null,category:values.get('category'),queueId:values.get('queue')});form.reset();setRoutingSite('');await load();setMessage('Regola di routing creata');});}}>
         <label>Sede<select name="site" value={routingSite} onChange={e=>setRoutingSite(e.target.value)}><option value="">Tutte le sedi (regola globale)</option>{sites.filter(s=>!s.isArchived).map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
         <label>Categoria<select name="category">{ticketCategories.map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>
         <label>Coda<select name="queue" required>{supportQueues.filter(q=>q.isActive&&(q.siteId===null||q.siteId===routingSite||!routingSite&&q.siteId===null)).map(q=><option key={q.id} value={q.id}>{q.name}{q.siteName?` · ${q.siteName}`:''}</option>)}</select></label>
@@ -116,7 +116,7 @@ export function AccessManagement({ currentUserId }: { currentUserId: string }) {
       </form>
       <div className="table-wrap"><table><thead><tr><th>Sede</th><th>Categoria</th><th>Coda di destinazione</th><th></th></tr></thead><tbody>{routingRules.map(rule=><tr key={rule.id}><td>{rule.siteName||'Tutte le sedi'}</td><td>{ticketCategories.find(([value])=>value===rule.category)?.[1]||rule.category}</td><td>{rule.queueName||'Coda rimossa'}</td><td><button className="secondary compact" disabled={busy} onClick={()=>void run(async()=>{await api(`/admin/support-routing/${rule.id}`,'DELETE',{expectedVersion:rule.version});await load();setMessage('Regola rimossa');})}>Rimuovi</button></td></tr>)}</tbody></table></div>
     </section>
-    <form className="panel settings" onSubmit={e => {
+    <form className="panel settings access-form-grid" onSubmit={e => {
       e.preventDefault(); const form = e.currentTarget; const values = new FormData(form);
       void run(async () => {
         await api('/admin/users', 'POST', { email: values.get('email'), password: values.get('password'), role: values.get('role') || null });
@@ -129,7 +129,7 @@ export function AccessManagement({ currentUserId }: { currentUserId: string }) {
       <label>Ruolo globale<select aria-label="Ruolo globale" name="role"><option value="">Nessuno (solo concessioni locali)</option>{roles.map(r => <option key={r.id}>{r.name}</option>)}</select></label>
       <button disabled={busy}>Crea utente</button>
     </form>
-    <form className="panel settings" onSubmit={e => {
+    <form className="panel settings access-form-grid" onSubmit={e => {
       e.preventDefault(); const values = new FormData(e.currentTarget);
       void run(async () => {
         await api('/admin/grants', 'POST', { userId: values.get('user'), role: values.get('role'), groupId: scope === 'group' ? values.get('target') : null, deviceId: scope === 'device' ? values.get('target') : null, siteId: scope === 'site' ? values.get('target') : null });
@@ -148,5 +148,5 @@ export function AccessManagement({ currentUserId }: { currentUserId: string }) {
       <td>{g.groupId ? `Gruppo: ${groups.find(t => t.id === g.groupId)?.name ?? g.groupId}` : g.deviceId ? `Dispositivo: ${devices.find(t => t.id === g.deviceId)?.name ?? g.deviceId}` : `Sede: ${sites.find(t => t.id === g.siteId)?.name ?? g.siteId}`}</td>
       <td><button disabled={busy} onClick={() => { if (window.confirm('Revocare questa concessione? Gli altri accessi resteranno validi.')) void run(async () => { await api(`/admin/grants/${g.id}`, 'DELETE'); await load(); setMessage('Concessione revocata'); }); }}>Revoca concessione</button></td>
     </tr>)}</tbody></table></div>}</section>
-  </>;
+  </div>;
 }

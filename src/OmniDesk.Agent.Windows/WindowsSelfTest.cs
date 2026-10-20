@@ -41,13 +41,16 @@ public static class WindowsSelfTest
         var metrics = collector.Metrics(); var inventory = collector.Inventory();
         if (metrics.CpuPercent is null || !double.IsFinite(metrics.CpuPercent.Value) || metrics.CpuPercent < 0 || metrics.CpuPercent > 100 ||
             metrics.TotalMemoryBytes <= 0 || metrics.AvailableMemoryBytes > metrics.TotalMemoryBytes || metrics.UptimeSeconds < 0 ||
-            string.IsNullOrWhiteSpace(inventory.OperatingSystem) || inventory.LogicalProcessors < 1 || metrics.NetworkAdapters is null ||
-            metrics.NetworkAdapters.Length > 32 || metrics.NetworkAdapters.Any(adapter =>
+            string.IsNullOrWhiteSpace(inventory.OperatingSystem) || inventory.LogicalProcessors < 1 || inventory.SerialNumber?.Length > 500 ||
+            metrics.SmartDisks is { Length: > 64 } || metrics.SmartDisks?.Any(disk => string.IsNullOrWhiteSpace(disk.Name) || disk.Name.Length > 256 ||
+                disk.Status is not ("unavailable" or "predicted_failure" or "no_failure_predicted")) == true ||
+            metrics.NetworkAdapters is null || metrics.NetworkAdapters.Length > 32 || metrics.NetworkAdapters.Any(adapter =>
                 string.IsNullOrWhiteSpace(adapter.Name) || adapter.Name.Length > 256 || string.IsNullOrWhiteSpace(adapter.Type) || adapter.Type.Length > 64 ||
                 adapter.MacAddress is null || adapter.MacAddress.Length > 32 || adapter.MacAddress.Any(ch => !Uri.IsHexDigit(ch)) ||
                 adapter.IpAddresses is null || adapter.IpAddresses.Length > 32 || adapter.IpAddresses.Any(address =>
                     address is null || address.Length > 64 || !System.Net.IPAddress.TryParse(address, out _))))
             throw new InvalidOperationException("Invalid Windows collector result");
+        Console.WriteLine($"PASS: hardware inventory; serial {(inventory.SerialNumber is null ? "unavailable" : "collected")}; SMART entries {metrics.SmartDisks?.Length ?? 0}.");
         using var rsa = RSA.Create(3072);
         var identity = AgentIdentity.Create("https://localhost", Guid.NewGuid(), rsa);
         for (var attempt = 0; attempt < 2; attempt++)

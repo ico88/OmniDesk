@@ -36,7 +36,7 @@ internal sealed class TrayContext : ApplicationContext
     {
         menu.Items.Add(status); menu.Items.Add(heartbeat);
         var refresh = new ToolStripMenuItem("Aggiorna stato"); refresh.Click += async (_, _) => await Poll(); menu.Items.Add(refresh);
-        var support = new ToolStripMenuItem("Richiedi assistenza / I miei ticket");
+        var support = new ToolStripMenuItem("Ticket di assistenza");
         support.Click += (_, _) => { using var form = new SupportForm(); form.ShowDialog(); };
         menu.Items.Add(support);
         menu.Items.Add(new ToolStripSeparator());

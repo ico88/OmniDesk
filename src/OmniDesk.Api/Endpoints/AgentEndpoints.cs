@@ -125,10 +125,13 @@ public static class AgentEndpoints
                 r.NetworkReceivedBytes >= 0 && r.NetworkSentBytes >= 0 && r.UptimeSeconds >= 0 && r.Disks is not null && r.Disks.Length <= 64 &&
         (r.AgentVersion is null || (r.AgentVersion.Length <= 64 && System.Text.RegularExpressions.Regex.IsMatch(r.AgentVersion, @"\A[0-9]+\.[0-9]+\.[0-9]+\z"))) &&
                 r.Disks.All(x => x is not null && !string.IsNullOrWhiteSpace(x.Name) && x.Name.Length <= 200 && x.TotalBytes > 0 && x.FreeBytes >= 0 && x.FreeBytes <= x.TotalBytes) &&
-                ValidNetworkAdapters(r.NetworkAdapters);
+                ValidNetworkAdapters(r.NetworkAdapters) && ValidSmartDisks(r.SmartDisks);
     private static bool ValidNetworkAdapters(OmniDesk.Contracts.NetworkAdapterItem[]? adapters) => adapters is null ||
         (adapters.Length <= 32 && adapters.All(x => x is not null && !string.IsNullOrWhiteSpace(x.Name) && x.Name.Length <= 256 &&
             !string.IsNullOrWhiteSpace(x.Type) && x.Type.Length <= 64 && x.MacAddress is not null && x.MacAddress.Length <= 32 &&
             x.MacAddress.All(Uri.IsHexDigit) && x.IpAddresses is not null && x.IpAddresses.Length <= 32 &&
             x.IpAddresses.All(ip => ip is not null && ip.Length <= 64 && IPAddress.TryParse(ip, out _))));
+    private static bool ValidSmartDisks(OmniDesk.Contracts.SmartDiskItem[]? disks) => disks is null ||
+        (disks.Length <= 64 && disks.All(x => x is not null && !string.IsNullOrWhiteSpace(x.Name) && x.Name.Length <= 256 &&
+            x.Status is "unavailable" or "predicted_failure" or "no_failure_predicted"));
 }

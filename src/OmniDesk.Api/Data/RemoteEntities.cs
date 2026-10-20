@@ -1,5 +1,6 @@
 namespace OmniDesk.Api.Data;
 public sealed class MeshDeviceMapping { public Guid DeviceId { get; set; } public string NodeId { get; set; } = ""; }
+public sealed class RustDeskDeviceMapping { public Guid DeviceId { get; set; } public string PeerId { get; set; } = ""; }
 public sealed class RemoteSession
 {
     public Guid Id { get; set; } = Guid.NewGuid();
