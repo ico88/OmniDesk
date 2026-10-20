@@ -1966,3 +1966,9 @@ modificato; ogni nuova estensione attende la propria CI sul push.
 - `Retention__AuditEventsDays` è esposto dal Compose base come `OMNIDESK_RETENTION_AUDIT_EVENTS_DAYS`, default `0`; Compose base e test passano `config --quiet`. `docker compose build api` è passato.
 - `./scripts/smoke.sh --browser` è passato su stack isolato, includendo Chromium, worker SLA, ClamAV/EICAR e restore completo DB/blob/Identity/CA. Non abilita la retention né rimuove dati live.
 - CI Linux `39367275318` e Windows `39367275321` sono verdi sul commit parent `d869617` (build/test/smoke Linux; MSI Windows con install/recovery/uninstall e upgrade/repair/rollback). Le pipeline per l'incremento audit corrente devono ancora essere lanciate al push. Nessun deploy LAN.
+
+### Service Desk — consegna email escalation SLA — 2026-10-20
+
+- `./scripts/test.sh` — passato: 94/94 API/PostgreSQL. `SlaPolicyScenario` abilita il consenso email esplicito sul destinatario con grant `tickets.view`, proietta le escalation duplicate-deduplicate e verifica che entrambe producano consegne email associate alle notifiche corrette.
+- Build API inclusa nella suite; build dashboard e Vitest 6/6 passati. L'email SMTP fake e il retry generale sono coperti separatamente da `SupportScenario`; questa verifica non prova SMTP reale o deliverability.
+- Nessuna configurazione SMTP reale o deploy LAN è stato effettuato. Pipeline sul commit di test pendenti finché non termina la run già in corso.

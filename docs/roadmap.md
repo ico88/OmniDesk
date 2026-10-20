@@ -1,5 +1,9 @@
 # Roadmap
 
+### Service Desk — notifiche email escalation SLA
+
+La proiezione outbox per breach ed escalation crea consegne email solo per destinatari con `tickets.view` e consenso email già attivo; l'EmailNotificationWorker rivalida account, scope e consenso prima di inviare tramite SMTP configurato. Test PostgreSQL aggiornato dimostra la coda per escalation duplicate-deduplicate, destinatario scoped e consenso esplicito. L'invio SMTP reale, deliverability e test operativi del provider restano da verificare; nessuna credenziale SMTP è stata aggiunta.
+
 ### Privacy — retention configurabile eventi di audit
 
 Implementata una retention audit opt-in `OMNIDESK_RETENTION_AUDIT_EVENTS_DAYS` (default `0`, disattivata): oltre la soglia elimina in transazioni batch limitate solo eventi più vecchi, preserva gli eventi di purge e registra il conteggio senza dettagli o PII. Usa l'indice `AuditEvents.At` esistente, non richiede migrazioni né modifica i dati live finché non viene configurata una soglia. Test PostgreSQL dedicato e suite 94/94, build dashboard e 6/6 Vitest passati localmente. Restano da definire e verificare separatamente retention telemetria/backup, snapshot off-site e requisiti normativi prima di abilitare una policy in produzione.
