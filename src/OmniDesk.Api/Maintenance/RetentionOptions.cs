@@ -9,4 +9,6 @@ public sealed class RetentionOptions
     public int ResolvedTicketAttachmentsDays { get; set; }
     public int ResolvedTicketContentDays { get; set; }
     public int AuditEventsDays { get; set; }
+    public int DeviceMetricsDays { get; set; }
+    public int DeviceInventoryDays { get; set; }
 }

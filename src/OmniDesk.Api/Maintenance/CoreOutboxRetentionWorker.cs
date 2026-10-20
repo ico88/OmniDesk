@@ -22,6 +22,7 @@ public sealed class CoreOutboxRetentionWorker(
         ValidateTicketAttachmentRetention();
         ValidateTicketContentRetention();
         ValidateAuditRetention();
+        ValidateDeviceRetention();
         if (retention.DeliveredOutboxDays == 0)
             logger.LogInformation("Delivered outbox event retention is disabled.");
 
@@ -84,6 +85,28 @@ public sealed class CoreOutboxRetentionWorker(
                         }
                     }
                     if (auditEventsRemoved > 0) logger.LogInformation("Retention removed {Count} expired audit events.", auditEventsRemoved);
+                    var deviceMetricsRemoved = 0;
+                    if (retention.DeviceMetricsDays > 0)
+                    {
+                        for (var batch = 0; batch < MaxBatchesPerRun; batch++)
+                        {
+                            var count = await PurgeDeviceMetricsBatchAsync(stoppingToken);
+                            deviceMetricsRemoved += count;
+                            if (count < DeviceBatchSize) break;
+                        }
+                    }
+                    if (deviceMetricsRemoved > 0) logger.LogInformation("Retention removed {Count} expired device metrics snapshots.", deviceMetricsRemoved);
+                    var inventoriesRemoved = 0;
+                    if (retention.DeviceInventoryDays > 0)
+                    {
+                        for (var batch = 0; batch < MaxBatchesPerRun; batch++)
+                        {
+                            var count = await PurgeDeviceInventoryBatchAsync(stoppingToken);
+                            inventoriesRemoved += count;
+                            if (count < DeviceBatchSize) break;
+                        }
+                    }
+                    if (inventoriesRemoved > 0) logger.LogInformation("Retention removed {Count} expired device inventory snapshots.", inventoriesRemoved);
                     await timer.WaitForNextTickAsync(stoppingToken);
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
@@ -174,6 +197,69 @@ public sealed class CoreOutboxRetentionWorker(
     private const int AttachmentBatchSize = 50;
     private const int TicketContentBatchSize = 250;
     private const int AuditBatchSize = 500;
+    private const int DeviceBatchSize = 250;
+
+    public async Task<int> PurgeDeviceMetricsBatchAsync(CancellationToken cancellationToken = default)
+    {
+        ValidateDeviceRetention();
+        if (retention.DeviceMetricsDays == 0) return 0;
+        var cutoff = DateTimeOffset.UtcNow.AddDays(-retention.DeviceMetricsDays);
+        using var scope = scopes.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var candidateIds = await db.DeviceMetrics.AsNoTracking()
+            .Where(item => item.ReceivedAt < cutoff &&
+                !db.DevicePresence.Any(presence => presence.DeviceId == item.DeviceId && presence.IsOnline))
+            .OrderBy(item => item.ReceivedAt).ThenBy(item => item.DeviceId)
+            .Select(item => item.DeviceId).Take(DeviceBatchSize).ToArrayAsync(cancellationToken);
+        if (candidateIds.Length == 0) return 0;
+
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        var deleted = await db.DeviceMetrics
+            .Where(item => candidateIds.Contains(item.DeviceId) && item.ReceivedAt < cutoff &&
+                !db.DevicePresence.Any(presence => presence.DeviceId == item.DeviceId && presence.IsOnline))
+            .ExecuteDeleteAsync(cancellationToken);
+        if (deleted > 0)
+        {
+            db.AuditEvents.Add(new AuditEvent
+            {
+                Action = "retention.device-metrics.purged",
+                Target = deleted.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            });
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        await transaction.CommitAsync(cancellationToken);
+        return deleted;
+    }
+
+    public async Task<int> PurgeDeviceInventoryBatchAsync(CancellationToken cancellationToken = default)
+    {
+        ValidateDeviceRetention();
+        if (retention.DeviceInventoryDays == 0) return 0;
+        var cutoff = DateTimeOffset.UtcNow.AddDays(-retention.DeviceInventoryDays);
+        using var scope = scopes.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var candidateIds = await db.DeviceInventories.AsNoTracking()
+            .Where(item => item.ReceivedAt < cutoff)
+            .OrderBy(item => item.ReceivedAt).ThenBy(item => item.DeviceId)
+            .Select(item => item.DeviceId).Take(DeviceBatchSize).ToArrayAsync(cancellationToken);
+        if (candidateIds.Length == 0) return 0;
+
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        var deleted = await db.DeviceInventories
+            .Where(item => candidateIds.Contains(item.DeviceId) && item.ReceivedAt < cutoff)
+            .ExecuteDeleteAsync(cancellationToken);
+        if (deleted > 0)
+        {
+            db.AuditEvents.Add(new AuditEvent
+            {
+                Action = "retention.device-inventory.purged",
+                Target = deleted.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            });
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        await transaction.CommitAsync(cancellationToken);
+        return deleted;
+    }
 
     public async Task<int> PurgeAuditEventsBatchAsync(CancellationToken cancellationToken = default)
     {
@@ -382,5 +468,13 @@ public sealed class CoreOutboxRetentionWorker(
     {
         if (retention.AuditEventsDays is < 0 or > 36500)
             throw new InvalidOperationException("Retention:AuditEventsDays must be between 0 and 36500.");
+    }
+
+    private void ValidateDeviceRetention()
+    {
+        if (retention.DeviceMetricsDays is < 0 or > 36500)
+            throw new InvalidOperationException("Retention:DeviceMetricsDays must be between 0 and 36500.");
+        if (retention.DeviceInventoryDays is < 0 or > 36500)
+            throw new InvalidOperationException("Retention:DeviceInventoryDays must be between 0 and 36500.");
     }
 }
