@@ -333,7 +333,7 @@ public static class SupportEndpoints
                     db.DeviceCredentials.Any(credential => credential.DeviceId == ticket.DeviceId && credential.RevokedAt == null)
                 select ticket.Id).AnyAsync();
             if (!allowed) return Results.NotFound();
-            var rows = await db.SupportAttachments.AsNoTracking().Where(x => x.TicketId == id && x.Visibility == "public")
+            var rows = await db.SupportAttachments.AsNoTracking().Where(x => x.TicketId == id && x.Visibility == "public" && x.ScanState != "retention_pending")
                 .OrderBy(x => x.CreatedAt).Select(x => new SupportAttachmentView(x.Id, x.OriginalFileName,
                     x.MediaType, x.SizeBytes, x.Visibility, x.ScanState, x.CreatedAt)).ToArrayAsync();
             c.Response.Headers.CacheControl = "no-store";
@@ -569,7 +569,8 @@ public static class SupportEndpoints
             var userId = c.User.UserId();
             if (!await p.Allows(userId, "tickets.view", ticket.DeviceId, siteId: ticket.SiteId)) return Results.Forbid();
             var canSeeInternal = await p.Allows(userId, "tickets.note.internal", ticket.DeviceId, siteId: ticket.SiteId);
-            var rows = await db.SupportAttachments.AsNoTracking().Where(x => x.TicketId == id && (x.Visibility == "public" || (canSeeInternal && x.Visibility == "internal")))
+            var rows = await db.SupportAttachments.AsNoTracking().Where(x => x.TicketId == id && x.ScanState != "retention_pending" &&
+                (x.Visibility == "public" || (canSeeInternal && x.Visibility == "internal")))
                 .OrderBy(x => x.CreatedAt).Select(x => new SupportAttachmentView(x.Id, x.OriginalFileName,
                     x.MediaType, x.SizeBytes, x.Visibility, x.ScanState, x.CreatedAt)).ToArrayAsync();
             c.Response.Headers.CacheControl = "no-store";

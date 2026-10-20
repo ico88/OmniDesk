@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using OmniDesk.Api.Data;
+using OmniDesk.Api.Attachments;
 
 namespace OmniDesk.Api.Maintenance;
 
@@ -18,6 +19,7 @@ public sealed class CoreOutboxRetentionWorker(
         if (retention.DeliveredOutboxDays is < 0 or > 36500)
             throw new InvalidOperationException("Retention:DeliveredOutboxDays must be between 0 and 36500.");
         ValidateEmailIntakeRetention();
+        ValidateTicketAttachmentRetention();
         if (retention.DeliveredOutboxDays == 0)
             logger.LogInformation("Delivered outbox event retention is disabled.");
 
@@ -47,6 +49,17 @@ public sealed class CoreOutboxRetentionWorker(
                         if (count < BatchSize) break;
                     }
                     if (emailIntakesRemoved > 0) logger.LogInformation("Retention removed {Count} expired email intake records.", emailIntakesRemoved);
+                    var attachmentsRemoved = 0;
+                    if (retention.ResolvedTicketAttachmentsDays > 0)
+                    {
+                        for (var batch = 0; batch < MaxBatchesPerRun; batch++)
+                        {
+                            var count = await PurgeResolvedTicketAttachmentsBatchAsync(stoppingToken);
+                            attachmentsRemoved += count;
+                            if (count < AttachmentBatchSize) break;
+                        }
+                    }
+                    if (attachmentsRemoved > 0) logger.LogInformation("Retention purged {Count} resolved-ticket attachments and screenshots.", attachmentsRemoved);
                     await timer.WaitForNextTickAsync(stoppingToken);
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
@@ -134,11 +147,124 @@ public sealed class CoreOutboxRetentionWorker(
         return deleted;
     }
 
+    private const int AttachmentBatchSize = 50;
+
+    public async Task<int> PurgeResolvedTicketAttachmentsBatchAsync(CancellationToken cancellationToken = default)
+    {
+        ValidateTicketAttachmentRetention();
+        if (retention.ResolvedTicketAttachmentsDays == 0) return 0;
+        var now = DateTimeOffset.UtcNow;
+        var cutoff = now.AddDays(-retention.ResolvedTicketAttachmentsDays);
+        List<(Guid Id, string StorageKey)> candidates;
+        int screenshotsPurged;
+        using (var scope = scopes.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+            var rows = await db.SupportAttachments.FromSqlInterpolated($"""
+                SELECT a.* FROM "SupportAttachments" a
+                LEFT JOIN "SupportTickets" t ON t."Id" = a."TicketId"
+                WHERE (a."ScanState" = 'retention_pending' AND a."NextScanAt" <= {now})
+                   OR (a."ScanState" <> 'retention_pending' AND t."State" IN ('resolved','closed') AND t."UpdatedAt" < {cutoff}
+                       AND (a."ScanState" <> 'scanning' OR a."ScanLeaseUntil" IS NULL OR a."ScanLeaseUntil" <= {now}))
+                ORDER BY a."NextScanAt", a."CreatedAt", a."Id"
+                FOR UPDATE OF a SKIP LOCKED
+                LIMIT {AttachmentBatchSize}
+                """).ToListAsync(cancellationToken);
+            foreach (var attachment in rows)
+            {
+                attachment.ScanState = "retention_pending";
+                attachment.ScanLeaseUntil = null;
+                attachment.NextScanAt = now;
+                attachment.ScanAttempts = 0;
+                attachment.LastScanErrorType = null;
+            }
+            await db.SaveChangesAsync(cancellationToken);
+
+            var ticketIds = await db.SupportTickets.AsNoTracking()
+                .Where(ticket => (ticket.State == "resolved" || ticket.State == "closed") && ticket.UpdatedAt < cutoff && ticket.Screenshot != null)
+                .OrderBy(ticket => ticket.UpdatedAt).Select(ticket => ticket.Id).Take(BatchSize).ToArrayAsync(cancellationToken);
+            screenshotsPurged = ticketIds.Length == 0 ? 0 : await db.SupportTickets
+                .Where(ticket => ticketIds.Contains(ticket.Id) && (ticket.State == "resolved" || ticket.State == "closed") &&
+                    ticket.UpdatedAt < cutoff && ticket.Screenshot != null)
+                .ExecuteUpdateAsync(update => update.SetProperty(ticket => ticket.Screenshot, (byte[]?)null), cancellationToken);
+            if (screenshotsPurged > 0)
+            {
+                db.AuditEvents.Add(new AuditEvent
+                {
+                    Action = "retention.ticket-screenshots.purged",
+                    Target = screenshotsPurged.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                });
+                await db.SaveChangesAsync(cancellationToken);
+            }
+            await transaction.CommitAsync(cancellationToken);
+            candidates = rows.Select(row => (row.Id, row.StorageKey)).ToList();
+        }
+
+        var deletedIds = new List<Guid>(candidates.Count);
+        using (var scope = scopes.CreateScope())
+        {
+            var storage = scope.ServiceProvider.GetRequiredService<AttachmentStorage>();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            foreach (var candidate in candidates)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                try
+                {
+                    storage.DeleteForRetention(candidate.StorageKey);
+                    deletedIds.Add(candidate.Id);
+                }
+                catch (Exception error) when (error is IOException or UnauthorizedAccessException or InvalidDataException)
+                {
+                    var attempt = await db.SupportAttachments.Where(item => item.Id == candidate.Id && item.ScanState == "retention_pending")
+                        .ExecuteUpdateAsync(update => update
+                            .SetProperty(item => item.ScanAttempts, item => item.ScanAttempts + 1)
+                            .SetProperty(item => item.NextScanAt, now.AddMinutes(5))
+                            .SetProperty(item => item.LastScanErrorType, error.GetType().Name), cancellationToken);
+                    if (attempt > 0) logger.LogWarning("Ticket attachment retention deferred: {Type}", error.GetType().Name);
+                }
+                catch (AttachmentStorageUnavailableException error)
+                {
+                    logger.LogWarning("Ticket attachment retention deferred: {Type}", error.GetType().Name);
+                    break;
+                }
+            }
+        }
+
+        var attachmentsPurged = 0;
+        if (deletedIds.Count > 0)
+        {
+            using var scope = scopes.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+            attachmentsPurged = await db.SupportAttachments
+                .Where(item => deletedIds.Contains(item.Id) && item.ScanState == "retention_pending")
+                .ExecuteDeleteAsync(cancellationToken);
+            if (attachmentsPurged > 0)
+            {
+                db.AuditEvents.Add(new AuditEvent
+                {
+                    Action = "retention.ticket-attachments.purged",
+                    Target = attachmentsPurged.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                });
+                await db.SaveChangesAsync(cancellationToken);
+            }
+            await transaction.CommitAsync(cancellationToken);
+        }
+        return attachmentsPurged + screenshotsPurged;
+    }
+
     private void ValidateEmailIntakeRetention()
     {
         if (retention.ProcessedEmailIntakesDays is < 1 or > 36500)
             throw new InvalidOperationException("Retention:ProcessedEmailIntakesDays must be between 1 and 36500.");
         if (retention.PendingEmailIntakesDays is < 1 or > 36500)
             throw new InvalidOperationException("Retention:PendingEmailIntakesDays must be between 1 and 36500.");
+    }
+
+    private void ValidateTicketAttachmentRetention()
+    {
+        if (retention.ResolvedTicketAttachmentsDays is < 0 or > 36500)
+            throw new InvalidOperationException("Retention:ResolvedTicketAttachmentsDays must be between 0 and 36500.");
     }
 }

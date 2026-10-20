@@ -1180,7 +1180,7 @@ namespace OmniDesk.Api.Migrations
 
                     b.ToTable("SupportAttachments", t =>
                         {
-                            t.HasCheckConstraint("CK_SupportAttachment_ScanState", "\"ScanState\" IN ('quarantined', 'scanning', 'clean', 'infected', 'scan_failed')");
+                            t.HasCheckConstraint("CK_SupportAttachment_ScanState", "\"ScanState\" IN ('quarantined', 'scanning', 'clean', 'infected', 'scan_failed', 'retention_pending')");
 
                             t.HasCheckConstraint("CK_SupportAttachment_Sha256", "length(\"Sha256\") = 64");
 

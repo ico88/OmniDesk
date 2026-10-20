@@ -50,6 +50,15 @@ public sealed class AttachmentStorage(IConfiguration configuration)
 
     public void Delete(string storageKey) => TryDelete(GetPath(storageKey));
 
+    public void DeleteForRetention(string storageKey)
+    {
+        var directory = RequireRoot();
+        if (!Directory.Exists(directory)) throw new AttachmentStorageUnavailableException();
+        var path = GetPath(storageKey);
+        File.Delete(path);
+        if (File.Exists(path)) throw new IOException("Attachment could not be removed.");
+    }
+
     private string GetPath(string storageKey)
     {
         if (storageKey.Length != 32 || storageKey.Any(c => !Uri.IsHexDigit(c)))

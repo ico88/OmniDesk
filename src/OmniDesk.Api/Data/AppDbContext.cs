@@ -129,7 +129,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
         b.Entity<SupportAttachment>().ToTable(t => {
             t.HasCheckConstraint("CK_SupportAttachment_Size", "\"SizeBytes\" > 0 AND \"SizeBytes\" <= 10485760");
             t.HasCheckConstraint("CK_SupportAttachment_Visibility", "\"Visibility\" IN ('public', 'internal')");
-            t.HasCheckConstraint("CK_SupportAttachment_ScanState", "\"ScanState\" IN ('quarantined', 'scanning', 'clean', 'infected', 'scan_failed')");
+            t.HasCheckConstraint("CK_SupportAttachment_ScanState", "\"ScanState\" IN ('quarantined', 'scanning', 'clean', 'infected', 'scan_failed', 'retention_pending')");
             t.HasCheckConstraint("CK_SupportAttachment_Sha256", "length(\"Sha256\") = 64");
         });
         b.Entity<SupportAttachment>().HasIndex(x => x.StorageKey).IsUnique();

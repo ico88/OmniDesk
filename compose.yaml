@@ -70,6 +70,7 @@ services:
       Retention__DeliveredOutboxDays: ${OMNIDESK_RETENTION_DELIVERED_OUTBOX_DAYS:-180}
       Retention__ProcessedEmailIntakesDays: ${OMNIDESK_RETENTION_PROCESSED_EMAIL_INTAKES_DAYS:-180}
       Retention__PendingEmailIntakesDays: ${OMNIDESK_RETENTION_PENDING_EMAIL_INTAKES_DAYS:-30}
+      Retention__ResolvedTicketAttachmentsDays: ${OMNIDESK_RETENTION_RESOLVED_TICKET_ATTACHMENTS_DAYS:-0}
       DevicePresence__OfflineAfterSeconds: ${OMNIDESK_DEVICE_OFFLINE_AFTER_SECONDS:-180}
       DevicePresence__PollSeconds: ${OMNIDESK_DEVICE_PRESENCE_POLL_SECONDS:-30}
       Downloads__Directory: /packages
