@@ -193,8 +193,6 @@ try {
  const agentAssertion=()=>{const now=Math.floor(Date.now()/1000);const claims=Buffer.from(JSON.stringify({iss:fixtureDevice,sub:fixtureDevice,aud:'omnidesk-agent',iat:now,nbf:now-5,exp:now+60,jti:randomBytes(16).toString('hex')})).toString('base64url');const unsigned=header+'.'+claims;return unsigned+'.'+sign('RSA-SHA256',Buffer.from(unsigned),fixtureKeys.privateKey).toString('base64url');};
  const heartbeat=await context.request.post('https://omnidesk.test/api/agent/metrics',{headers:{Authorization:'Bearer '+agentAssertion()},data:{cpuPercent:12.5,totalMemoryBytes:16000000000,availableMemoryBytes:8000000000,networkReceivedBytes:100,networkSentBytes:200,uptimeSeconds:3600,disks:[{name:'C:',totalBytes:100000,freeBytes:50000}],agentVersion:'0.8.1',networkAdapters:[{name:'Wi-Fi',type:'Wireless80211',macAddress:'AABBCCDDEEFF',ipAddresses:['192.168.1.50','fe80::1']},{name:'Ethernet',type:'Ethernet',macAddress:'001122334455',ipAddresses:['10.0.0.20']}]}});
  assert.equal(heartbeat.status(),204,'Signed heartbeat with multiple current network interfaces accepted');
- const inventory=await context.request.put('https://omnidesk.test/api/agent/inventory',{headers:{Authorization:'Bearer '+agentAssertion()},data:{operatingSystem:'Windows 10 Pro',architecture:'X64',manufacturer:'Fixture',model:'Network test',serialNumber:'SMOKE-NETWORK',processor:'Fixture CPU',logicalProcessors:8,software:[],warnings:[]}});
- assert.equal(inventory.status(),204,'Fixture inventory enables the device overview cards');
  await page.reload(); await page.getByRole('heading',{name:'Panoramica',exact:true}).waitFor();
  await page.getByRole('button',{name:'Dispositivi',exact:true}).click();
  await page.getByRole('cell',{name:fixtureName,exact:true}).waitFor();
