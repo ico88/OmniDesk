@@ -1,5 +1,13 @@
 # Stato e verifiche — 18 ottobre 2026
 
+### Versionamento workflow installer Windows — 2026-10-20
+
+- Corretto il job `native-installer`: legge la versione Agent dal progetto e la usa per nome/percorso artifact, sostituendo il valore statico 0.8.8; delega il packaging allo script comune, che verifica l’allineamento Agent/Tray/Setup/MSI, vendor hash e checksum. L'artifact è esplicitamente nominato `unsigned-lab`.
+- Verifica locale XML/workflow: Agent, Tray, Setup e MSI allineati a 0.8.9; path/nome artifact derivati dall'output versione; nessun riferimento `windows-0.8.8` nel workflow. `git diff --check` — passato.
+- Linux [run 39357044431](https://github.com/ico88/OmniDesk/actions/runs/39357044431) e Windows standard [run 39357044468](https://github.com/ico88/OmniDesk/actions/runs/39357044468) — passati sul commit `f50c5a4`, inclusi smoke/restore Linux e lifecycle MSI Windows.
+- Dispatch lab [run 39357062002](https://github.com/ico88/OmniDesk/actions/runs/39357062002) — passato. Artifact `windows-0.8.9-unsigned-lab` scaricato; contiene MSI, Setup e `SHA256SUMS.txt`; `sha256sum -c SHA256SUMS.txt` ha confermato entrambi i file. Artifact CI di laboratorio, non firmato e non promosso alla LAN.
+- Nessun servizio LAN modificato. Firma Authenticode, installazione client reale e gate MeshCentral/node-forge restano aperti.
+
 ### CI commit `2e41459` — 2026-10-20
 
 - Linux [run 39356327778](https://github.com/ico88/OmniDesk/actions/runs/39356327778) — concluso con successo sullo SHA `2e4145995bf2a2071deb4b069caa9eddf0a3ad01`: test applicativi, configurazioni Compose, build Docker API/dashboard e `./scripts/smoke.sh --browser`, inclusi Chromium e restore isolato.
