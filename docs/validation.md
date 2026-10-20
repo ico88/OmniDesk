@@ -1862,6 +1862,7 @@ modificato; ogni nuova estensione attende la propria CI sul push.
 - `docker build -t omnidesk-api:local -f src/OmniDesk.Api/Dockerfile .`, `docker compose config --quiet`, `docker compose -f compose.test.yaml config --quiet`, `bash -n scripts/smoke.sh` e `git diff --check` — passati.
 - `./scripts/smoke.sh --browser` — passato: API con il nuovo worker avviata nello stack isolato, smoke Chromium, ClamAV, worker SLA/escalation/notifica e ripristino runtime DB/blob/Identity/CA completati. Nessun servizio LAN è stato toccato.
 - Nessuna modifica allo schema o dipendenza. La retention intake non cancella il ticket promosso né i suoi messaggi; backup preesistenti seguono la policy separata. Retention ticket/allegati/audit/backup e test sulla LAN restano da definire/eseguire.
+- CI sul codice `3be39f0`: Linux `39353156966` — passata; Windows `39353156938` — compilazione e test MSI install/recovery/uninstall passati, upgrade/repair/rollback ancora in esecuzione al momento della verifica. I successivi commit documentali non cambiano il codice.
 
 ### Verifica read-only istanza LAN — 2026-10-20
 

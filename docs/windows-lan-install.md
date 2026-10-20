@@ -1,6 +1,14 @@
 # Agent Windows su LAN
 
-Queste istruzioni descrivono il kit diagnostico 0.5.2 già compilato. I [sorgenti Agent/Tray 0.6.0](windows-agent-tray-implementation.md) sono un avanzamento successivo, non compilato o distribuito; non sostituire il kit con sorgenti non verificati.
+## Stato corrente
+
+Questa pagina contiene ancora procedure storiche 0.5.2–0.7.x, non adatte al kit attuale. Il flusso desiderato per i pacchetti Windows 0.8.9 del branch è un singolo ZIP con `OmniDesk.Setup.exe`, MSI Agent+Tray, CA pubblica, checksum e istruzioni. L'utente estrae il kit, genera un token monouso da **Dispositivi → Registra un dispositivo**, avvia Setup con elevazione UAC e incolla il token nel campo mascherato: non occorre eseguire PowerShell. Setup verifica il pin della CA, HTTPS/readiness, installa il MSI, effettua enrollment da stdin e verifica il servizio. La disinstallazione standard da Impostazioni Windows revoca prima credenziali e configurazione remota sul server; se il server non è raggiungibile, l'MSI interrompe la rimozione e mantiene il prodotto.
+
+**Gate di consegna:** l'ultimo artifact 0.8.9 del branch non è ancora promosso sulla LAN. Scaricare dalla dashboard solo la versione che risulta effettivamente pubblicata, verificarne origine/run e checksum; non confondere i package CI con il kit disponibile sul server. I pacchetti attuali sono unsigned per laboratorio e i checksum non equivalgono a Authenticode. Nessuna protezione assoluta contro amministratori locali o accesso fisico privilegiato.
+
+Per stato verificato vedere [completion-status.md](completion-status.md) e [validation.md](validation.md). Il kit LAN concordato usa `https://192.168.1.233:8085`; Agent non richiede porte inbound sul PC per heartbeat/inventario. La procedura MSI non modifica regole firewall.
+
+## Procedura storica 0.5.2–0.7.x — non usare per il kit 0.8.9
 
 Server di collaudo: **https://192.168.1.233:8085**. Agent 0.5.2 conserva IP/porta, usa HTTPS con verifica standard del certificato e rifiuta redirect. Servono Windows x64, orologio sincronizzato, accesso TCP dal client alla porta 8085 e privilegi amministrativi per MSI/enrollment/store certificati. Nessuna porta inbound aggiuntiva è necessaria sul PC per heartbeat/inventario. Non vengono modificate automaticamente regole firewall.
 

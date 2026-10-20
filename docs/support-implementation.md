@@ -16,7 +16,7 @@ La Tray chiede conferma prima di catturare lo schermo principale della sessione 
 
 La richiesta IPC può raggiungere 750000 byte, con timeout, singola connessione e ACL/logon già esistenti; i messaggi di stato restano limitati a 4096 byte lato client. L'intake HTTP ha limite 750000 byte; al massimo dieci nuovi ticket per dispositivo in cinque minuti, sotto lock PostgreSQL condiviso con la revoca. RequestId e vincolo univoco rendono i retry idempotenti; riuso con contenuto diverso restituisce 409. La Tray conserva il RequestId per retry dello stesso contenuto finché la finestra rimane aperta; chiuderla dopo un timeout richiede verificare l'elenco prima di reinviare.
 
-Ticket e immagini sono conservati nel database PostgreSQL e inclusi nei backup. Non esiste ancora una retention automatica o una cancellazione self-service: definire la policy prima della produzione. Questo percorso accetta solo screenshot PNG; non sostituisce la quarantena/antivirus prevista per futuri allegati generici. Nessun servizio antivirus esterno collegato.
+Ticket e immagini sono conservati nel database PostgreSQL e inclusi nei backup. La retention automatica dell'inbox email non cancella ticket né screenshot: retention/cancellazione ticket e blob e cancellazione self-service restano da definire prima della produzione. Questo percorso accetta solo screenshot PNG; non sostituisce la quarantena/antivirus prevista per futuri allegati generici. Nessun servizio antivirus esterno collegato.
 
 ## Contratti
 

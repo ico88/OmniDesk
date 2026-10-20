@@ -1,8 +1,12 @@
-# Agent e Tray 0.6.0 — stato di implementazione
+# Agent e Tray — registro implementazione e stato corrente
 
-**Sorgenti implementati, non compilati né collaudati.** La revisione automatica delle autorizzazioni Docker non è stata disponibile (modello di revisione a capacità esaurita); i comandi non sono stati eseguiti. L'istanza LAN e il kit diagnostico 0.5.2 precedente rimangono quelli già verificati. Non è attestata una nuova build CI o MSI.
+**Le sezioni 0.6.0 seguenti sono un registro storico e non descrivono lo stato attuale.** Il branch contiene Agent e Tray distinti nel pacchetto MSI 0.8.9. CI Windows ha verificato build, installazione, Service Recovery, uninstall e upgrade/repair/rollback su runner isolato. Il test client interattivo, la firma Authenticode e il gate Microsoft Defender restano aperti. Per evidenza aggiornata vedere [completion-status.md](completion-status.md), [roadmap.md](roadmap.md) e [validation.md](validation.md).
 
-## Contratto e confini
+## Snapshot storico dell'incremento 0.6.0
+
+Le sezioni seguenti fino a “Aggiornamento ticket e compilazione” descrivono lo snapshot 0.6.0 e i suoi limiti al momento della stesura; alcune funzioni lì segnate come non implementate sono state aggiunte nelle release successive. Non usarle per stabilire lo stato corrente: consultare la sezione iniziale e i report linkati.
+
+## Contratto e confini 0.6.0
 
 Target iniziale da collaudare: Windows 11 x64, servizio LocalSystem e Tray per logon senza elevazione. Nuovi progetti `OmniDesk.Windows.Ipc` e `OmniDesk.Tray.Windows`, separati dalla console IT WebView2. La Tray dichiara asInvoker e rifiuta l'esecuzione elevata; una sola istanza per sessione mediante mutex Local. Non riceve chiavi macchina, token o percorsi da aprire con privilegi del servizio.
 
@@ -28,7 +32,7 @@ Sorgente MSI 0.6.0: un'unica feature installa Agent e Tray self-contained nella 
 
 DACL esplicita del servizio: SYSTEM/Administrators full control, Interactive Users solo query config/status e read-control, senza stop/change-config/start/delete/write-DAC/write-owner. Non usa deny generici. Directory/binari ereditano il confine Program Files del percorso predefinito, ancora da collaudare. Recovery sorgente: restart dopo 5/30/120 secondi, reset conteggio 24 ore, su install/repair; nessun reboot o comando arbitrario. Applicazione effettiva, rollback, stop intenzionale e comportamento dopo fault non-crash devono essere verificati; non si assume che ogni arresto del worker venga trattato come crash da SCM. Riferimenti: [PermissionEx](https://docs.firegiant.com/wix/schema/wxs/permissionex/), [ServiceConfigFailureActions](https://docs.firegiant.com/wix/schema/wxs/serviceconfigfailureactions/).
 
-## Verifiche ancora necessarie
+## Verifiche ancora necessarie nell'incremento 0.6.0 — storico
 
 Prima di consegnare 0.6.0: compilare i due publish win-x64 e MSI su Windows, eseguire test framing e regressione, installare su VM, verificare boot senza logon e stato reale da account standard, ACL/pipe squatting/client remoto/impersonazione, timeout/input ostile/RDP/logoff, recovery dopo crash e install/repair/upgrade/rollback/uninstall. Provare che chiudere Tray lascia heartbeat attivo e che un utente standard non modifica/disinstalla il servizio. Nessuna di queste prove è dichiarata eseguita qui.
 

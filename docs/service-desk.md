@@ -60,22 +60,23 @@ Porta futura per riepiloghi, classificazione, bozze di risposta e ricerca KB. Ne
 
 Email, ticket e allegati sono input non fidati, anche quando contengono istruzioni rivolte al modello. L'assistente produce proposte e non accede a shell, token o adapter RMM. Eventuali approvazioni future vincolano attore, dispositivo, azione, hash dei parametri e scadenza; autorizzazione server ricontrollata all'esecuzione, nessuna approvazione generica riutilizzabile. Audit registra provenienza/versione e decisione umana evitando copie indiscriminate dei dati sensibili.
 
-## Superficie API proposta, non disponibile
+## Superficie API disponibile e sviluppi futuri
 
-- `/api/service-desk/tickets`: ricerca paginata, dettaglio, creazione, transizioni, assegnazioni, collegamenti, commenti, allegati e interventi; mutazioni cookie protette da CSRF, ETag/If-Match e idempotenza dove necessario.
-- `/api/service-desk/policies`, `/automations`, `/knowledge`: amministrazione autorizzata e versionata; nessun endpoint per script arbitrari.
-- `/api/portal/requests` e `/api/portal/knowledge`: DTO dedicati al richiedente, mai serializzazione diretta delle entità interne.
-- `/api/agent/service-desk/intakes`: identità macchina separata, nessuna impersonificazione della sessione browser. `POST /api/email/intake`: webhook provider-neutral firmato HMAC-SHA256; timestamp firmato con body, validità ±5 minuti, payload massimo 64 KiB, chiave esterna di almeno 32 byte e mailbox esplicitamente allowlistata. I messaggi sono trattati come input non fidato e finiscono in `SupportEmailIntakes`, non in ticket. `GET /api/admin/email-intakes` e discard richiedono `tickets.manage`; la chiave va montata come secret leggibile solo dal processo API. Il webhook non sostituisce autenticazione del mittente o verifica di thread.
-- Le azioni RMM restano negli endpoint RMM esistenti; il contesto ticket è correlazione audit, non una nuova autorizzazione.
+- `/api/support`: console IT per elenco/dettaglio, messaggi, transizioni, assegnazioni, allegati, partecipanti, SLA e correlazione interventi; autorizzazione `tickets.view`/`tickets.manage` per ambito e capability.
+- `/api/portal`: account Identity autenticato e device esplicitamente collegati; DTO dedicati, ownership dei ticket, chat pubblica e screenshot/allegati con consenso; antiforgery e versioni attese sulle mutazioni.
+- `/api/agent/support`: intake, elenco e risposte dalla Tray con identità macchina firmata e requesterKey, senza impersonare l'utente Windows.
+- `POST /api/email/intake`: webhook provider-neutral HMAC-SHA256 con timestamp/body firmati, finestra ±5 minuti, payload massimo 64 KiB, chiave di almeno 32 byte e mailbox allowlistata. L'input non fidato è accodato in `SupportEmailIntakes`. `GET /api/admin/email-intakes` e POST discard/promote richiedono `tickets.manage`; la promozione seleziona device e conferma il mittente non verificato, crea origine `email` senza `RequesterUserId` e registra audit. Retention intake: pending 30 giorni, discarded/promoted 180. Il webhook non autentica il mittente né verifica thread; adapter mailbox e reply sono futuri.
+- `/api/notifications`: proiezioni interne autorizzate. Le policy SLA e knowledge base hanno endpoint amministrativi versionati. Automazioni, consegna email esterna, intake provider reale, binding/reply email e allarmi esterni restano da sviluppare.
+- Le azioni RMM restano negli endpoint RMM esistenti; il contesto ticket è correlazione audit, non una nuova autorizzazione. Le mutazioni cookie richiedono antiforgery; le operazioni idempotenti usano RequestId e i DTO non serializzano direttamente entità interne.
 
 Schema dettagliato: [modello dati proposto](service-desk-data-model.md). Ordine e dipendenze: [roadmap](roadmap.md#percorso-futuro-omnidesk-service-desk).
 
-## Criteri di verifica futuri
+## Gate di verifica ancora aperti
 
-Non sono test eseguiti: isolamento sede/richiedente/team; ticket visibile senza privilegi RMM; nessuna fuga di note interne tramite ricerca/export/email/allegati; vincolo almeno un dispositivo e promozione intake concorrente; conflitti ETag; deduplicazione email/allarmi; replay agente; quarantena/download; calendari DST, pause, riaperture ed escalation una sola volta dopo crash; audit senza bearer; backup/restore DB/blob; prompt injection incapace di attivare comandi. A questi si aggiungono test API PostgreSQL, frontend, browser portale e integrazioni reali dei connettori prima di dichiararli operativi.
+Suite API/PostgreSQL, Vitest e smoke Chromium isolato coprono già molti flussi di autorizzazione, note interne, intake/promozione email, allegati/quarantena, SLA e restore; vedere [validation.md](validation.md) per l'evidenza e i limiti. Gate ancora aperti: prove portale con account reale; vincolo DB differibile almeno un dispositivo e test di promozione concorrente; provider/thread/reply email; notifiche esterne; restore periodico su host LAN/off-site e retention ticket/allegati; collaudi RMM live. Nessun esito di test indiretti va generalizzato oltre lo scenario descritto.
 
-## Ingresso Windows tramite Tray — estensione proposta
+## Ingresso Windows tramite Tray — implementato nel branch, test client aperto
 
-La funzione utente “Richiedi assistenza” appartiene a **OmniDesk Tray**, processo non elevato distinto dal servizio Agent. La Tray comunica su named pipe locale con ACL per logon e validazione; il servizio associa la richiesta al proprio dispositivo, il server verifica sede e identità umana. Su computer condivisi la chiave macchina non permette di leggere ticket di altri utenti. Screenshot acquisiti dalla Tray soltanto dopo scelta, anteprima e consenso esplicito, poi sottoposti alle policy allegati. Nessuna operazione IPC consente arresto servizio o comandi arbitrari.
+La funzione utente “Richiedi assistenza” appartiene a **OmniDesk Tray**, processo non elevato distinto dal servizio Agent. La Tray comunica su named pipe locale con ACL per logon e validazione; il servizio associa la richiesta al proprio dispositivo e al contesto Windows verificato dalla pipe. Su computer condivisi la chiave macchina non permette di leggere ticket di altri utenti. Screenshot acquisiti dalla Tray soltanto dopo scelta, anteprima e consenso esplicito, poi sottoposti alle policy allegati. Nessuna operazione IPC consente arresto servizio o comandi arbitrari. Progetti Windows/MSI e test CI esistono; la prova interattiva su client reale resta aperta.
 
-Il futuro MSI unico installerà entrambi i componenti; il MSI attuale contiene solo Agent. Vedi [specifica Windows e consenso remoto](windows-agent-tray.md) e [dipendenze WT/SD](roadmap.md#percorso-futuro-windows-agent-e-tray). Questi flussi sono progettati, non implementati.
+Il pacchetto MSI unico installa Agent e Tray nel branch; l'ultimo kit 0.8.9 non è ancora promosso sulla LAN. Vedi [specifica Windows e consenso remoto](windows-agent-tray.md) e [dipendenze WT/SD](roadmap.md#percorso-futuro-windows-agent-e-tray).
