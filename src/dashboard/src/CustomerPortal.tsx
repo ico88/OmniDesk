@@ -35,9 +35,21 @@ export function CustomerPortal({onMessage}:{onMessage:(message:string)=>void}) {
   useEffect(()=>{let active=true;void Promise.all([api<PortalDevice[]>('/portal/devices'),api<Ticket[]>('/portal/tickets')]).then(([available,owned])=>{
     if(active){setDevices(available);setTickets(owned);}
   }).catch(e=>{if(active)setError(e instanceof Error?e.message:'I ticket personali non sono disponibili');});return()=>{active=false;};},[]);
+  useEffect(()=>{let active=true;let refreshing=false;const refresh=async()=>{
+    if(refreshing)return;refreshing=true;
+    try{const [available,owned]=await Promise.all([api<PortalDevice[]>('/portal/devices'),api<Ticket[]>('/portal/tickets')]);if(active){setDevices(available);setTickets(owned);setSelectedId(current=>owned.some(ticket=>ticket.id===current)?current:'');}}
+    catch{/* Keep the last successful view on transient connectivity errors. */}
+    finally{refreshing=false;}
+  };const timer=window.setInterval(()=>void refresh(),30000);return()=>{active=false;window.clearInterval(timer);};},[]);
   useEffect(()=>{if(!selectedId){setDetail(null);return;}let active=true;setDetail(null);
     void api<Detail>(`/portal/tickets/${selectedId}`).then(value=>{if(active)setDetail(value);}).catch(e=>{if(active){setError(e instanceof Error?e.message:'Conversazione non disponibile');setSelectedId('');}});
     return()=>{active=false;};},[selectedId]);
+  useEffect(()=>{if(!selectedId)return;let active=true;let refreshing=false;const ticketId=selectedId;const refresh=async()=>{
+    if(refreshing)return;refreshing=true;
+    try{const value=await api<Detail>(`/portal/tickets/${ticketId}`);if(active)setDetail(current=>current?.ticket.id===ticketId&&current.ticket.version>value.ticket.version?current:value);}
+    catch{/* Retain the last successful conversation until the next refresh. */}
+    finally{refreshing=false;}
+  };const timer=window.setInterval(()=>void refresh(),30000);return()=>{active=false;window.clearInterval(timer);};},[selectedId]);
 
   async function run(action:()=>Promise<void>){setBusy(true);setError('');try{await action();}catch(e){setError(e instanceof Error?e.message:'Operazione non riuscita');}finally{setBusy(false);}}
   async function createTicket(){
@@ -58,7 +70,7 @@ export function CustomerPortal({onMessage}:{onMessage:(message:string)=>void}) {
 
   return <div className="portal-layout">
     <section className="panel portal-tickets">
-      <div className="section-heading"><div><span className="eyebrow">AREA PERSONALE</span><h2>I miei ticket <span className="count">{tickets.length}</span></h2></div><button className="secondary compact" disabled={busy} onClick={()=>void run(load)}><Icon name="refresh"/>Aggiorna</button></div>
+      <div className="section-heading"><div><span className="eyebrow">AREA PERSONALE</span><h2>I miei ticket <span className="count">{tickets.length}</span></h2><small>Stato e conversazione si aggiornano automaticamente.</small></div><button className="secondary compact" disabled={busy} onClick={()=>void run(load)}><Icon name="refresh"/>Aggiorna</button></div>
       {tickets.length===0?<p className="empty-state">Non hai ancora richieste di assistenza.</p>:<div className="portal-ticket-list">{tickets.map(ticket=><button type="button" key={ticket.id} className={`portal-ticket ${selectedId===ticket.id?'selected':''}`} onClick={()=>{setError('');setSelectedId(ticket.id);}}><span><strong>#{ticket.number} · {ticket.subject}</strong><small>{ticket.deviceName} · {ticket.siteName}</small></span><span className="status-pill">{states[ticket.state]??ticket.state}</span></button>)}</div>}
     </section>
     <section className="panel portal-content">
