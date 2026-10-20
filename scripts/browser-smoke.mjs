@@ -76,6 +76,10 @@ try {
  await page.getByLabel('Nome visualizzato',{exact:true}).fill('Federico Operatore');
  await page.getByRole('button',{name:'Salva nome',exact:true}).click();
  await page.getByText('Nome operatore aggiornato',{exact:true}).waitFor();
+ await page.getByRole('button',{name:'Email invii',exact:true}).click();
+ await page.getByRole('heading',{name:'Consegne email ticket',exact:true}).waitFor();
+ await page.getByText('Non ci sono consegne email in attesa.',{exact:true}).waitFor();
+ await page.getByRole('button',{name:'Panoramica',exact:true}).click();
  const scopeToken=(await (await context.request.get('https://omnidesk.test/api/auth/csrf')).json()).token;
  const kbGroupName='Knowledge scope '+randomBytes(5).toString('hex');
  const kbGroupResponse=await context.request.post('https://omnidesk.test/api/admin/groups',{headers:{'X-CSRF-TOKEN':scopeToken},data:{name:kbGroupName}});

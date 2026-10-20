@@ -15,9 +15,10 @@ public static class AccountScenario
     {
         var emailPreference = await admin.GetFromJsonAsync<JsonElement>("/api/auth/me");
         Assert.False(emailPreference.GetProperty("emailNotificationsEnabled").GetBoolean());
-        Assert.False(emailPreference.GetProperty("emailNotificationsAvailable").GetBoolean());
+        Assert.True(emailPreference.GetProperty("emailNotificationsAvailable").GetBoolean());
+        Assert.Equal(HttpStatusCode.OK, (await admin.PutAsJsonAsync("/api/auth/email-notifications", new { enabled = true })).StatusCode);
+        Assert.True((await admin.GetFromJsonAsync<JsonElement>("/api/auth/me")).GetProperty("emailNotificationsEnabled").GetBoolean());
         Assert.Equal(HttpStatusCode.OK, (await admin.PutAsJsonAsync("/api/auth/email-notifications", new { enabled = false })).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, (await admin.PutAsJsonAsync("/api/auth/email-notifications", new { enabled = true })).StatusCode);
         Assert.Equal(HttpStatusCode.NoContent, (await admin.PutAsJsonAsync("/api/dashboard/layout", new { widgets = new[] { "authentication", "devices" } })).StatusCode);
         var mine = await admin.GetFromJsonAsync<JsonElement>("/api/dashboard/layout");
         Assert.Equal("authentication", mine.GetProperty("widgets")[0].GetString());

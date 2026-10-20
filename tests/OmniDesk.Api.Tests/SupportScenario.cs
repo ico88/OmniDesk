@@ -252,6 +252,28 @@ public static class SupportScenario
             var delivery = await db.EmailNotificationDeliveries.SingleAsync(x => x.NotificationId == emailNotificationId);
             Assert.Equal("sent", delivery.State);
             Assert.NotNull(delivery.SentAt);
+            delivery.State = "dead";
+            delivery.AttemptCount = 8;
+            delivery.DeadLetteredAt = DateTimeOffset.UtcNow;
+            delivery.LastErrorType = "SmtpException";
+            await db.SaveChangesAsync();
+        }
+        Assert.Equal(HttpStatusCode.Forbidden, (await scoped.GetAsync("/api/admin/email-notifications")).StatusCode);
+        var deadLetters = await admin.GetFromJsonAsync<System.Text.Json.JsonElement>("/api/admin/email-notifications");
+        var deadLetter = Assert.Single(deadLetters.GetProperty("items").EnumerateArray());
+        Assert.Equal(emailNotificationId, deadLetter.GetProperty("notificationId").GetGuid());
+        Assert.Equal("dead", deadLetter.GetProperty("state").GetString());
+        Assert.DoesNotContain("scoped@example.test", deadLetters.ToString(), StringComparison.Ordinal);
+        Assert.Equal(HttpStatusCode.Forbidden, (await scoped.PostAsync($"/api/admin/email-notifications/{emailNotificationId}/retry", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await admin.PostAsync($"/api/admin/email-notifications/{emailNotificationId}/retry", null)).StatusCode);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var delivery = await db.EmailNotificationDeliveries.SingleAsync(x => x.NotificationId == emailNotificationId);
+            Assert.Equal("pending", delivery.State);
+            Assert.Equal(0, delivery.AttemptCount);
+            Assert.Null(delivery.DeadLetteredAt);
+            Assert.True(await db.AuditEvents.AnyAsync(x => x.Action == "notification.email.retry" && x.Target == emailNotificationId.ToString()));
         }
         Assert.Equal(HttpStatusCode.NotFound, (await admin.PostAsync($"/api/notifications/{newTicketNotice.GetProperty("id").GetGuid()}/read", null)).StatusCode);
         Assert.Equal(HttpStatusCode.NoContent, (await scoped.PostAsync($"/api/notifications/{newTicketNotice.GetProperty("id").GetGuid()}/read", null)).StatusCode);

@@ -46,6 +46,13 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             ["Attachments:RootPath"] = AttachmentRoot,
             ["EmailIntake:SigningKeyFile"] = EmailIntakeSigningKeyFile,
             ["EmailIntake:AllowedMailboxes:0"] = "support@example.test",
+            ["OutboundEmail:Enabled"] = "true",
+            ["OutboundEmail:Host"] = "smtp.example.test",
+            ["OutboundEmail:Port"] = "587",
+            ["OutboundEmail:FromAddress"] = "help@example.test",
+            ["OutboundEmail:Username"] = "omni",
+            ["OutboundEmail:PasswordFile"] = "/tmp/not-used-smtp-secret",
+            ["OutboundEmail:DashboardUrl"] = "https://desk.example.test",
             ["ConnectionStrings:Database"] = Environment.GetEnvironmentVariable("TEST_DATABASE")
                 ?? throw new InvalidOperationException("TEST_DATABASE must point to an isolated PostgreSQL test database")
         }));
