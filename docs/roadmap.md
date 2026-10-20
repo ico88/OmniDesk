@@ -611,5 +611,9 @@ errore del motore; la sessione incorporata resta attiva e l’avviso scompare al
 caricamento. Suite API/PostgreSQL 95/95, Vitest 6/6, build API/dashboard,
 publish self-contained dell’Agent `win-x64`, smoke Chromium con due interfacce e
 frame ritardato, restore isolato completo, Compose e `git diff --check` passano.
-Restano il collaudo Windows della raccolta rete e il test runtime sul dispositivo
-pilota; nessun deploy LAN effettuato.
+Commit applicativo `160d1a7` distribuito su LAN per API/dashboard senza
+migrazioni; probe HTTPS/CA, asset e rifiuto anonimo passano. Il kit Agent+Tray
+0.8.9 è pubblicato nel download amministrativo, unsigned da laboratorio. CI
+Linux `39378646434` e Windows `39378646489` passate. Restano il download
+autenticato con account admin e il collaudo sul PC Windows pilota per confermare
+heartbeat IP/MAC e caricamento remoto incorporato.
