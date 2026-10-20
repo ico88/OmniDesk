@@ -64,3 +64,8 @@ fi
 bash scripts/verify-backup.sh --staging "$backup_path"
 touch "$backup_path/READY"
 printf 'Backup verified and completed: %s\n' "$backup_path"
+backup_retention_days=${OMNIDESK_BACKUP_RETENTION_DAYS:-}
+if [[ -z "$backup_retention_days" && -f .env ]]; then
+  backup_retention_days=$(awk -F= '$1 == "OMNIDESK_BACKUP_RETENTION_DAYS" { print substr($0, index($0, "=") + 1); exit }' .env)
+fi
+bash scripts/prune-backups.sh .backups "${backup_retention_days:-0}"
