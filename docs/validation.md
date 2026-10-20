@@ -1,5 +1,11 @@
 # Stato e verifiche — 18 ottobre 2026
 
+### CI commit `2e41459` — 2026-10-20
+
+- Linux [run 39356327778](https://github.com/ico88/OmniDesk/actions/runs/39356327778) — concluso con successo sullo SHA `2e4145995bf2a2071deb4b069caa9eddf0a3ad01`: test applicativi, configurazioni Compose, build Docker API/dashboard e `./scripts/smoke.sh --browser`, inclusi Chromium e restore isolato.
+- Windows [run 39356327808](https://github.com/ico88/OmniDesk/actions/runs/39356327808) — concluso con successo sullo stesso SHA: parsing script, contratti Tray, build Agent/Tray/MSI e console, installazione/recovery/disinstallazione MSI e upgrade/repair/rollback da baseline fissata. Artifact unsigned di agent, console e diagnostica sono stati caricati sul run e restano artifact CI, non una release firmata/promossa.
+- I due workflow verificano build/runtime isolati e lifecycle MSI sul runner GitHub; non coprono l’installazione/IPC interattiva sul PC Windows 10 `192.168.1.160`, né distribuiscono la revisione sulla LAN. Firma Authenticode e gate advisory MeshCentral/node-forge restano aperti.
+
 ### Gate dipendenza MeshCentral/node-forge — 2026-10-20
 
 - `docker run --rm -v "$PWD/modules/remote-meshcentral:/work:ro" -w /work node:22-alpine npm audit --omit=dev --json` — riscontro: MeshCentral 1.2.5 → node-forge 1.4.0; advisory GHSA-86w9-cpqp-85rv severity high, range `<=1.4.0`, `fixAvailable: false`. Il codice di uscita 1 è l'esito atteso del controllo vulnerabilità.
