@@ -1,5 +1,9 @@
 # Roadmap
 
+### Privacy — retention del contenuto dei ticket risolti
+
+Implementata nel branch una policy separata opt-in, `OMNIDESK_RETENTION_RESOLVED_TICKET_CONTENT_DAYS` (default `0`, disattivata). Dopo la soglia, ticket `resolved`/`closed` perdono oggetto libero, descrizione, risoluzione e corpi di messaggi pubblici/interni; numero, stato, date, metadati, eventi di workflow e interventi RMM restano consultabili. Flag persistenti evitano ripetizioni, il worker opera in batch transazionali e l'audit registra solo conteggi. La migrazione è versionata. Suite PostgreSQL 93/93, build dashboard e 6/6 Vitest, build Docker e smoke runtime Chromium/restore sono passati localmente. Non pubblicato sulla LAN. Retention allegati, intake, contenuti ticket, audit, telemetria e backup restano policy indipendenti.
+
 ### Telemetria — transizioni di presenza Agent
 
 Lo stato operativo Online/Offline continua a derivare dall'ultimo heartbeat firmato; un worker persistente ora inizializza la baseline senza creare eventi retroattivi e registra una sola voce audit al cambio, con target device e senza dati telemetrici. Dispositivi revocati sono esclusi. La soglia (180 secondi) e la frequenza (30 secondi) sono configurabili e allineate alle API di stato e aggiornamento. La campanella mostra i dispositivi offline e collega alla scheda dispositivo; la query è filtrata in database per i dispositivi visibili all'utente e l'allarme sparisce al ripristino. Verifiche PostgreSQL 91/91, dashboard 6/6, smoke Chromium/restore e build Docker sono passati in locale. Rimangono canali esterni/email per gli allarmi, retention della telemetria e pubblicazione LAN.

@@ -71,9 +71,13 @@ Email, ticket e allegati sono input non fidati, anche quando contengono istruzio
 
 Schema dettagliato: [modello dati proposto](service-desk-data-model.md). Ordine e dipendenze: [roadmap](roadmap.md#percorso-futuro-omnidesk-service-desk).
 
+## Retention del contenuto ticket
+
+La retention del contenuto dei ticket risolti è indipendente da quella di intake e allegati, opt-in tramite `OMNIDESK_RETENTION_RESOLVED_TICKET_CONTENT_DAYS` e disattivata per default (`0`). Oltre soglia, il worker redige oggetto libero, descrizione, risoluzione e messaggi di conversazione pubblici/interni su ticket `resolved` o `closed`; conserva numero, stato, timestamp e metadati di audit, eventi di workflow e interventi RMM. Le risposte API includono `contentPurged` affinché dashboard e portale mostrino un segnaposto chiaro. L'audit registra solo conteggi. Migrazione versionata; test mirato e suite completa PostgreSQL 93/93 passati. La policy è nel branch e non è attiva nell'istanza LAN.
+
 ## Gate di verifica ancora aperti
 
-Suite API/PostgreSQL, Vitest e smoke Chromium isolato coprono già molti flussi di autorizzazione, note interne, intake/promozione email, allegati/quarantena, SLA e restore; vedere [validation.md](validation.md) per l'evidenza e i limiti. La retention degli allegati e screenshot è opt-in tramite `OMNIDESK_RETENTION_RESOLVED_TICKET_ATTACHMENTS_DAYS` (default `0`): rimuove i file e gli screenshot soltanto per ticket `resolved` o `closed` oltre soglia, preservando record ticket e conversazioni. Il purge è auditato per conteggio e ritenta gli errori filesystem; mentre un file è in purge non è elencato né scaricabile. Gate ancora aperti: prove portale con account reale; vincolo DB differibile almeno un dispositivo e test di promozione concorrente; provider/thread/reply email; notifiche esterne; retention conversazioni/audit/telemetria e backup; restore periodico su host LAN/off-site e collaudi RMM live. Nessun esito di test indiretti va generalizzato oltre lo scenario descritto.
+Suite API/PostgreSQL, Vitest e smoke Chromium isolato coprono già molti flussi di autorizzazione, note interne, intake/promozione email, allegati/quarantena, SLA e restore; vedere [validation.md](validation.md) per l'evidenza e i limiti. La retention degli allegati/screenshot e quella del contenuto sono opt-in, indipendenti e disattivate per default: la prima rimuove file oltre soglia, la seconda redige testi di ticket risolti/chiusi preservandone struttura e audit operativo. Gate ancora aperti: prove portale con account reale; vincolo DB differibile almeno un dispositivo e test di promozione concorrente; provider/thread/reply email; notifiche esterne; retention audit/telemetria e backup; restore periodico su host LAN/off-site e collaudi RMM live. Nessun esito di test indiretti va generalizzato oltre lo scenario descritto.
 
 ## Ingresso Windows tramite Tray — implementato nel branch, test client aperto
 

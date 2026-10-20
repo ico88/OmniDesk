@@ -1944,3 +1944,11 @@ modificato; ogni nuova estensione attende la propria CI sul push.
 - `docker compose build api dashboard` — passato dal checkout corrente.
 - `./scripts/smoke.sh --browser` — passato dopo la rebuild: Chromium verifica il nome operatore, conferma la disconnessione temporanea e il messaggio che consente la riconnessione; gli altri smoke UI, ClamAV, worker SLA e restore completo sono passati. Lo smoke usa una sessione remota simulata; nessun controllo MeshCentral live o Windows è implicato.
 - `node --check scripts/browser-smoke.mjs` e `git diff --check` — passati. Nessun deploy LAN.
+
+### Privacy — retention contenuto dei ticket — 2026-10-20
+
+- Test mirato `Ticket_content_retention...` e `./scripts/test.sh` — passati su PostgreSQL effimero: 93/93 test API; il test dedicato controlla policy disattivata per default, redazione dei ticket risolti/chiusi oltre soglia, conservazione dei ticket recenti/aperti, numero/stato/date e interventi RMM, più audit con soli conteggi.
+- Build dashboard (`tsc --noEmit && vite build`) e Vitest — passati, 6/6. `docker compose build api dashboard` — passato dal checkout corrente.
+- `docker compose config --quiet`, Compose test, backup-check con `BACKUP_CHECK_FILE=/tmp/omnidesk-test-backup.dump`, restore-check con `RESTORE_BACKUP_PATH="$PWD" RESTORE_CHECK_DIR=/tmp` e `git diff --check` — passati.
+- `./scripts/smoke.sh --browser` — passato nello stack isolato: migrazioni/bootstrap, HTTPS, Chromium (intake/promozione email, account/grant, icona, portale chat/consenso screenshot/isolation/revocation, stato dispositivi, ticket/SLA/notifiche/RMM), ClamAV con fixture pulite/EICAR, worker SLA/escalation e restore runtime completo DB/blob/Identity/CA. Nessun servizio LAN è stato toccato.
+- Migrazione `20261020061000_ResolvedTicketContentRetention` applicata automaticamente dalla suite su DB effimero. La retention è opt-in (`OMNIDESK_RETENTION_RESOLVED_TICKET_CONTENT_DAYS`, default `0`), non è distribuita sulla LAN. La policy non cancella allegati, eventi operativi o backup e non certifica cancellazione da snapshot preesistenti. CI Linux `39364458083` è passata sul commit precedente all'incremento; CI Windows `39364458101` è passata su build/MSI/install/recovery/upgrade/repair/rollback del commit precedente. Il codice nuovo richiede le proprie pipeline dopo il push.
