@@ -1,5 +1,11 @@
 # Stato e verifiche — 18 ottobre 2026
 
+### Tray Windows — allegati contestuali ticket — 2026-10-20
+
+- L'endpoint macchina associa alla conversazione solo metadati pubblici di allegati collegati a messaggi dello stesso ticket e non redatti. La Tray mostra nome/dimensione per file puliti e indicazioni generiche durante scansione, in caso di errore o file bloccato; nessuna chiave storage o URL firmato transita nell'IPC.
+- `./scripts/test.sh` — 95/95 API/PostgreSQL, build dashboard e 6/6 Vitest; `SupportScenario` verifica la proiezione del nome allegato nella risposta macchina autenticata. `git diff --check` passato.
+- L'host non dispone del comando `dotnet`; build nativa Tray e MSI sono demandate alla CI Windows. Nessuna esecuzione runtime su Windows, nessun aggiornamento del pacchetto LAN e nessun deploy eseguiti per questa revisione.
+
 ### Diagnostica processo node ID MSI — 2026-10-20
 
 - La prima implementazione bounded è fallita su Windows [run 39371845078](https://github.com/ico88/OmniDesk/actions/runs/39371845078): MSI installato correttamente, ma `Start-Process` non ha esposto un `ExitCode` utilizzabile per la sonda `-nodeid`. Nessun errore MSI o timeout del binario.

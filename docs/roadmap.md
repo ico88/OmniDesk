@@ -1,5 +1,15 @@
 # Roadmap
 
+### Tray Windows — allegati nella conversazione
+
+La conversazione autenticata dispositivo include ora i soli metadati degli
+allegati pubblici collegati ai messaggi: nome e stato antivirus, senza chiavi o
+percorsi storage. Allegati di note interne e messaggi redatti non vengono
+restituiti. La Tray mostra il nome solo dopo scansione pulita; file infetti sono
+indicati senza esporre il nome. Versione Agent/Tray/Setup/MSI portata a 0.8.10.
+La suite locale API/PostgreSQL e dashboard passa; build Windows e test MSI sono
+delegati alla CI. Nessun aggiornamento del pacchetto web o deploy LAN eseguito.
+
 ### Allegati contestuali alla conversazione ticket
 
 Gli allegati possono essere associati a un messaggio pubblico o a una nota interna
