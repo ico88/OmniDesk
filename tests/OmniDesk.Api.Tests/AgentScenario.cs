@@ -87,11 +87,22 @@ public static class AgentScenario
         agent.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Assertion(key));
         Assert.Equal(HttpStatusCode.BadRequest, (await agent.PostAsJsonAsync("/api/agent/metrics", metrics with { AvailableMemoryBytes = long.MaxValue })).StatusCode);
         agent.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Assertion(key));
-        Assert.Equal(HttpStatusCode.NoContent, (await agent.PutAsJsonAsync("/api/agent/inventory", new InventoryRequest("Windows fixture", "X64", "Fixture", "Test", null, "Test CPU", 8, [new("Test app", "1.0", "Test")], []))).StatusCode);
+        var inventory = new InventoryRequest("Windows fixture", "X64", "Fixture", "Test", null, "Test CPU", 8,
+            [new("Test app", "1.0", "Test")], [], [new("Wi-Fi", "Wireless80211", "AABBCCDDEEFF", ["192.168.1.50", "fe80::1"]), new("Ethernet", "Ethernet", "001122334455", ["10.0.0.20"])]);
+        agent.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Assertion(key));
+        Assert.Equal(HttpStatusCode.NoContent, (await agent.PutAsJsonAsync("/api/agent/inventory", inventory with { NetworkAdapters = null })).StatusCode);
+        agent.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Assertion(key));
+        Assert.Equal(HttpStatusCode.NoContent, (await agent.PutAsJsonAsync("/api/agent/inventory", inventory)).StatusCode);
+        agent.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Assertion(key));
+        Assert.Equal(HttpStatusCode.BadRequest, (await agent.PutAsJsonAsync("/api/agent/inventory", inventory with { NetworkAdapters = [new("Wi-Fi", "Wireless80211", "invalid", ["not-an-ip"])] })).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await scoped.GetAsync($"/api/devices/{id}/status")).StatusCode);
         Assert.Equal(HttpStatusCode.Created, (await admin.PostAsJsonAsync("/api/admin/grants", new { userId = scopedId, role = "Viewer", groupId = group, deviceId = (Guid?)null })).StatusCode);
         var status = await scoped.GetFromJsonAsync<JsonElement>($"/api/devices/{id}/status");
         Assert.True(status.GetProperty("online").GetBoolean());
+        var adapters = status.GetProperty("inventory").GetProperty("networkAdapters").EnumerateArray().ToArray();
+        Assert.Equal(2, adapters.Length);
+        Assert.Equal("AABBCCDDEEFF", adapters[0].GetProperty("macAddress").GetString());
+        Assert.Equal("192.168.1.50", adapters[0].GetProperty("ipAddresses")[0].GetString());
         var listed = (await scoped.GetFromJsonAsync<JsonElement[]>("/api/devices"))!.Single(x => x.GetProperty("id").GetGuid() == id);
         Assert.True(listed.GetProperty("online").GetBoolean());
         Assert.False(listed.GetProperty("revoked").GetBoolean());

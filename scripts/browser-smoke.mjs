@@ -193,6 +193,8 @@ try {
  const agentAssertion=()=>{const now=Math.floor(Date.now()/1000);const claims=Buffer.from(JSON.stringify({iss:fixtureDevice,sub:fixtureDevice,aud:'omnidesk-agent',iat:now,nbf:now-5,exp:now+60,jti:randomBytes(16).toString('hex')})).toString('base64url');const unsigned=header+'.'+claims;return unsigned+'.'+sign('RSA-SHA256',Buffer.from(unsigned),fixtureKeys.privateKey).toString('base64url');};
  const heartbeat=await context.request.post('https://omnidesk.test/api/agent/metrics',{headers:{Authorization:'Bearer '+agentAssertion()},data:{cpuPercent:12.5,totalMemoryBytes:16000000000,availableMemoryBytes:8000000000,networkReceivedBytes:100,networkSentBytes:200,uptimeSeconds:3600,disks:[{name:'C:',totalBytes:100000,freeBytes:50000}],agentVersion:'0.8.1'}});
  assert.equal(heartbeat.status(),204,'Signed fixture heartbeat accepted');
+ const networkInventory=await context.request.put('https://omnidesk.test/api/agent/inventory',{headers:{Authorization:'Bearer '+agentAssertion()},data:{operatingSystem:'Windows fixture',architecture:'X64',manufacturer:'OmniDesk',model:'Browser smoke',serialNumber:null,processor:'Fixture CPU',logicalProcessors:8,software:[],warnings:[],networkAdapters:[{name:'Wi-Fi',type:'Wireless80211',macAddress:'AABBCCDDEEFF',ipAddresses:['192.168.1.50','fe80::1']},{name:'Ethernet',type:'Ethernet',macAddress:'001122334455',ipAddresses:['10.0.0.20']}]}});
+ assert.equal(networkInventory.status(),204,'Signed multi-interface network inventory accepted');
  await page.reload(); await page.getByRole('heading',{name:'Panoramica',exact:true}).waitFor();
  await page.getByRole('button',{name:'Dispositivi',exact:true}).click();
  await page.getByRole('cell',{name:fixtureName,exact:true}).waitFor();
@@ -448,6 +450,12 @@ try {
  await page.getByRole('button',{name:'Aggiorna',exact:true}).click();
  await page.getByRole('row').filter({has:page.getByRole('cell',{name:fixtureName,exact:true})}).getByRole('button',{name:'Apri',exact:true}).click();
  assert.equal(await page.getByRole('row').filter({has:page.getByRole('cell',{name:fixtureName,exact:true})}).getByText('Online',{exact:true}).count(),1,'Recent signed heartbeat appears as Online in the device list');
+ const networkCard=page.locator('.device-info-card').filter({has:page.getByRole('heading',{name:'Rete',exact:true})});
+ await networkCard.getByText('Wi-Fi · Wi-Fi',{exact:true}).waitFor();
+ await networkCard.getByText('IP 192.168.1.50, fe80::1',{exact:true}).waitFor();
+ await networkCard.getByText('MAC AABBCCDDEEFF',{exact:true}).waitFor();
+ await networkCard.getByText('Ethernet · Ethernet',{exact:true}).waitFor();
+ await networkCard.getByText('IP 10.0.0.20',{exact:true}).waitFor();
  const renamed=fixtureName+' renamed';
  await page.locator('summary').filter({hasText:'Gestione dispositivo'}).click();
  await page.getByLabel('Nome dispositivo',{exact:true}).fill(renamed);
@@ -488,7 +496,11 @@ try {
   if(route.request().method()==='DELETE'){remoteShareState='revoked';return route.fulfill({status:204});}
   return route.continue();
  });
- await page.route('https://mesh.example.test/sharing**',route=>route.fulfill({status:200,contentType:'text/html',body:'<!doctype html><title>Remote fixture</title><p>Isolated Mesh fixture</p>'}));
+ let delayMeshFrame=false; let delayedMeshFrameRoute=null;
+ await page.route('https://mesh.example.test/sharing**',async route=>{
+  if(delayMeshFrame){delayedMeshFrameRoute=route;return;}
+  return route.fulfill({status:200,contentType:'text/html',body:'<!doctype html><title>Remote fixture</title><p>Isolated Mesh fixture</p>'});
+ });
  await page.getByRole('tab',{name:'Desktop remoto',exact:true}).click();
  await page.locator('.remote-status .count').filter({hasText:'1'}).waitFor();
  await page.locator('.remote-live-session strong').getByText('Desktop remoto attivo · Operatore di prova',{exact:true}).waitFor();
@@ -497,8 +509,18 @@ try {
  await page.getByRole('button',{name:'Disconnetti temporaneamente',exact:true}).click();
  await page.getByText('Sessione interrotta. Operatore di prova può riconnettersi fino alla scadenza del lease.',{exact:true}).waitFor();
  await page.getByRole('button',{name:'Avvia sessione',exact:true}).waitFor();
+ await page.evaluate(()=>{const original=window.setTimeout;Object.defineProperty(window,'__omniOriginalSetTimeout',{value:original,configurable:true});window.setTimeout=function(callback,delay,...args){return original.call(window,callback,delay===20000?25:delay,...args);};});
+ delayMeshFrame=true;
  await page.getByRole('button',{name:'Avvia sessione',exact:true}).click();
  await page.locator(`iframe[title="Desktop remoto: ${renamed}"]`).waitFor();
+ const slowEmbedNotice=page.getByRole('status').getByText('La sessione è autorizzata, ma il browser non ha confermato il caricamento dell’anteprima. Puoi attendere ancora o aprirla in una nuova scheda.',{exact:true});
+ await slowEmbedNotice.waitFor();
+ assert.equal(await page.getByRole('alert').filter({hasText:'Verifica il motore remoto'}).count(),0,'A slow iframe must not be reported as a remote engine failure');
+ assert.ok(delayedMeshFrameRoute,'The delayed remote frame request remains pending for this check');
+ delayMeshFrame=false;
+ await delayedMeshFrameRoute.fulfill({status:200,contentType:'text/html',body:'<!doctype html><title>Remote fixture</title><p>Delayed Mesh fixture</p>'});
+ await slowEmbedNotice.waitFor({state:'detached'});
+ await page.evaluate(()=>{window.setTimeout=window.__omniOriginalSetTimeout;delete window.__omniOriginalSetTimeout;});
  page.once('dialog',dialog=>dialog.accept());
  await page.getByRole('button',{name:'Disconnetti e revoca',exact:true}).click();
  await page.getByRole('button',{name:'Avvia sessione',exact:true}).waitFor();
