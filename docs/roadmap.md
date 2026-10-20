@@ -278,9 +278,13 @@ e i nuovi ticket ricevono snapshot dei target iniziali per primo riscontro e
 risoluzione, calcolati sul calendario lavorativo con fallback globale. Le
 risposte pubbliche dell'operatore e la risoluzione/chiusura completano i target
 in modo idempotente e sono consultabili nel dettaglio ticket tramite il permesso
-`tickets.view`. Il worker registra i target scaduti una sola volta e produce
-audit. Restano configurazione policy UI, pause/ripresa, cicli di riapertura,
-notifiche, escalation e allarmi.
+`tickets.view`. Il worker registra i target scaduti una sola volta, produce
+audit e invia eventi outbox per notifiche autorizzate. L'amministrazione web
+gestisce policy globali/per sede, versioni immutabili, calendari, festività e
+stati di pausa. La pausa si applica solo prima della scadenza e sposta il
+deadline alla ripresa; la riapertura crea un nuovo ciclo resolution mantenendo
+la versione policy originaria. Test PostgreSQL, dashboard e smoke Chromium
+isolato passano. Escalation e-mail e allarmi esterni restano aperti.
 
 Il numero ticket è ora generato da Identity PostgreSQL e condiviso dalla Tray e
 dalla console nel formato `OD-000123`; non deriva dall’UUID e non promette una

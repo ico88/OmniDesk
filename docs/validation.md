@@ -1813,3 +1813,10 @@ modificato; ogni nuova estensione attende la propria CI sul push.
 - `docker compose config --quiet`, `docker compose -f compose.test.yaml config --quiet`, `git diff --check`, and `node --check scripts/browser-smoke.mjs` in `node:22-alpine` — passed.
 - `./scripts/smoke.sh --browser` — passed with isolated containers. Chromium created a policy in the dashboard, published two immutable revisions, edited a split-day calendar, verified the stored two-interval definition and confirmed a newly created ticket snapshots version 3. Migration/HTTPS/ClamAV, ticket/portal flows and full isolated DB/blob/identity-key/CA restore also passed. Live LAN services were not modified.
 - CI `39342551037` (build/test) and `39342551020` (Windows package) passed for parent commit `ada0320`; the policy-admin changes in this entry are uncommitted at validation time and require CI after push.
+
+### SLA pause/resume and reopen cycle — 2026-10-20
+
+- `./scripts/test.sh` — passed: 88 API/PostgreSQL tests, production dashboard build, 6/6 Vitest. Coverage includes configured workflow pause states, overdue targets remaining breachable, paused targets excluded from breach processing, resumed deadlines and accumulated duration, resolution cycle creation on reopen, and scoped breach notifications.
+- `docker build -t omnidesk-api:local -f src/OmniDesk.Api/Dockerfile .` and `docker build -t omnidesk-dashboard:local -f src/dashboard/Dockerfile .` — passed.
+- `./scripts/smoke.sh --browser` — passed on rebuilt local images: migrations/bootstrap, HTTPS, Chromium SLA administration and ticket flows, ClamAV clean/EICAR scan, and isolated DB/blob/Identity-key/CA backup restore. Live LAN services were not modified.
+- Runtime delivery of an actual expired SLA notification on the LAN, email/escalation channels, production restore, and CI for the pending commit remain unverified.
