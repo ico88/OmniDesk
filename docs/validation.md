@@ -2088,3 +2088,18 @@ modificato; ogni nuova estensione attende la propria CI sul push.
 - Follow-up push `ad5d532`: CI Linux [`39394376992`](https://github.com/ico88/OmniDesk/actions/runs/39394376992) e Windows [`39394376714`](https://github.com/ico88/OmniDesk/actions/runs/39394376714) — entrambe passate. Linux include i nuovi test, build, suite e smoke Chromium/restore; Windows include build MSI, install/recovery/uninstall e upgrade/repair/rollback sulle baseline 0.6.0 e 0.7.0.
 - La retention locale non aggiunge cifratura né copia off-site e non è stata attivata sui backup del deployment.
 
+
+### Knowledge Base — ricerca PostgreSQL full-text — 2026-10-20
+
+- Migrazione versionata `20261020110000_KnowledgeFullTextSearch`: colonna `tsvector` generata/stored con pesi titolo A, riepilogo B, corpo C, configurazione `simple` e indice GIN. Gli aggiornamenti a titolo/riepilogo/corpo aggiornano automaticamente il vettore; nessun testo duplicato è scritto dall'applicazione.
+- `/api/knowledge/search` ora usa `plainto_tsquery` parameterizzata. Stato di pubblicazione e autorizzazioni globali/sede/gruppo restano filtri SQL sulla stessa query prima della selezione; risultati limitati a 50 e senza corpo. Non vengono introdotte funzioni di ranking non testate o query costruite concatenando input.
+- `./scripts/test.sh` — passato: 96/96 test API/PostgreSQL; coperti ricerca nei tre campi, termini multipli, caratteri senza token, cambio del contenuto e vettore aggiornato, bozze, risultati senza body e isolamento scoped. Build dashboard e Vitest 6/6 passati.
+- `docker compose build api` — passato. `./scripts/smoke.sh --browser` — passato nello stack effimero: applicate 53 migrazioni, Chromium ha verificato la ricerca multi-termine e i risultati senza corpo; restore runtime DB/blob/Identity/CA riuscito. `docker compose config --quiet` e `git diff --check` — passati. Nessun deploy o migrazione sulla LAN; database live invariato.
+
+### KB full-text e filtro interfacce rete Agent — 2026-10-20
+
+- Ricerca KB PostgreSQL: migrazione `20261020110000_KnowledgeFullTextSearch`, vettore generato con pesi titolo/riepilogo/corpo e indice GIN; query parameterizzata `plainto_tsquery`. La migrazione su schema isolato controlla backfill degli articoli esistenti e definizione GIN. Test query su tutti i campi, AND multi-termine, aggiornamento, bozze e isolamento scope.
+- Il collector Windows considera per stato rete soltanto interfacce `Up` con indirizzi unicast e gateway configurato; i contatori bytes sono sommati sulle stesse interfacce. Questo esclude i livelli filtro NDIS senza IP e gli adattatori host-only senza route predefinita; restano mostrate più connessioni contemporanee cablate/Wi-Fi. Test mirati verificano i criteri senza dipendere da hardware Windows.
+- `./scripts/test.sh` — passato dopo l’incremento Agent: 97/97 test API/PostgreSQL e unitari, build dashboard e Vitest 6/6. Include migrazione/backfill/GIN KB, query e scope e selezione delle interfacce.
+- Cross-build con `mcr.microsoft.com/dotnet/sdk:10.0`: Agent, Tray e Setup Windows tutti compilati senza warning/errori. I progetti, MSI WiX e manifest MSI/Agent/Tray/Setup sono allineati alla versione 0.8.12. Build WiX, lifecycle MSI, installazione e raccolta reale su Windows restano da verificare nella CI Windows e sul PC pilota.
+- `docker compose build api`, smoke Chromium/restore isolato con ricerca multi-termine, `docker compose config --quiet` e `git diff --check` — passati; lo smoke ha applicato 53 migrazioni in stack effimero. Nessun deploy LAN o migrazione sul DB live.
