@@ -66,11 +66,14 @@ Non include credenziali, token o chiavi private.
 {remote_note}
 
 1. Estrai il kit su Windows e verifica i checksum dell'artifact GitHub.
-2. Dalla console OmniDesk, Dispositivi > Registra un dispositivo, genera un
-   token monouso. Non salvarlo in un file.
-3. Avvia OmniDesk.Setup.exe e incolla il token nel campo mascherato. Windows
-   richiede l'autorizzazione amministrativa. Setup verifica CA/HTTPS/server,
-   installa il pacchetto e invia il token su pipe standard, mai in argomenti o file.
+2. Su un nuovo dispositivo, dalla console OmniDesk apri Dispositivi > Registra
+   un dispositivo e genera un token monouso. Non salvarlo in un file. Se il PC
+   è già registrato sullo stesso server, non serve un nuovo token: Setup conserva
+   l'identità esistente durante l'aggiornamento.
+3. Avvia OmniDesk.Setup.exe con autorizzazione amministrativa. Incolla il token
+   nel campo mascherato solo per un nuovo dispositivo. Setup verifica CA/HTTPS,
+   installa il pacchetto e invia l'eventuale token su pipe standard, mai in
+   argomenti o file.
 4. La Tray si avvia al prossimo accesso dell'utente; il servizio è indipendente.
 
 Rimozione: Impostazioni Windows > App > OmniDesk Agent > Disinstalla. Prima della
