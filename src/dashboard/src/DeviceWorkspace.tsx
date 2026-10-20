@@ -7,6 +7,7 @@ import { RemoteConsole } from './RemoteConsole';
 import { RemoteSessions } from './RemoteSessions';
 import { SupportDesk } from './SupportDesk';
 import { Icon } from './Icon';
+import { reportsFilteredNetworkAdapters } from './deviceNetwork';
 
 type MetricDisk = { name: string; totalBytes: number; freeBytes: number };
 type NetworkAdapter = { name: string; type: string; macAddress: string; ipAddresses: string[] };
@@ -133,6 +134,7 @@ export function DeviceWorkspace({ device, admin, groups, sites, onDeviceChanged,
   }, [activeTab, device.id, device.capabilities]);
 
   const metrics = device.metrics;
+  const networkInventoryCurrent = reportsFilteredNetworkAdapters(metrics?.agentVersion);
   const inventory = device.inventory;
   const count = (capability: string) => device.capabilities.includes(capability);
   const remoteProps = {
@@ -145,7 +147,7 @@ export function DeviceWorkspace({ device, admin, groups, sites, onDeviceChanged,
 
   return <section className="panel device-detail device-workspace">
     <div className="section-heading device-workspace-heading">
-      <div><span className="eyebrow">DISPOSITIVO</span><h2><Monitor size={22}/>{device.name}</h2><small>{inventory?.operatingSystem ?? 'Sistema operativo non disponibile'} · Ultimo contatto {device.lastSeen ? new Date(device.lastSeen).toLocaleString('it-IT') : 'mai'}</small></div>
+      <div><span className="eyebrow">DISPOSITIVO</span><h2><Monitor size={22}/>{device.name}</h2><small>{inventory?.operatingSystem ?? 'Sistema operativo non disponibile'} · Agent {metrics?.agentVersion ?? 'non rilevato'} · Ultimo contatto {device.lastSeen ? new Date(device.lastSeen).toLocaleString('it-IT') : 'mai'}</small></div>
       <span className={`status-pill ${device.revoked ? 'danger' : device.online ? 'online' : 'offline'}`}>{device.revoked ? 'Revocato' : device.online ? 'Online' : 'Offline'}</span>
     </div>
     {admin && <details className="advanced device-management"><summary><Icon name="settings"/>Gestione dispositivo</summary><DeviceManagement key={`${device.id}:${device.name}:${device.groupId}:${device.siteId}:${device.revoked}`} device={device} groups={groups} sites={sites} onChanged={onDeviceChanged}/></details>}
@@ -162,7 +164,7 @@ export function DeviceWorkspace({ device, admin, groups, sites, onDeviceChanged,
         {inventory && <article className="device-info-card"><h3><Server size={16}/>Sistema</h3><p>{inventory.operatingSystem} · {inventory.architecture}</p><p>{inventory.manufacturer ?? 'Produttore non rilevato'} {inventory.model ?? ''}</p><small>{inventory.processor ?? 'CPU non rilevata'} · {inventory.logicalProcessors} processori logici</small></article>}
         {metrics && <article className="device-info-card"><h3><HardDrive size={16}/>Archiviazione</h3>{metrics.disks.length ? metrics.disks.map(d => <div className="disk-row" key={d.name}><span>{d.name}</span><strong>{byteCount(d.freeBytes)} liberi</strong><small>di {byteCount(d.totalBytes)}</small><div className="meter"><i style={{ width: `${Math.min(100, Math.max(0, (d.totalBytes - d.freeBytes) / d.totalBytes * 100))}%` }}/></div></div>) : <p>Dati disco non disponibili.</p>}</article>}
         {metrics && <article className="device-info-card"><h3><Network size={16}/>Rete</h3>
-          {metrics?.networkAdapters?.length ? <div className="network-adapter-list">{metrics.networkAdapters.map((adapter, index) => <div className="network-adapter" key={`${adapter.name}-${index}`}>
+          {!networkInventoryCurrent ? <p className="network-stale-note"><AlertTriangle size={14}/>Agent {metrics?.agentVersion ?? 'installato'}: elenco rete non filtrato. Aggiorna alla versione 0.8.12 o successiva; i dati si aggiorneranno al prossimo heartbeat.</p> : metrics?.networkAdapters?.length ? <div className="network-adapter-list">{metrics.networkAdapters.map((adapter, index) => <div className="network-adapter" key={`${adapter.name}-${index}`}>
             <strong>{adapter.type === 'Wireless80211' ? 'Wi-Fi' : adapter.type.startsWith('Ethernet') ? 'Ethernet' : adapter.type} · {adapter.name}</strong>
             <span>IP {adapter.ipAddresses.length ? adapter.ipAddresses.join(', ') : 'non disponibile'}</span>
             <span>MAC {adapter.macAddress || 'non disponibile'}</span>
