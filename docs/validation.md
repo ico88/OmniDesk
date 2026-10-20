@@ -1,5 +1,12 @@
 # Stato e verifiche — 18 ottobre 2026
 
+### Migrazione GitHub Actions a Node 24 — 2026-10-20
+
+- Migrazione workflow: `actions/checkout@v7`, `actions/setup-dotnet@v6`, `actions/setup-node@v7` e `actions/upload-artifact@v7`. L'auto-cache npm è disattivata esplicitamente (`package-manager-cache: false`). Riferimenti upstream: [checkout](https://github.com/actions/checkout/releases), [setup-dotnet](https://github.com/actions/setup-dotnet/releases), [setup-node](https://github.com/actions/setup-node/releases), [upload-artifact](https://github.com/actions/upload-artifact/releases). Le release Node 24 richiedono runner Actions 2.327.1 o successivo.
+- Linux [run 39358139780](https://github.com/ico88/OmniDesk/actions/runs/39358139780) — completato con successo sul commit `9af754b`, inclusi test, build Docker, smoke Chromium e restore isolato.
+- Windows [run 39358139788](https://github.com/ico88/OmniDesk/actions/runs/39358139788) — completato con successo sullo stesso commit: setup-dotnet v6, workflow Agent/MSI e console; upload-artifact v7 ha caricato `omnidesk-agent-unsigned`, `omnidesk-console-unsigned` e `omnidesk-msi-diagnostics`.
+- La CI prova la compatibilità dei workflow e degli artifact su runner GitHub, non equivale alla firma Authenticode o a una release MSI approvata. Nessuna pubblicazione LAN eseguita.
+
 ### Versionamento workflow installer Windows — 2026-10-20
 
 - Corretto il job `native-installer`: legge la versione Agent dal progetto e la usa per nome/percorso artifact, sostituendo il valore statico 0.8.8; delega il packaging allo script comune, che verifica l’allineamento Agent/Tray/Setup/MSI, vendor hash e checksum. L'artifact è esplicitamente nominato `unsigned-lab`.
