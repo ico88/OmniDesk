@@ -19,6 +19,10 @@ DB/blob e restore applicativo isolato devono riuscire prima che l'archivio ricev
 `READY`. Gli archivi staged vengono rifiutati dal verificatore in modalità
 normale; il test shell controlla entrambe le condizioni. Smoke Chromium completo
 passato con restore fixture attraverso la modalità staging.
+Il backup riconosce anche installazioni legacy senza tabella allegati né volume:
+in quel caso salva e verifica un payload vuoto; se lo schema allegati esiste ma
+il mount persistente manca, interrompe il backup. Questa compatibilità è stata
+verificata con backup e restore isolato del DB LAN prima dell'upgrade.
 Questo riduce il rischio di archivi incoerenti quando la retention elimina
 allegati durante la raccolta, ma non sostituisce backup off-site, cifratura,
 retention dei backup o prova di disaster recovery su host separato.
@@ -33,7 +37,8 @@ offline, mentre l'inventario segue la propria soglia. I record dispositivo non
 vengono eliminati. Suite PostgreSQL 95/95, build dashboard/Vitest, configurazioni
 Compose e build API sono passati. Anche lo smoke Chromium/restore isolato è
 passato, includendo probe browser, ClamAV ed esercizio del ripristino. Non
-distribuito sulla LAN; retention backup/off-site ancora da progettare e validare.
+attivato sulla LAN (default `0`); retention backup/off-site ancora da progettare
+e validare.
 
 ### Service Desk — notifiche email escalation SLA
 
