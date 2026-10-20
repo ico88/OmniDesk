@@ -17,7 +17,7 @@ jobs:
   milestone-one:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: bash -n setup.sh scripts/test.sh scripts/smoke.sh scripts/backup.sh scripts/verify-backup.sh scripts/validate-release.sh
       - run: node --check scripts/restore-runtime-smoke.mjs
       - run: ./scripts/test.sh
