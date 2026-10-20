@@ -108,7 +108,7 @@ function App() {
   </aside><main className="content" aria-busy={busy}><header><div><small className="eyebrow">WORKSPACE / GESTIONE IT</small><h1>{{overview:'Panoramica',devices:'Dispositivi',branding:'Personalizzazione',users:'Utenti',workflows:'Workflow ticket',slaPolicies:'Policy SLA',audit:'Audit amministrativo',security:'Account e sicurezza',myTickets:'I miei ticket',support:'Assistenza',emailIntakes:'Email da valutare',knowledge:'Knowledge base'}[tab]}</h1></div><div className="header-actions"><Notifications onOpenTicket={id=>{setFocusTicketId(id);setTab('support');}}/><span className="badge"><Icon name="security" size={15}/>{admin?'Amministratore':'Accesso limitato'}</span></div></header>
     {error && <p role="alert" className="error">{error}</p>}{message && <p role="status" className="notice"><Icon name="check"/>{message}</p>}
     {tab === 'support' && <SupportDesk sites={sites} devices={devices} visibleDeviceIds={devices.map(d=>d.id)} focusTicketId={focusTicketId} onTicketFocused={()=>setFocusTicketId(null)} onOpenDevice={id=>action(async()=>{const next=await api<DeviceStatus>(`/devices/${id}/status`);setStatus(next);setTab('devices');})}/>}
-    {tab === 'emailIntakes' && canManageEmailIntake && <EmailIntakeInbox onMessage={setMessage}/>}
+    {tab === 'emailIntakes' && canManageEmailIntake && <EmailIntakeInbox devices={devices} onMessage={setMessage} onOpenTicket={id=>{setFocusTicketId(id);setTab('support');}}/>}
     {tab === 'myTickets' && <CustomerPortal onMessage={setMessage}/>}
     {tab === 'knowledge' && canReadKnowledge && <KnowledgeBase canManage={user.globalPermissions.includes('knowledge.manage')} onMessage={setMessage}/>}
     {tab === 'slaPolicies' && canManageSla && <SlaPolicyAdmin onMessage={setMessage}/>}

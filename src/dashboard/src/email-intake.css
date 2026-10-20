@@ -2,6 +2,7 @@
 .email-intake-list{display:grid;gap:14px;margin-top:18px}
 .email-intake-item{padding:18px;border:1px solid var(--line);border-radius:14px;background:var(--surface-raised,rgba(255,255,255,.025));min-width:0}
 .email-intake-item>header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
+.email-intake-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
 .email-intake-item h3{margin:0 0 8px;font-size:1rem;overflow-wrap:anywhere}
 .email-intake-item p{margin:0 0 6px;overflow-wrap:anywhere}
 .email-intake-item small{color:var(--muted)}
@@ -10,4 +11,12 @@
 .email-intake-item pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:360px;overflow:auto;margin:10px 0 0;padding:14px;border:1px solid var(--line);border-radius:10px;background:var(--surface);font:inherit;font-size:.9rem}
 .email-intake-item .email-message-id{display:block;overflow-wrap:anywhere}
 .email-intake-item .danger-action{color:var(--danger,#dc2626)}
-@media(max-width:640px){.email-intake-item>header{flex-direction:column}.email-intake-item>header .danger-action{align-self:flex-end}}
+.email-promotion-form{display:grid;gap:12px;margin:16px 0;padding:16px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+.email-promotion-form>p{margin:0;color:var(--muted)}
+.email-promotion-form>label,.email-promotion-options>label{display:grid;gap:6px;font-weight:600}
+.email-promotion-form input:not([type=checkbox]),.email-promotion-form textarea,.email-promotion-form select{width:100%;font:inherit}
+.email-promotion-form textarea{resize:vertical}
+.email-promotion-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.email-promotion-form .email-identity-confirm{display:flex;align-items:flex-start;gap:9px;font-weight:500}
+.email-promotion-form .email-identity-confirm input{margin-top:4px}
+@media(max-width:640px){.email-intake-item>header{flex-direction:column}.email-intake-actions{align-self:stretch;justify-content:flex-start}.email-promotion-options{grid-template-columns:1fr}}
