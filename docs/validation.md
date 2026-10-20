@@ -1987,8 +1987,10 @@ modificato; ogni nuova estensione attende la propria CI sul push.
 - Compose base, test, backup-check e restore-check con fixture di percorso — `config --quiet` passato; `git diff --check` passato.
 - `./scripts/smoke.sh --browser` — passato nello stack isolato: il fixture è stato verificato in staging, inclusi riferimenti DB/blob e restore runtime completo DB/Identity/CA via HTTPS; API readiness, antiforgery e deny anonimo passati. Nessun servizio LAN modificato.
 - `backup.sh` lascia senza marker `READY` un archivio se checksum, riferimenti blob o restore falliscono. Backup off-site, cifratura, retention e DR su host separato restano aperti.
+- CI Linux `39370170711` — passata: suite, test backup staging, Compose, build API/dashboard e smoke restore staging completo. CI Windows `39370170700` — passata: console, MSI, install/recovery/uninstall e upgrade/repair/rollback sulle baseline. Nessun backup live o deploy LAN.
 
 ### Windows — timeout delle prove MSI
 
 - La pipeline `39369087920` non aveva ancora concluso la prova install/recovery/uninstall al momento dell'ultima verifica; non è stata cancellata. Il test MSI ora applica timeout espliciti di 180 secondi a installazione/disinstallazione e 30 secondi alle transizioni dei servizi. Il job ha un limite complessivo di 45 minuti per evitare attese senza termine.
 - La revisione PowerShell richiede il runner Windows della CI; nessun parser PowerShell è disponibile localmente. La nuova pipeline deve verificare le modifiche e l'esito install/recovery/upgrade.
+- Run Windows `39370170700` ha poi completato con successo l'intera matrice MSI, ma precede l'introduzione dei timeout. Nella run `39370263899` con i timeout, parse, build MSI, installazione, recovery, uninstall e console sono passati; upgrade/repair/rollback è ancora in esecuzione. La run precedente `39369087920` risulta ancora attiva e non è stata interrotta.
