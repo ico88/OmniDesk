@@ -16,6 +16,7 @@ services:
     restart: unless-stopped
     environment:
       MESH_DOMAIN: ${MESH_DOMAIN:?Set MESH_DOMAIN}
+      OMNIDESK_REMOTE_SESSION_MINUTES: ${OMNIDESK_REMOTE_SESSION_MINUTES:-30}
       OMNIDESK_FRAME_ORIGINS: https://${OMNIDESK_DOMAIN},https://${OMNIDESK_LAN_IP:-192.168.1.233}:${OMNIDESK_HTTPS_PORT:-8085}
     secrets: [mesh_password]
     volumes:
@@ -30,6 +31,7 @@ services:
       MeshCentral__Origin: https://${MESH_DOMAIN:?Set MESH_DOMAIN}/
       MeshCentral__Username: omnidesk-service
       MeshCentral__PasswordFile: /run/secrets/mesh_password
+      OMNIDESK_REMOTE_SESSION_MINUTES: ${OMNIDESK_REMOTE_SESSION_MINUTES:-30}
     secrets: [db_password, mesh_password]
   caddy:
     environment:

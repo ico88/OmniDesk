@@ -65,7 +65,7 @@ builder.Services.AddSingleton<IOutboundEmailSender, SmtpOutboundEmailSender>();
 builder.Services.AddSingleton<AttachmentStorage>();
 builder.Services.AddSingleton<IAttachmentScanner, ClamAvAttachmentScanner>();
 builder.Services.AddHostedService<AttachmentScanWorker>();
-builder.Services.AddSingleton<IMeshCentralClient>(new MeshCentralClient(new MeshCentralOptions(builder.Configuration["MeshCentral:Origin"], builder.Configuration["MeshCentral:Username"], builder.Configuration["MeshCentral:PasswordFile"])));
+builder.Services.AddSingleton<IMeshCentralClient>(new MeshCentralClient(new MeshCentralOptions(builder.Configuration["MeshCentral:Origin"], builder.Configuration["MeshCentral:Username"], builder.Configuration["MeshCentral:PasswordFile"], builder.Configuration.GetValue("OMNIDESK_REMOTE_SESSION_MINUTES", 30))));
 builder.Services.AddSingleton<IMeshProvisioningClient>(sp => (IMeshProvisioningClient)sp.GetRequiredService<IMeshCentralClient>());
 builder.Services.AddAuthentication().AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, DeviceAuthentication>(DeviceAuthentication.SchemeName, _ => {});
 builder.Services.AddHostedService<AssertionCleanup>();

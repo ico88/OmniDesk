@@ -45,7 +45,16 @@ public sealed class RemoteSessionGuard(IServiceScopeFactory scopes, ILogger<Remo
                 if (!mesh.Configured || string.IsNullOrEmpty(session.NodeId) || session.PublicId is null) continue;
                 using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
                 timeout.CancelAfter(TimeSpan.FromSeconds(10));
-                if (session.Capability == "remote.control") await mesh.Disconnect(session.NodeId, session.PublicId, timeout.Token);
+                if (session.Capability == "remote.control")
+                {
+                    var actor = await db.Users.AsNoTracking().SingleOrDefaultAsync(x => x.Id == session.ActorId, ct);
+                    var guestName = RemoteOperatorName.Resolve(actor);
+                    try { await mesh.Disconnect(session.NodeId, session.PublicId, guestName, timeout.Token); }
+                    catch (Exception e) when (e is not OperationCanceledException || !ct.IsCancellationRequested)
+                    {
+                        logger.LogWarning("Remote desktop disconnect lookup failed for {SessionId}: {Type}", session.Id, e.GetType().Name);
+                    }
+                }
                 await mesh.Revoke(session.NodeId, session.PublicId, timeout.Token);
                 await using var tx = await db.Database.BeginTransactionAsync(ct);
                 var endedAt = DateTimeOffset.UtcNow;

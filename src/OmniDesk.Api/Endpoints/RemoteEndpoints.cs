@@ -53,9 +53,7 @@ public static class RemoteEndpoints
             try
             {
                 var operatorUser = await users.FindByIdAsync(c.User.UserId());
-                var operatorName = operatorUser?.DisplayName;
-                if (string.IsNullOrWhiteSpace(operatorName)) operatorName = operatorUser?.Email;
-                if (string.IsNullOrWhiteSpace(operatorName)) operatorName = "Operatore OmniDesk";
+                var operatorName = RemoteOperatorName.Resolve(operatorUser);
                 created = await mesh.Create(mapping.NodeId, r.Capability, operatorName, session.ConsentRequired, c.RequestAborted);
                 session.PublicId = created.PublicId; session.ExpiresAt = created.ExpiresAt; session.State = "active";
                 db.AuditEvents.Add(Event(c, "remote.create", session.Id)); await db.SaveChangesAsync();
@@ -93,7 +91,8 @@ public static class RemoteEndpoints
             if (!await p.Allows(userId, "administration") && !await p.Allows(userId, "remote.control", id)) return Results.Forbid();
             if (await db.DeviceCredentials.AnyAsync(x => x.DeviceId == id && x.RevokedAt != null) ||
                 await db.RemoteProvisionings.AnyAsync(x => x.DeviceId == id && !x.Enabled)) return Results.Forbid();
-            await mesh.Disconnect(session.NodeId, session.PublicId, c.RequestAborted);
+            var operatorUser = await db.Users.AsNoTracking().SingleOrDefaultAsync(x => x.Id == session.ActorId);
+            await mesh.Disconnect(session.NodeId, session.PublicId, RemoteOperatorName.Resolve(operatorUser), c.RequestAborted);
             db.AuditEvents.Add(Event(c, "remote.disconnect", session.Id));
             await db.SaveChangesAsync();
             return Results.Accepted(value: new { session.Id, state = "disconnect_requested", reconnectAllowedUntil = session.ExpiresAt });
@@ -124,9 +123,17 @@ public static class RemoteEndpoints
             if (session.State is "revoked" or "failed") return Results.NoContent();
             if (string.IsNullOrEmpty(session.NodeId) || session.PublicId is null)
                 return Results.Accepted(value: new { session.Id, state = "revocation_pending" });
+            var operatorUser = await db.Users.AsNoTracking().SingleOrDefaultAsync(x => x.Id == session.ActorId);
+            var guestName = RemoteOperatorName.Resolve(operatorUser);
             try
             {
-                if (session.Capability == "remote.control") await mesh.Disconnect(session.NodeId, session.PublicId, c.RequestAborted);
+                if (session.Capability == "remote.control")
+                {
+                    // A disconnect lookup can fail after MeshCentral has expired and purged the
+                    // share. Still attempt durable share revocation; it is idempotent for missing IDs.
+                    try { await mesh.Disconnect(session.NodeId, session.PublicId, guestName, c.RequestAborted); }
+                    catch when (!c.RequestAborted.IsCancellationRequested) { }
+                }
                 await mesh.Revoke(session.NodeId, session.PublicId, c.RequestAborted);
             }
             catch

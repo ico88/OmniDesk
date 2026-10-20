@@ -18,13 +18,17 @@ export type DeviceStatus = {
 };
 type Group = { id: string; name: string };
 type UpdateItem = { UpdateId: string; Revision: number; Title: string; Kb: string[]; ResultCode: number | null };
-type UpdateJob = { id: string; kind: string; state: string; createdAt: string; result: string | null };
+type UpdateJob = { id: string; kind: string; state: string; createdAt: string; completedAt?: string | null; result: string | null };
 type DiagnosticJob = UpdateJob & { completedAt: string | null };
 type DiagnosticData = { Kind: string; CollectedAt: string; Processes?: { ProcessId: number; Name: string; StartedAt: string; CanTerminate: boolean }[]; Services?: { Name: string; DisplayName: string; State: string; StartType: string }[]; Events?: { Log: string; TimeCreated: string; Id: number; Level: string; Source: string; Message: string }[] };
 type ServiceJob = UpdateJob & { completedAt: string | null; payload?: string };
 type WindowsDownload = { available: boolean; release: { version: string; msiSha256?: string | null; msiSize?: number | null } | null };
 
 const jobLabels: Record<string, string> = { queued: 'In coda', leased: 'In esecuzione', succeeded: 'Completato', failed: 'Non riuscito', cancelled: 'Annullato' };
+const elapsed = (from: string, to = Date.now()) => {
+  const seconds = Math.max(0, Math.floor((to - new Date(from).getTime()) / 1000));
+  return seconds < 60 ? `${seconds} secondi` : `${Math.floor(seconds / 60)} min ${seconds % 60} sec`;
+};
 const byteCount = (bytes: number) => `${(bytes / 1073741824).toFixed(1)} GiB`;
 const versionAtLeast = (value: string | null | undefined, minimum: string) => {
   if (!value) return false;
@@ -42,11 +46,12 @@ export function DeviceWorkspace({ device, admin, groups, sites, onDeviceChanged,
   onDeviceChanged: (message: string) => Promise<void>;
   onMessage: (message: string) => void;
 }) {
-  const [activeTab, setActiveTab] = useState<DeviceTabId>('overview');
+  const [activeTab, setActiveTab] = useState<DeviceTabId>('desktop');
   const [remoteReady, setRemoteReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [jobs, setJobs] = useState<UpdateJob[]>([]);
+  const [jobsCheckedAt, setJobsCheckedAt] = useState(Date.now());
   const [selectedUpdates, setSelectedUpdates] = useState<UpdateItem[]>([]);
   const [windowsRelease, setWindowsRelease] = useState<WindowsDownload | null>(null);
   const [diagnosticJobs, setDiagnosticJobs] = useState<DiagnosticJob[]>([]);
@@ -106,6 +111,19 @@ export function DeviceWorkspace({ device, admin, groups, sites, onDeviceChanged,
   }, [activeTab, device.id]);
 
   useEffect(() => {
+    if (activeTab !== 'updates' || !device.capabilities.includes('updates')) return;
+    let active = true;
+    const refresh = async () => {
+      try {
+        const rows = await api<UpdateJob[]>(`/devices/${device.id}/updates`);
+        if (active) { setJobs(rows); setJobsCheckedAt(Date.now()); }
+      } catch { /* Keep the last known state; manual refresh reports errors. */ }
+    };
+    const timer = window.setInterval(() => void refresh(), 5000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [activeTab, device.id, device.capabilities]);
+
+  useEffect(() => {
     if (activeTab !== 'processes' && activeTab !== 'services' && activeTab !== 'events') return;
     if (!count('diagnostics.view')) return;
     let active = true;
@@ -150,7 +168,6 @@ export function DeviceWorkspace({ device, admin, groups, sites, onDeviceChanged,
       <div><span className="eyebrow">DISPOSITIVO</span><h2><Monitor size={22}/>{device.name}</h2><small>{inventory?.operatingSystem ?? 'Sistema operativo non disponibile'} · Agent {metrics?.agentVersion ?? 'non rilevato'} · Ultimo contatto {device.lastSeen ? new Date(device.lastSeen).toLocaleString('it-IT') : 'mai'}</small></div>
       <span className={`status-pill ${device.revoked ? 'danger' : device.online ? 'online' : 'offline'}`}>{device.revoked ? 'Revocato' : device.online ? 'Online' : 'Offline'}</span>
     </div>
-    {admin && <details className="advanced device-management"><summary><Icon name="settings"/>Gestione dispositivo</summary><DeviceManagement key={`${device.id}:${device.name}:${device.groupId}:${device.siteId}:${device.revoked}`} device={device} groups={groups} sites={sites} onChanged={onDeviceChanged}/></details>}
     <DeviceTabs active={activeTab} onChange={tab => { setActiveTab(tab); setError(''); }}/>
     {error && <p className="error" role="alert">{error}</p>}
 
@@ -204,9 +221,11 @@ export function DeviceWorkspace({ device, admin, groups, sites, onDeviceChanged,
         }}>Aggiorna Agent</button></> : <small>Solo un amministratore globale può aggiornare il software Agent.</small>}</article>
         <div className="action-row"><button disabled={busy || device.revoked} onClick={() => void work(async () => { await api(`/devices/${device.id}/updates/scan`, 'POST', { requestId: crypto.randomUUID() }); await loadJobs(); })}>Avvia scansione</button><p>I lavori vengono eseguiti dall’agente. Nessun riavvio automatico.</p></div>
         {!jobs.length && <p>Nessun lavoro di aggiornamento registrato.</p>}
-        {jobs.map(job => <article className="update-job-card" key={job.id}><div><strong>{job.kind === 'scan' ? 'Scansione' : job.kind === 'install' ? 'Installazione aggiornamenti' : 'Aggiornamento Agent'}</strong><span className={`status-pill ${job.state === 'succeeded' ? 'online' : job.state === 'failed' ? 'danger' : 'offline'}`}>{jobLabels[job.state] ?? job.state}</span></div><small>{new Date(job.createdAt).toLocaleString('it-IT')}</small>
+        {jobs.map(job => <article className="update-job-card" key={job.id}><div><strong>{job.kind === 'scan' ? 'Scansione' : job.kind === 'install' ? 'Installazione aggiornamenti' : 'Aggiornamento Agent'}</strong><span className={`status-pill ${job.state === 'succeeded' ? 'online' : job.state === 'failed' ? 'danger' : 'offline'}`}>{jobLabels[job.state] ?? job.state}</span></div><small>{new Date(job.createdAt).toLocaleString('it-IT')}{job.state === 'queued' || job.state === 'leased' ? ` · ${elapsed(job.createdAt, jobsCheckedAt)}` : ''}</small>
+          {job.kind === 'agent.update' && job.state === 'leased' && <p className="muted">Installazione MSI in corso. Il servizio Agent può riavviarsi durante l’operazione; OmniDesk non riavvia Windows. La pagina controlla l’esito automaticamente ogni 5 secondi.</p>}
+          {job.kind === 'agent.update' && job.state === 'leased' && Date.now() - new Date(job.createdAt).getTime() >= 5 * 60_000 && <p className="network-stale-note" role="status"><AlertTriangle size={15}/>Nessun esito ricevuto dopo 5 minuti: non significa che l’installazione sia fallita. Serve la conferma dell’Agent; ultimo controllo {new Date(jobsCheckedAt).toLocaleTimeString('it-IT')}.</p>}
           {job.state === 'queued' && <button className="secondary compact" disabled={busy} onClick={() => void work(async () => { await api(`/devices/${device.id}/updates/${job.id}`, 'DELETE'); await loadJobs(); })}>Annulla</button>}
-          {job.result && (() => { try { const result = JSON.parse(job.result) as { Succeeded: boolean; RebootRequired: boolean; Error: string | null; Updates: UpdateItem[] }; return <div className="update-result"><p>{result.Succeeded ? 'Operazione completata' : 'Operazione non riuscita'}{result.RebootRequired ? ' · Riavvio richiesto' : ''}</p>{result.Error && <details><summary>Dettagli errore</summary><code>{result.Error}</code></details>}{job.kind === 'scan' && result.Succeeded && result.Updates.map(item => <label className="update-choice" key={`${item.UpdateId}-${item.Revision}`}><input type="checkbox" checked={selectedUpdates.some(x => x.UpdateId === item.UpdateId)} onChange={event => setSelectedUpdates(event.target.checked ? [...selectedUpdates.filter(x => x.UpdateId !== item.UpdateId), item] : selectedUpdates.filter(x => x.UpdateId !== item.UpdateId))}/>{item.Title} · {item.Kb.join(', ')}</label>)}</div>; } catch { return <p>Risultato non leggibile; richiedi di nuovo l’elenco lavori.</p>; } })()}
+          {job.result && (() => { try { const result = JSON.parse(job.result) as { Succeeded: boolean; RebootRequired: boolean; Error: string | null; Updates: UpdateItem[] }; return <div className="update-result"><p>{result.Succeeded ? job.kind === 'agent.update' ? 'Agent aggiornato correttamente' : 'Operazione completata' : 'Aggiornamento non riuscito'}{result.RebootRequired ? ' · Riavvio di Windows necessario' : result.Succeeded && job.kind === 'agent.update' ? ' · Riavvio di Windows non necessario' : ''}</p>{result.Error && <p className="error" role="alert">{result.Error}</p>}{job.kind === 'scan' && result.Succeeded && result.Updates.map(item => <label className="update-choice" key={`${item.UpdateId}-${item.Revision}`}><input type="checkbox" checked={selectedUpdates.some(x => x.UpdateId === item.UpdateId)} onChange={event => setSelectedUpdates(event.target.checked ? [...selectedUpdates.filter(x => x.UpdateId !== item.UpdateId), item] : selectedUpdates.filter(x => x.UpdateId !== item.UpdateId))}/>{item.Title} · {item.Kb.join(', ')}</label>)}</div>; } catch { return <p>Risultato non leggibile; richiedi di nuovo l’elenco lavori.</p>; } })()}
         </article>)}
         {!!selectedUpdates.length && <button disabled={busy || device.revoked} onClick={() => void work(async () => { await api(`/devices/${device.id}/updates/install`, 'POST', { requestId: crypto.randomUUID(), updates: selectedUpdates.map(item => ({ updateId: item.UpdateId, revision: item.Revision })) }); setSelectedUpdates([]); await loadJobs(); })}>Installa {selectedUpdates.length} aggiornamenti selezionati</button>}
       </>}
@@ -258,6 +277,7 @@ export function DeviceWorkspace({ device, admin, groups, sites, onDeviceChanged,
         </>;
       })()}
     </DevicePanel>}
+    {admin && <details className="advanced device-management"><summary><Icon name="settings"/>Configurazione dispositivo</summary><DeviceManagement key={`${device.id}:${device.name}:${device.groupId}:${device.siteId}:${device.revoked}`} device={device} groups={groups} sites={sites} onChanged={onDeviceChanged}/></details>}
   </section>;
 }
 

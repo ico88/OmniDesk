@@ -4,8 +4,8 @@ import type { ReactNode } from 'react';
 export type DeviceTabId = 'overview' | 'desktop' | 'terminal' | 'files' | 'processes' | 'services' | 'software' | 'updates' | 'events' | 'tickets';
 
 const tabs: { id: DeviceTabId; label: string; icon: LucideIcon }[] = [
-  { id: 'overview', label: 'Panoramica', icon: Gauge },
   { id: 'desktop', label: 'Desktop remoto', icon: Monitor },
+  { id: 'overview', label: 'Panoramica', icon: Gauge },
   { id: 'terminal', label: 'Terminale e PowerShell', icon: Terminal },
   { id: 'files', label: 'Trasferimento file', icon: Files },
   { id: 'processes', label: 'Processi', icon: Activity },

@@ -2,6 +2,8 @@ import {readFileSync,writeFileSync,existsSync} from 'node:fs';
 import {spawnSync,spawn} from 'node:child_process';
 const domain=process.env.MESH_DOMAIN;
 if(!domain || !/^[a-zA-Z0-9.-]+$/.test(domain)) throw new Error('MESH_DOMAIN required');
+const sessionMinutes=Number(process.env.OMNIDESK_REMOTE_SESSION_MINUTES||30);
+if(!Number.isInteger(sessionMinutes)||sessionMinutes<1||sessionMinutes>30)throw new Error('OMNIDESK_REMOTE_SESSION_MINUTES must be between 1 and 30');
 const origin=new URL(process.env.MESH_PUBLIC_ORIGIN||`https://${domain}/`);
 if(origin.protocol!=='https:'||origin.hostname!==domain||origin.username||origin.password||origin.pathname!=='/'||origin.search||origin.hash)throw new Error('Invalid public origin');
 const framingOrigins=(process.env.OMNIDESK_FRAME_ORIGINS||'').split(/[\s,]+/).filter(Boolean).map(value=>{
@@ -11,7 +13,7 @@ const framingOrigins=(process.env.OMNIDESK_FRAME_ORIGINS||'').split(/[\s,]+/).fi
 });
 if(framingOrigins.length===0)throw new Error('OMNIDESK_FRAME_ORIGINS required');
 const directory='/opt/meshcentral/meshcentral-data';
-const config={settings:{cert:domain,port:8081,aliasPort:Number(origin.port||443),redirPort:0,mpsPort:0,tlsOffload:true,wanOnly:true,exactPorts:true,lockAgentDownload:true,allowedFramingOrigins:framingOrigins},domains:{'':{title:'OmniDesk Remote',newAccounts:false,certUrl:origin.href,guestDeviceSharing:{maxSessionTime:5},userNameIsEmail:false,consentMessages:{title:'OmniDesk — Assistenza remota',desktop:'{0} richiede controllo del desktop. Acconsenti?',terminal:'{0} richiede accesso al terminale. Acconsenti?',files:'{0} richiede accesso ai file. Acconsenti?',consentTimeout:30,autoAcceptOnTimeout:false,autoAcceptIfNoUser:false,autoAcceptIfLocked:false}}}};
+const config={settings:{cert:domain,port:8081,aliasPort:Number(origin.port||443),redirPort:0,mpsPort:0,tlsOffload:true,wanOnly:true,exactPorts:true,lockAgentDownload:true,allowedFramingOrigins:framingOrigins},domains:{'':{title:'OmniDesk Remote',newAccounts:false,certUrl:origin.href,guestDeviceSharing:{maxSessionTime:sessionMinutes},userNameIsEmail:false,consentMessages:{title:'OmniDesk — Assistenza remota',desktop:'{0} richiede controllo del desktop. Acconsenti?',terminal:'{0} richiede accesso al terminale. Acconsenti?',files:'{0} richiede accesso ai file. Acconsenti?',consentTimeout:30,autoAcceptOnTimeout:false,autoAcceptIfNoUser:false,autoAcceptIfLocked:false}}}};
 writeFileSync(`${directory}/config.json`,JSON.stringify(config,null,2),{mode:0o600});
 const main='/opt/meshcentral/node_modules/meshcentral';
 function run(args){const result=spawnSync('node',[main,'--datapath',directory,...args],{stdio:['ignore','pipe','pipe']});if(result.status!==0||(!result.stdout.toString().includes('Done.')&&!result.stdout.toString().includes('User already exists.')))throw new Error('MeshCentral provisioning failed');}

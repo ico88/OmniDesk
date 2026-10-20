@@ -3,20 +3,21 @@ using System.Text;
 using System.Text.Json;
 namespace OmniDesk.Remote.MeshCentral;
 public sealed record MeshSession(string PublicId, string Url, DateTimeOffset ExpiresAt);
-public sealed record MeshCentralOptions(string? Origin, string? Username, string? PasswordFile);
+public sealed record MeshCentralOptions(string? Origin, string? Username, string? PasswordFile, int SessionMinutes = 30);
 public interface IMeshCentralClient
 {
     bool Configured { get; }
     Task<MeshSession> Create(string nodeId, string capability, string actor, bool consentRequired, CancellationToken cancellationToken);
-    Task Disconnect(string nodeId, string publicId, CancellationToken cancellationToken);
+    Task Disconnect(string nodeId, string publicId, string guestName, CancellationToken cancellationToken);
     Task Revoke(string nodeId, string publicId, CancellationToken cancellationToken);
 }
 public sealed partial class MeshCentralClient(MeshCentralOptions options) : IMeshCentralClient
 {
-    internal static readonly TimeSpan SessionLifetime = TimeSpan.FromMinutes(30);
+    public TimeSpan SessionLifetime => TimeSpan.FromMinutes(options.SessionMinutes);
     public bool Configured => Uri.TryCreate(options.Origin, UriKind.Absolute, out var origin) && origin.Scheme == "https" &&
         origin.AbsolutePath == "/" && string.IsNullOrEmpty(origin.UserInfo) && string.IsNullOrEmpty(origin.Query) &&
-        string.IsNullOrEmpty(origin.Fragment) && !string.IsNullOrWhiteSpace(options.Username) && File.Exists(options.PasswordFile);
+        string.IsNullOrEmpty(origin.Fragment) && !string.IsNullOrWhiteSpace(options.Username) && File.Exists(options.PasswordFile) &&
+        options.SessionMinutes is > 0 and <= 30;
     public async Task<MeshSession> Create(string nodeId, string capability, string actor, bool consentRequired, CancellationToken cancellationToken)
     {
         // Exactly one protocol. Consent policy comes only from the authorized server; no administrative UI or broad account handed to browser.
@@ -41,26 +42,21 @@ public sealed partial class MeshCentralClient(MeshCentralOptions options) : IMes
     public async Task Revoke(string nodeId, string publicId, CancellationToken cancellationToken)
     {
         var reply = await Command(new Dictionary<string, object> { ["action"] = "removeDeviceShare", ["nodeid"] = nodeId, ["publicid"] = publicId }, cancellationToken);
-        if ((!reply.TryGetProperty("result", out var result) || result.GetString() != "OK") && !reply.TryGetProperty("removed", out _))
+        if (!reply.TryGetProperty("result", out var result) ||
+            (result.GetString() != "OK" && result.GetString() != "Invalid device share identifier."))
             throw new InvalidOperationException("MeshCentral refused session revocation");
     }
-    public async Task Disconnect(string nodeId, string publicId, CancellationToken cancellationToken)
+    public async Task Disconnect(string nodeId, string publicId, string guestName, CancellationToken cancellationToken)
     {
         // MeshCentral's desktop endsession command targets a share by its owner and guest name.
-        // Resolve both from the server-side share record; neither value comes from the browser.
+        // Prefer the server record; MeshCentral purges expired shares, so use the stored OmniDesk
+        // guest name and configured service identity when the record is already gone.
         var reply = await Command(new Dictionary<string, object> { ["action"] = "deviceShares", ["nodeid"] = nodeId }, cancellationToken);
-        if (!reply.TryGetProperty("deviceShares", out var shares) || shares.ValueKind != JsonValueKind.Array)
-            throw new InvalidOperationException("MeshCentral did not return device shares");
-        var share = shares.EnumerateArray().SingleOrDefault(x =>
-            x.TryGetProperty("publicid", out var id) && id.GetString() == publicId);
-        if (share.ValueKind != JsonValueKind.Object ||
-            !share.TryGetProperty("userid", out var userId) || string.IsNullOrWhiteSpace(userId.GetString()) ||
-            !share.TryGetProperty("guestName", out var guestName) || string.IsNullOrWhiteSpace(guestName.GetString()))
-            throw new InvalidOperationException("MeshCentral share identity is unavailable");
+        var identity = MeshDisconnectIdentity.Resolve(reply.GetProperty("deviceShares"), publicId, options.Username ?? "", guestName);
 
         await Command(new Dictionary<string, object> {
             ["action"] = "endDesktopMultiplex", ["nodeid"] = nodeId,
-            ["xuserid"] = userId.GetString()!, ["guestname"] = guestName.GetString()!
+            ["xuserid"] = identity.OwnerId, ["guestname"] = identity.GuestName
         }, cancellationToken, waitForResponse: false);
     }
     private async Task<JsonElement> Command(Dictionary<string, object> command, CancellationToken cancellationToken, Action<JsonElement>? serverInfo = null, bool waitForResponse = true)
@@ -92,7 +88,14 @@ public sealed partial class MeshCentralClient(MeshCentralOptions options) : IMes
             if (command["action"].ToString() == "deviceShares" && json.RootElement.TryGetProperty("action", out var sharesAction) &&
                 sharesAction.GetString() == "deviceShares" && json.RootElement.TryGetProperty("nodeid", out var sharesNode) &&
                 sharesNode.GetString() == command["nodeid"].ToString()) return json.RootElement.Clone();
-            if (json.RootElement.TryGetProperty("responseid", out var id) && id.GetString() == responseId) return json.RootElement.Clone();
+            if (json.RootElement.TryGetProperty("responseid", out var id) && id.GetString() == responseId)
+            {
+                // MeshCentral first reports the removed document (possibly null), then sends the
+                // final result after its database removal callback has run.
+                if (command["action"].ToString() == "removeDeviceShare" &&
+                    (!json.RootElement.TryGetProperty("result", out var removeResult) || removeResult.ValueKind != JsonValueKind.String)) continue;
+                return json.RootElement.Clone();
+            }
         }
     }
 }

@@ -37,7 +37,9 @@ internal static class AgentUpdater
         using var process = Process.Start(start) ?? throw new InvalidOperationException("Windows Installer could not be started.");
         await process.WaitForExitAsync();
         var ok = process.ExitCode is 0 or 3010;
-        var installedVersion = FileVersionInfo.GetVersionInfo(Path.Combine(AppContext.BaseDirectory, "OmniDesk.Agent.Windows.exe")).ProductVersion?.Split('+')[0];
+        // This process runs from ProgramData as OmniDeskUpdater.exe; verify the MSI target under Program Files.
+        var installedPath = AgentInstallLayout.ExecutablePath(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles));
+        var installedVersion = FileVersionInfo.GetVersionInfo(installedPath).ProductVersion?.Split('+')[0];
         ok &= Version.TryParse(installedVersion, out var actual) && actual >= target;
         var result = new UpdateResultRequest(receipt.LeaseId, ok, process.ExitCode == 3010, [], ok ? null : $"Windows Installer failed or installed version did not reach {target} (exit {process.ExitCode}). Log: {Path.GetFileName(logPath)}");
         UpdateWorker.Save(receiptPath, receipt with { State = ok ? "installed" : "failed", Result = result });
