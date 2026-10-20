@@ -2080,9 +2080,10 @@ modificato; ogni nuova estensione attende la propria CI sul push.
 
 ### Backup — retention locale opt-in — 2026-10-20
 
-- `bash -n scripts/backup.sh scripts/prune-backups.sh tests/backup-retention-tests.sh` e `bash tests/backup-retention-tests.sh` — passati. Il test dimostra default disattivato, rimozione solo di backup vecchi diretti con `READY`, preservazione di staging, backup futuri e symlink, e rifiuto di soglie/percorso non validi.
+- `bash -n scripts/backup.sh scripts/prepare-backup-directory.sh scripts/prune-backups.sh tests/backup-retention-tests.sh` e `bash tests/backup-retention-tests.sh` — passati. Il test dimostra default disattivato, validazione prima del backup, root symlink/file respinti, rimozione solo di backup vecchi diretti con `READY`, preservazione di staging, backup futuri e symlink, e rifiuto di soglie/percorso non validi.
 - `bash tests/backup-verification-tests.sh`, `docker compose config --quiet`, `git diff --check` e `./scripts/test.sh` — passati; suite API/PostgreSQL 96/96, build dashboard e Vitest 6/6.
 - Il backup invoca la pulizia solo dopo aver verificato e marcato `READY` il nuovo archivio. `OMNIDESK_BACKUP_RETENTION_DAYS` si configura nell'ambiente o nel `.env`; default `0`. La pulizia non è stata eseguita sui backup del repository/deployment. Nessuna migrazione o modifica LAN.
-- CI Linux [`39392940229`](https://github.com/ico88/OmniDesk/actions/runs/39392940229) — passata, includendo test retention, suite applicativa e smoke Chromium/restore isolato. CI Windows [`39392940145`](https://github.com/ico88/OmniDesk/actions/runs/39392940145) — passata, inclusi install/recovery/uninstall e upgrade/repair/rollback MSI sulle baseline 0.6.0 e 0.7.0; non esegue la retention backup.
+- CI Linux [`39392940229`](https://github.com/ico88/OmniDesk/actions/runs/39392940229) — passata sulla prima versione, includendo test retention, suite applicativa e smoke Chromium/restore isolato. CI Windows [`39392940145`](https://github.com/ico88/OmniDesk/actions/runs/39392940145) — passata, inclusi install/recovery/uninstall e upgrade/repair/rollback MSI sulle baseline 0.6.0 e 0.7.0; non esegue la retention backup.
+- Follow-up hardening: test shell verificano anche validazione preflight prima di Compose e rifiuto di una root backup symlink/file. `bash -n`, test mirati, `docker compose config --quiet` e `git diff --check` — passati in locale. La CI per queste ultime modifiche attende il push.
 - La retention locale non aggiunge cifratura né copia off-site e non è stata attivata sui backup del deployment.
 

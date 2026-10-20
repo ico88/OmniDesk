@@ -38,6 +38,11 @@ suite applicativa, smoke/restore e CI Linux `39392940229` passano; CI Windows
 `39392940145` completa la matrice MSI. Nessuna retention è stata attivata sui
 backup live; cifratura e copia off-site restano aperte.
 
+Hardening successivo in lavorazione: la validazione della soglia ora precede
+qualsiasi comando Docker e la directory `.backups` viene rifiutata se file o
+symlink. Test mirati e configurazione Compose passano localmente; la CI di
+queste modifiche è ancora pendente.
+
 | Parte | Implementazione | Verifica disponibile | Gate rimanente |
 | --- | --- | --- | --- |
 | Presenza e audit Agent | Online/Offline da heartbeat firmato; baseline persistente e audit deduplicato delle transizioni, revocati esclusi, soglia/poll configurabili; campanella e inbox notificano solo dispositivi visibili; email offline opzionale con consenso e rivalidazione scope; retention opt-in configurabile per audit, metriche e inventario (default disattivata) | Test integrato PostgreSQL controlla isolamento device e consegna SMTP fake; suite 95/95, dashboard 6/6 Vitest, smoke Chromium/restore e build Docker passano localmente | Revisione non pubblicata sulla LAN; SMTP reale, altri canali esterni, policy normative prima di abilitare retention in produzione restano aperte |

@@ -22,7 +22,7 @@ La pulizia può essere verificata tramite le azioni audit `retention.outbox.purg
 
 ## Backup locali
 
-`scripts/backup.sh` può eliminare i backup locali verificati oltre una soglia configurabile. `OMNIDESK_BACKUP_RETENTION_DAYS` accetta `0` (default, disattivata) oppure da 1 a 36500 giorni; si può impostare nell'ambiente del comando o nel `.env` del deployment. La pulizia avviene soltanto dopo che il nuovo backup è stato marcato `READY` e dopo la verifica DB/blob/restore. Vengono considerati soltanto i figli diretti di `.backups` con nome prodotto dallo script e marker `READY` regolare; directory in staging, symlink e file fuori da `.backups` restano intatti. Il log riporta solo il numero di backup rimossi.
+`scripts/backup.sh` può eliminare i backup locali verificati oltre una soglia configurabile. `OMNIDESK_BACKUP_RETENTION_DAYS` accetta `0` (default, disattivata) oppure da 1 a 36500 giorni; si può impostare nell'ambiente del comando o nel `.env` del deployment. Configurazione e directory `.backups` vengono validate prima di avviare Compose o raccogliere dati; la directory deve essere dedicata, reale e viene protetta con permessi `0700`. La pulizia avviene soltanto dopo che il nuovo backup è stato marcato `READY` e dopo la verifica DB/blob/restore. Vengono considerati soltanto i figli diretti di `.backups` con nome prodotto dallo script e marker `READY` regolare; directory in staging, symlink e file fuori da `.backups` restano intatti. Il log riporta solo il numero di backup rimossi.
 
 Esempio esplicito per conservare 90 giorni:
 
