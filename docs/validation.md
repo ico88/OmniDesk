@@ -1855,3 +1855,10 @@ modificato; ogni nuova estensione attende la propria CI sul push.
 - Build delle immagini API e dashboard con Docker — passate. `docker compose config --quiet`, Compose test, `bash -n scripts/smoke.sh`, `node --check scripts/browser-smoke.mjs` con Node 22 Alpine e `git diff --check` — passati.
 - `./scripts/smoke.sh --browser` — passato nello stack isolato: Chromium ha scelto un device, modificato l’oggetto, confermato la natura non verificata del mittente e creato/aperto il ticket; i restanti controlli Chromium, ClamAV, worker SLA/escalation/notifica e restore runtime DB/blob/Identity/CA sono passati. Nessun servizio LAN è stato toccato.
 - Non verificati provider reali, collegamento mailbox/thread, reply email, CI per questo incremento o runtime LAN. I test usano chiavi e dati effimeri isolati; la promozione non attribuisce l’identità del mittente.
+
+### Privacy — retention intake email — 2026-10-20
+
+- `./scripts/test.sh` — passato: 91/91 test API/PostgreSQL, build TypeScript/Vite e 6/6 Vitest. Il test dedicato verifica purge dopo 30 giorni dei pending e 180 dei record discarded/promoted, conserva righe recenti e stati sconosciuti e controlla che l'audit contenga soltanto il conteggio.
+- `docker build -t omnidesk-api:local -f src/OmniDesk.Api/Dockerfile .`, `docker compose config --quiet`, `docker compose -f compose.test.yaml config --quiet`, `bash -n scripts/smoke.sh` e `git diff --check` — passati.
+- `./scripts/smoke.sh --browser` — passato: API con il nuovo worker avviata nello stack isolato, smoke Chromium, ClamAV, worker SLA/escalation/notifica e ripristino runtime DB/blob/Identity/CA completati. Nessun servizio LAN è stato toccato.
+- Nessuna modifica allo schema o dipendenza. La retention intake non cancella il ticket promosso né i suoi messaggi; backup preesistenti seguono la policy separata. Retention ticket/allegati/audit/backup e test sulla LAN restano da definire/eseguire.

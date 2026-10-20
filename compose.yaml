@@ -68,6 +68,8 @@ services:
       Proxy__Network: ${OMNIDESK_PROXY_SUBNET:-172.29.84.0/24}
       Security__TotpEnabled: ${OMNIDESK_TOTP_ENABLED:-false}
       Retention__DeliveredOutboxDays: ${OMNIDESK_RETENTION_DELIVERED_OUTBOX_DAYS:-180}
+      Retention__ProcessedEmailIntakesDays: ${OMNIDESK_RETENTION_PROCESSED_EMAIL_INTAKES_DAYS:-180}
+      Retention__PendingEmailIntakesDays: ${OMNIDESK_RETENTION_PENDING_EMAIL_INTAKES_DAYS:-30}
       Downloads__Directory: /packages
       Attachments__RootPath: /attachments
       Attachments__ClamAvHost: clamav
