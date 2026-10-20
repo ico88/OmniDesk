@@ -1922,3 +1922,10 @@ modificato; ogni nuova estensione attende la propria CI sul push.
 - `docker compose config --quiet`, `docker compose -f compose.test.yaml config --quiet` e overlay `compose.email.yaml` con configurazione SMTP temporanea — passati; `git diff --check` — passato.
 - Migrazione `20261020023034_OutboundEmailNotifications` generata con EF Core 10.0.13 e applicata dalla suite sul PostgreSQL usa-e-getta. SMTP reale, ricezione mailbox, deploy LAN e CI per questi commit non sono stati verificati. La feature resta disabilitata nella configurazione Compose base; l'overlay richiede opt-in esplicito e secret esterno al repository.
 - `./scripts/smoke.sh --browser` — passato su stack isolato: Chromium verifica anche il deep link `/?ticket=<id>` fino al dettaglio autorizzato e poi rientra nella dashboard; probe HTTPS/ClamAV, worker SLA/notifiche e ripristino runtime completo DB/blob/Identity/CA passati. Nessun servizio LAN è stato modificato.
+
+### SD4 — recupero amministrativo consegne email — 2026-10-20
+
+- `./scripts/test.sh` — passato: 91/91 test API/PostgreSQL. Lo scenario verifica preferenza esplicita attivabile, accesso negato a utenti non admin, lista priva dell'indirizzo destinatario e requeue atomico del dead letter con reset tentativi e audit.
+- Build Docker API/dashboard e configurazioni Compose base/test — passate; dashboard TypeScript/Vite e Vitest 6/6 — passati.
+- `./scripts/smoke.sh --browser` — passato su stack isolato: Chromium apre la pagina amministrativa e verifica la coda vuota; probe HTTPS, ClamAV, worker SLA/notifiche e restore DB/blob/Identity/CA passano. Nessun servizio LAN è stato toccato.
+- CI Linux `39360140407` e Windows `39360140450` sono verdi per i commit outbound `9af0e30`; il pannello di recupero è un commit successivo e richiede nuove pipeline. SMTP reale non verificato.
