@@ -696,3 +696,24 @@ storiche non filtrate, segnala l’aggiornamento necessario e mostra la versione
 rilevata nell’intestazione del dispositivo. Build e test unitari della soglia
 passano; il codice UI non è ancora pubblicato sulla LAN né verificato sul browser
 live. Vedi [validation.md](validation.md).
+
+### Aggiornamento remoto Agent e priorità Desktop remoto — 2026-10-20
+
+La scheda dispositivo si apre ora su Desktop remoto e mette questa sezione prima
+della configurazione amministrativa. La scheda Aggiornamenti rilegge i lavori
+ogni cinque secondi senza cancellare le selezioni della scansione. Per
+l'aggiornamento Agent mostra il tempo trascorso e chiarisce che il servizio può
+riavviarsi mentre Windows non viene riavviato da OmniDesk; oltre cinque minuti
+senza esito avvisa che il server attende la conferma dell'Agent. Il risultato
+finale distingue successo, fallimento e riavvio Windows richiesto, riportando
+l'errore direttamente nel riepilogo. Questa vista non può attestare un esito
+finché il servizio non invia la ricevuta; il collaudo MSI remoto sul PC pilota
+resta necessario. Build e suite locali sono registrate in [validation.md](validation.md).
+
+Nello stesso incremento il worker di revoca continua anche se il lookup del link
+MeshCentral è già scaduto e conferma la revoca persistente tramite risposta
+finale del server. Per link scaduti usa l’identità del servizio per chiudere i
+viewer; il nome operatore registrato nel link resta la fonte preferita. La
+durata massima configurata lato MeshCentral è allineata ai 30 minuti richiesti
+da OmniDesk (prima era limitata a 5). Il server LAN non è stato riavviato e
+richiede una distribuzione coordinata prima che la correzione sia attiva.
