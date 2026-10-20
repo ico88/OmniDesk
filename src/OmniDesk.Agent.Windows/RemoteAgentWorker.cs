@@ -18,6 +18,8 @@ public sealed class RemoteAgentWorker(ILogger<RemoteAgentWorker> logger) : Backg
     private Guid? configured;
     private Stopwatch? authorized;
     private TimeSpan lease;
+    private string? lastFailureCode;
+    private DateTimeOffset lastFailureLoggedAt;
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         using var client=AgentConnection.CreateClient();
@@ -52,9 +54,17 @@ public sealed class RemoteAgentWorker(ILogger<RemoteAgentWorker> logger) : Backg
                             }
                         }
                     }
+                    lastFailureCode=null;
                 }
                 catch(OperationCanceledException)when(stoppingToken.IsCancellationRequested){break;}
-                catch(Exception e){logger.LogWarning("Remote provisioning/lease unavailable: {Type}",e.GetType().Name);}
+                catch(Exception e){
+                    var failure=RemoteAgentFailure.Classify(e);
+                    var now=DateTimeOffset.UtcNow;
+                    if(lastFailureCode!=failure.Code||now-lastFailureLoggedAt>=TimeSpan.FromMinutes(5)){
+                        logger.LogWarning("Remote engine unavailable ({Code}; {Type}). {Guidance}",failure.Code,e.GetType().Name,failure.Guidance);
+                        lastFailureCode=failure.Code;lastFailureLoggedAt=now;
+                    }
+                }
                 if(authorized is null||authorized.Elapsed>=lease)StopRemote();
                 await Task.Delay(TimeSpan.FromSeconds(15),stoppingToken);
             }
