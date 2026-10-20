@@ -41,8 +41,8 @@ public static class WindowsSelfTest
         var metrics = collector.Metrics(); var inventory = collector.Inventory();
         if (metrics.CpuPercent is null || !double.IsFinite(metrics.CpuPercent.Value) || metrics.CpuPercent < 0 || metrics.CpuPercent > 100 ||
             metrics.TotalMemoryBytes <= 0 || metrics.AvailableMemoryBytes > metrics.TotalMemoryBytes || metrics.UptimeSeconds < 0 ||
-            string.IsNullOrWhiteSpace(inventory.OperatingSystem) || inventory.LogicalProcessors < 1 || inventory.NetworkAdapters is null ||
-            inventory.NetworkAdapters.Length > 32 || inventory.NetworkAdapters.Any(adapter =>
+            string.IsNullOrWhiteSpace(inventory.OperatingSystem) || inventory.LogicalProcessors < 1 || metrics.NetworkAdapters is null ||
+            metrics.NetworkAdapters.Length > 32 || metrics.NetworkAdapters.Any(adapter =>
                 string.IsNullOrWhiteSpace(adapter.Name) || adapter.Name.Length > 256 || string.IsNullOrWhiteSpace(adapter.Type) || adapter.Type.Length > 64 ||
                 adapter.MacAddress is null || adapter.MacAddress.Length > 32 || adapter.MacAddress.Any(ch => !Uri.IsHexDigit(ch)) ||
                 adapter.IpAddresses is null || adapter.IpAddresses.Length > 32 || adapter.IpAddresses.Any(address =>
