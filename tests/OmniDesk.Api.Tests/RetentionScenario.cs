@@ -83,6 +83,73 @@ public sealed class RetentionScenario(ApiFactory factory) : IClassFixture<ApiFac
     }
 
     [Fact]
+    public async Task Ticket_content_retention_redacts_old_resolved_content_but_keeps_structure_and_operational_history()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var site = new Site { Name = "Ticket content retention " + Guid.NewGuid().ToString("N") };
+        var device = new Device { Id = Guid.NewGuid(), Name = "Ticket content device", SiteId = site.Id };
+        var oldTicket = Ticket(device.Id, site.Id, "closed", now.AddDays(-200));
+        oldTicket.Subject = "Secret customer subject";
+        oldTicket.Description = "Secret customer description";
+        oldTicket.Resolution = "Secret resolution text";
+        var recentTicket = Ticket(device.Id, site.Id, "resolved", now.AddDays(-20));
+        var openTicket = Ticket(device.Id, site.Id, "open", now.AddDays(-300));
+        var oldReply = new SupportMessage { TicketId = oldTicket.Id, Kind = "portal_reply", Body = "Secret public conversation", CreatedAt = now.AddDays(-199) };
+        var oldNote = new SupportMessage { TicketId = oldTicket.Id, Kind = "internal_note", Visibility = "internal", Body = "Secret internal note", CreatedAt = now.AddDays(-198) };
+        var intervention = new SupportMessage { TicketId = oldTicket.Id, Kind = "rmm_intervention", Visibility = "internal", Body = "RMM artifact reference", CreatedAt = now.AddDays(-197) };
+        var recentReply = new SupportMessage { TicketId = recentTicket.Id, Kind = "portal_reply", Body = "Recent conversation" };
+        var openReply = new SupportMessage { TicketId = openTicket.Id, Kind = "reply", Body = "Open ticket conversation" };
+        try
+        {
+            using (var scope = factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                await TestDatabaseMigration.ApplyAsync(db);
+                db.Sites.Add(site);
+                db.Devices.Add(device);
+                db.SupportTickets.AddRange(oldTicket, recentTicket, openTicket);
+                db.SupportMessages.AddRange(oldReply, oldNote, intervention, recentReply, openReply);
+                await db.SaveChangesAsync();
+            }
+
+            var disabled = new CoreOutboxRetentionWorker(factory.Services.GetRequiredService<IServiceScopeFactory>(),
+                Options.Create(new RetentionOptions()), NullLogger<CoreOutboxRetentionWorker>.Instance);
+            Assert.Equal(0, await disabled.PurgeResolvedTicketContentBatchAsync());
+            var worker = new CoreOutboxRetentionWorker(factory.Services.GetRequiredService<IServiceScopeFactory>(),
+                Options.Create(new RetentionOptions { ResolvedTicketContentDays = 180 }), NullLogger<CoreOutboxRetentionWorker>.Instance);
+            Assert.Equal(1, await worker.PurgeResolvedTicketContentBatchAsync());
+
+            using (var scope = factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                var purged = await db.SupportTickets.SingleAsync(ticket => ticket.Id == oldTicket.Id);
+                Assert.True(purged.ContentPurged);
+                Assert.Equal($"Ticket #{purged.Number}", purged.Subject);
+                Assert.Equal("", purged.Description);
+                Assert.Null(purged.Resolution);
+                Assert.InRange(Math.Abs((now.AddDays(-200) - purged.UpdatedAt).Ticks), 0, TimeSpan.TicksPerMicrosecond);
+                Assert.True((await db.SupportMessages.SingleAsync(message => message.Id == oldReply.Id)).ContentPurged);
+                Assert.Equal("", (await db.SupportMessages.SingleAsync(message => message.Id == oldNote.Id)).Body);
+                Assert.Equal("RMM artifact reference", (await db.SupportMessages.SingleAsync(message => message.Id == intervention.Id)).Body);
+                Assert.False((await db.SupportTickets.SingleAsync(ticket => ticket.Id == recentTicket.Id)).ContentPurged);
+                Assert.Equal("Recent conversation", (await db.SupportMessages.SingleAsync(message => message.Id == recentReply.Id)).Body);
+                Assert.False((await db.SupportTickets.SingleAsync(ticket => ticket.Id == openTicket.Id)).ContentPurged);
+                Assert.Equal("Open ticket conversation", (await db.SupportMessages.SingleAsync(message => message.Id == openReply.Id)).Body);
+                Assert.Contains(await db.AuditEvents.ToArrayAsync(), audit => audit.Action == "retention.ticket-content.purged" && audit.Target == "tickets=1;messages=2");
+            }
+        }
+        finally
+        {
+            using var scope = factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            await db.SupportMessages.Where(message => message.TicketId == oldTicket.Id || message.TicketId == recentTicket.Id || message.TicketId == openTicket.Id).ExecuteDeleteAsync();
+            await db.SupportTickets.Where(ticket => ticket.Id == oldTicket.Id || ticket.Id == recentTicket.Id || ticket.Id == openTicket.Id).ExecuteDeleteAsync();
+            await db.Devices.Where(item => item.Id == device.Id).ExecuteDeleteAsync();
+            await db.Sites.Where(item => item.Id == site.Id).ExecuteDeleteAsync();
+        }
+    }
+
+    [Fact]
     public async Task Retention_removes_only_old_fully_processed_events_and_audits_the_batch()
     {
         var deliveredId = Guid.NewGuid();
