@@ -595,3 +595,18 @@ Preferenza individuale esplicita, SMTP MailKit solo TLS su 465/587 con password 
 ### Portale — avviso al richiedente quando risponde l’assistenza
 
 Le risposte pubbliche degli operatori generano una notifica `ticket.staff.reply` per il richiedente, con autorizzazione rivalidata tramite ownership, account attivo, collegamento portale, credenziale dispositivo e sede attiva. L’email usa lo stesso consenso esplicito e contiene solo riferimenti generici al ticket, senza testo della risposta o note interne. Il centro notifiche distingue risposta dell’assistenza e risposta del richiedente; il click e il deep link `/?ticket=...` instradano l’utente al dettaglio nel portale se non ha accesso alla console operatori. Revocando il collegamento, la notifica scompare e la lettura viene negata. Suite API/PostgreSQL 95/95, build dashboard, Vitest 6/6 e smoke Chromium completo passano localmente; nessuna migrazione richiesta. Non distribuito sulla LAN; resta da provare con account cliente reale e configurazione SMTP reale.
+
+### Panoramica rete dispositivo e caricamento MeshCentral incorporato
+
+L’Agent invia gli adattatori di rete attivi insieme all’heartbeat: la dashboard
+mostra nome, tipo, MAC e tutti gli IP unicast per ciascuna interfaccia, così
+Wi-Fi ed Ethernet possono comparire contemporaneamente e i dati si aggiornano
+con la telemetria. Il contratto è opzionale per mantenere compatibilità con
+Agent precedenti e l’API applica limiti alla quantità e alla forma dei dati.
+L’avviso della console remota distingue il caricamento lento dell’iframe da un
+errore del motore; la sessione incorporata resta attiva e l’avviso scompare al
+caricamento. Suite API/PostgreSQL 95/95, Vitest 6/6, build API/dashboard,
+publish self-contained dell’Agent `win-x64`, smoke Chromium con due interfacce e
+frame ritardato, restore isolato completo, Compose e `git diff --check` passano.
+Restano il collaudo Windows della raccolta rete e il test runtime sul dispositivo
+pilota; nessun deploy LAN effettuato.
