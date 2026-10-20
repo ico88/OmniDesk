@@ -1,14 +1,25 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-backup_root=${1:-.backups}
-retention_days=${2:-${OMNIDESK_BACKUP_RETENTION_DAYS:-0}}
+mode=prune
+if [[ "${1:-}" == --validate-only ]]; then
+  mode=validate
+  backup_root=''
+  retention_days=${2:-${OMNIDESK_BACKUP_RETENTION_DAYS:-0}}
+else
+  backup_root=${1:-.backups}
+  retention_days=${2:-${OMNIDESK_BACKUP_RETENTION_DAYS:-0}}
+fi
 
 if [[ ! "$retention_days" =~ ^[0-9]{1,5}$ ]] || (( 10#$retention_days > 36500 )); then
   echo 'OMNIDESK_BACKUP_RETENTION_DAYS must be an integer between 0 and 36500.' >&2
   exit 2
 fi
 retention_days=$((10#$retention_days))
+if [[ "$mode" == validate ]]; then
+  echo "Backup retention configuration is valid (${retention_days} day(s))."
+  exit 0
+fi
 if (( retention_days == 0 )); then
   echo 'Backup retention is disabled (0 days); no backups pruned.'
   exit 0

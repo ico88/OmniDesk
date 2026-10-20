@@ -3,10 +3,15 @@ set -Eeuo pipefail
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.."
 umask 077
 # Local backup only. Archives include private keys and must never be committed or shared publicly.
+backup_retention_days=${OMNIDESK_BACKUP_RETENTION_DAYS:-}
+if [[ -z "$backup_retention_days" && -f .env ]]; then
+  backup_retention_days=$(awk -F= '$1 == "OMNIDESK_BACKUP_RETENTION_DAYS" { print substr($0, index($0, "=") + 1); exit }' .env)
+fi
+backup_retention_days=${backup_retention_days:-0}
+bash scripts/prune-backups.sh --validate-only "$backup_retention_days"
+backup_root=$(bash scripts/prepare-backup-directory.sh .backups)
 docker compose config --quiet
-mkdir -p .backups
-chmod 700 .backups
-backup_path=$(mktemp -d ".backups/$(date -u +%Y%m%dT%H%M%SZ).XXXXXX")
+backup_path=$(mktemp -d "$backup_root/$(date -u +%Y%m%dT%H%M%SZ).XXXXXX")
 printf 'Backup directory: %s\n' "$backup_path"
 docker compose exec -T db pg_dump -U omnidesk -d omnidesk --format=custom > "$backup_path/database.dump.partial"
 mv -- "$backup_path/database.dump.partial" "$backup_path/database.dump"
@@ -64,8 +69,4 @@ fi
 bash scripts/verify-backup.sh --staging "$backup_path"
 touch "$backup_path/READY"
 printf 'Backup verified and completed: %s\n' "$backup_path"
-backup_retention_days=${OMNIDESK_BACKUP_RETENTION_DAYS:-}
-if [[ -z "$backup_retention_days" && -f .env ]]; then
-  backup_retention_days=$(awk -F= '$1 == "OMNIDESK_BACKUP_RETENTION_DAYS" { print substr($0, index($0, "=") + 1); exit }' .env)
-fi
-bash scripts/prune-backups.sh .backups "${backup_retention_days:-0}"
+bash scripts/prune-backups.sh "$backup_root" "$backup_retention_days"
