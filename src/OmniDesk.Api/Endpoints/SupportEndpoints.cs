@@ -124,6 +124,25 @@ public static class SupportEndpoints
             c.Response.Headers.CacheControl = "no-store";
             return Results.Ok(new SupportRequesterConversation(ticket.Id, ticket.Version, ticket.State, messages));
         });
+        machine.MapGet("/{requesterKey}/{ticketId:guid}/attachments/{attachmentId:guid}", async (string requesterKey, Guid ticketId,
+            Guid attachmentId, HttpContext c, AppDbContext db, AttachmentStorage storage) => {
+            if (!ValidKey(requesterKey)) return Results.BadRequest();
+            var deviceId = Guid.Parse(c.User.UserId());
+            var row = await (from attachment in db.SupportAttachments.AsNoTracking()
+                join ticket in db.SupportTickets.AsNoTracking() on attachment.TicketId equals ticket.Id
+                where attachment.Id == attachmentId && attachment.TicketId == ticketId && attachment.Visibility == "public" &&
+                    attachment.ScanState == "clean" && attachment.MessageId != null && ticket.DeviceId == deviceId &&
+                    ticket.RequesterKey == requesterKey && db.DeviceCredentials.Any(credential => credential.DeviceId == deviceId && credential.RevokedAt == null) &&
+                    db.SupportMessages.Any(message => message.Id == attachment.MessageId && message.TicketId == ticketId && !message.ContentPurged && message.Visibility == "public")
+                select attachment).SingleOrDefaultAsync();
+            if (row is null) return Results.NotFound();
+            c.Response.Headers.CacheControl = "no-store";
+            c.Response.Headers["X-Content-Type-Options"] = "nosniff";
+            c.Response.Headers["Content-Security-Policy"] = "sandbox";
+            c.Response.Headers["X-OmniDesk-Attachment-Scan"] = "clean";
+            try { return Results.File(storage.OpenRead(row.StorageKey), "application/octet-stream", SafeAttachmentName(row.OriginalFileName)); }
+            catch (FileNotFoundException) { return Results.StatusCode(410); }
+        });
         machine.MapPost("/{requesterKey}/{ticketId:guid}/messages", async (string requesterKey, Guid ticketId, SupportRequesterReply r, HttpContext c, AppDbContext db) => {
             if (!ValidKey(requesterKey) || r.RequesterKey != requesterKey || r.ExpectedVersion < 1 ||
                 string.IsNullOrWhiteSpace(r.Body) || r.Body.Trim().Length > 8000) return Results.BadRequest();

@@ -15,6 +15,8 @@ internal sealed class SupportForm : Form
     private readonly PictureBox preview = new() { Height = 170, Dock = DockStyle.Top, SizeMode = PictureBoxSizeMode.Zoom };
     private readonly ComboBox ticketPicker = new() { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly TextBox conversation = new() { ReadOnly = true, Multiline = true, ScrollBars = ScrollBars.Vertical, Dock = DockStyle.Fill };
+    private readonly ComboBox attachmentPicker = new() { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly Button downloadAttachment = new() { Text = "Scarica allegato pulito", AutoSize = true, Enabled = false };
     private readonly TextBox replyText = new() { MaxLength = 8000, Multiline = true, Dock = DockStyle.Fill, PlaceholderText = "Scrivi un aggiornamento per il team IT" };
     private readonly Label result = new() { Dock = DockStyle.Bottom, Height = 45 };
     private readonly Button send = new() { Text = "Invia richiesta", AutoSize = true };
@@ -24,6 +26,7 @@ internal sealed class SupportForm : Form
     private readonly Button reply = new() { Text = "Invia risposta", AutoSize = true };
     private SupportTicketView? selectedTicket;
     private bool conversationCanReply;
+    private bool attachmentDownloadAvailable;
     private byte[]? screenshot;
     private SupportCreate? pending;
     private bool busy;
@@ -34,15 +37,18 @@ internal sealed class SupportForm : Form
         Text = "OmniDesk — Richiedi assistenza"; Width = 660; Height = 750; StartPosition = FormStartPosition.CenterScreen;
         var buttons = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 65 };
         buttons.Controls.AddRange([capture, remove, send, refresh, reply]);
-        var thread = new TableLayoutPanel { Dock = DockStyle.Bottom, Height = 245, ColumnCount = 1, RowCount = 4, Padding = new Padding(8) };
-        thread.RowStyles.Add(new RowStyle(SizeType.Absolute, 29)); thread.RowStyles.Add(new RowStyle(SizeType.Percent, 58));
-        thread.RowStyles.Add(new RowStyle(SizeType.Percent, 42)); thread.RowStyles.Add(new RowStyle(SizeType.Absolute, 1));
-        thread.Controls.Add(ticketPicker, 0, 0); thread.Controls.Add(conversation, 0, 1); thread.Controls.Add(replyText, 0, 2);
+        var thread = new TableLayoutPanel { Dock = DockStyle.Bottom, Height = 285, ColumnCount = 1, RowCount = 4, Padding = new Padding(8) };
+        thread.RowStyles.Add(new RowStyle(SizeType.Absolute, 29)); thread.RowStyles.Add(new RowStyle(SizeType.Percent, 55));
+        thread.RowStyles.Add(new RowStyle(SizeType.Absolute, 35)); thread.RowStyles.Add(new RowStyle(SizeType.Percent, 45));
+        var attachmentTools = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1 };
+        attachmentTools.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 65)); attachmentTools.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 35));
+        attachmentTools.Controls.Add(attachmentPicker, 0, 0); attachmentTools.Controls.Add(downloadAttachment, 1, 0);
+        thread.Controls.Add(ticketPicker, 0, 0); thread.Controls.Add(conversation, 0, 1); thread.Controls.Add(attachmentTools, 0, 2); thread.Controls.Add(replyText, 0, 3);
         category.Items.AddRange(["Generale", "Hardware", "Software", "Rete", "Account", "Altro"]); category.SelectedIndex = 0;
         Controls.Add(buttons); Controls.Add(thread); Controls.Add(consent); Controls.Add(preview); Controls.Add(description); Controls.Add(category); Controls.Add(subject); Controls.Add(result);
         capture.Click += (_, _) => CaptureScreen(); remove.Click += (_, _) => ClearImage();
         send.Click += async (_, _) => await Send(); refresh.Click += async (_, _) => await List();
-        reply.Click += async (_, _) => await Reply(); ticketPicker.SelectedIndexChanged += TicketPickerChanged;
+        reply.Click += async (_, _) => await Reply(); downloadAttachment.Click += async (_, _) => await DownloadAttachment(); ticketPicker.SelectedIndexChanged += TicketPickerChanged;
         Shown += async (_, _) => await List();
     }
     private void ClearImage() { screenshot = null; preview.Image?.Dispose(); preview.Image = null; consent.Checked = false; pending = null; }
@@ -86,11 +92,13 @@ internal sealed class SupportForm : Form
     }
     private async Task<TraySupportResponse> Call(TrayRequest request)
     {
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(stop.Token); timeout.CancelAfter(TimeSpan.FromSeconds(25));
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(stop.Token);
+        timeout.CancelAfter(request.Method == TrayProtocol.DownloadTicketAttachmentMethod ? TimeSpan.FromMinutes(2) : TimeSpan.FromSeconds(25));
         return await Task.Run(async () => {
             using var pipe = await LocalStatusPipe.OpenVerifiedAsync(Process.GetCurrentProcess().SessionId, timeout.Token);
             await TrayProtocol.Write(pipe,request,timeout.Token,TrayProtocol.MaxSupportPayload);
-            var response = await TrayProtocol.Read<TraySupportResponse>(pipe,timeout.Token,TrayProtocol.MaxSupportPayload);
+            var maxPayload = request.Method == TrayProtocol.DownloadTicketAttachmentMethod ? TrayProtocol.MaxAttachmentPayload : TrayProtocol.MaxSupportPayload;
+            var response = await TrayProtocol.Read<TraySupportResponse>(pipe,timeout.Token,maxPayload);
             if (response.Version != TrayProtocol.Version || response.RequestId != request.RequestId) throw new InvalidDataException();
             return response;
         },timeout.Token);
@@ -98,7 +106,7 @@ internal sealed class SupportForm : Form
     private async Task Work(Func<Task> action)
     {
         if (busy) return; busy = true;
-        send.Enabled = refresh.Enabled = capture.Enabled = remove.Enabled = subject.Enabled = description.Enabled = category.Enabled = consent.Enabled = reply.Enabled = ticketPicker.Enabled = false;
+        send.Enabled = refresh.Enabled = capture.Enabled = remove.Enabled = subject.Enabled = description.Enabled = category.Enabled = consent.Enabled = reply.Enabled = ticketPicker.Enabled = attachmentPicker.Enabled = downloadAttachment.Enabled = false;
         try { await action(); }
         catch (Exception e) when (!stop.IsCancellationRequested)
         {
@@ -116,7 +124,7 @@ internal sealed class SupportForm : Form
         finally
         {
             busy = false;
-            if (!IsDisposed) { send.Enabled = refresh.Enabled = capture.Enabled = remove.Enabled = subject.Enabled = description.Enabled = category.Enabled = consent.Enabled = ticketPicker.Enabled = true; reply.Enabled = conversationCanReply; }
+            if (!IsDisposed) { send.Enabled = refresh.Enabled = capture.Enabled = remove.Enabled = subject.Enabled = description.Enabled = category.Enabled = consent.Enabled = ticketPicker.Enabled = attachmentPicker.Enabled = true; reply.Enabled = conversationCanReply; downloadAttachment.Enabled = attachmentDownloadAvailable; }
         }
     }
     private Task List() => Work(async () => {
@@ -140,13 +148,20 @@ internal sealed class SupportForm : Form
     private async Task LoadConversationCore()
     {
         selectedTicket = ticketPicker.SelectedItem as SupportTicketView;
-        if (selectedTicket is null) { conversation.Clear(); conversationCanReply = false; return; }
+        if (selectedTicket is null) { conversation.Clear(); conversationCanReply = attachmentDownloadAvailable = false; attachmentPicker.Items.Clear(); return; }
+        conversation.Clear(); attachmentPicker.Items.Clear(); attachmentDownloadAvailable = false; downloadAttachment.Enabled = false;
         var response = await Call(new(TrayProtocol.Version,Guid.NewGuid(),TrayProtocol.TicketConversationMethod,TicketId:selectedTicket.Id));
         if (response.Error is not null) { result.Text = response.Error; return; }
         var thread = response.Conversation;
         if (thread is null) { result.Text = "Conversazione non disponibile."; return; }
         selectedTicket = selectedTicket with { Version = thread.Version, State = thread.State };
         conversationCanReply = thread.State is "open" or "in_progress";
+        attachmentPicker.Items.Clear();
+        foreach (var item in thread.Messages.Where(message => !message.ContentPurged).SelectMany(message => message.Attachments ?? []).Where(item => item.ScanState == "clean"))
+            attachmentPicker.Items.Add(new TrayAttachmentChoice(thread.TicketId, item));
+        if (attachmentPicker.Items.Count > 0) attachmentPicker.SelectedIndex = 0;
+        attachmentDownloadAvailable = attachmentPicker.Items.Count > 0;
+        downloadAttachment.Enabled = attachmentDownloadAvailable && !busy;
         conversation.Text = string.Join(Environment.NewLine + Environment.NewLine, thread.Messages.Select(m =>
             $"{(m.Kind == "request" ? "Richiesta" : m.Kind == "requester_reply" ? "Tu" : m.Kind == "state_change" ? "Stato" : "Team IT")} · {m.CreatedAt.ToLocalTime():g}\r\n" +
             (m.Kind == "state_change" ? $"{m.FromState} → {m.ToState}" : m.Body) +
@@ -161,6 +176,40 @@ internal sealed class SupportForm : Form
         _ => "📎 Allegato in quarantena o scansione in corso"
     };
     private static string FormatSize(long bytes) => bytes < 1024 ? $"{bytes} B" : bytes < 1024 * 1024 ? $"{bytes / 1024.0:0} KB" : $"{bytes / (1024.0 * 1024):0.0} MB";
+    private sealed record TrayAttachmentChoice(Guid TicketId, SupportRequesterAttachmentView Attachment)
+    {
+        public override string ToString() => $"{Attachment.FileName} · {FormatSize(Attachment.SizeBytes)}";
+    }
+    private static string SaveDialogName(string name)
+    {
+        var leaf = name.Replace('\\', '/').Split('/').LastOrDefault() ?? "";
+        var safe = new string(leaf.Where(c => !char.IsControl(c) && c is not ('<' or '>' or ':' or '"' or '/' or '\\' or '|' or '?' or '*')).ToArray()).Trim().Trim('.');
+        if (string.IsNullOrWhiteSpace(safe)) return "allegato";
+        var stem = safe.Split('.')[0];
+        if (new[] { "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9" }.Contains(stem, StringComparer.OrdinalIgnoreCase)) safe = "_" + safe;
+        return safe.Length <= 255 ? safe : safe[^255..];
+    }
+    private async Task DownloadAttachment()
+    {
+        if (attachmentPicker.SelectedItem is not TrayAttachmentChoice choice) { result.Text = "Seleziona un allegato pulito da scaricare."; return; }
+        using var dialog = new SaveFileDialog { FileName = SaveDialogName(choice.Attachment.FileName), Filter = "Tutti i file (*.*)|*.*", OverwritePrompt = true, AddExtension = false };
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        await Work(async () => {
+            var response = await Call(new TrayRequest(TrayProtocol.Version, Guid.NewGuid(), TrayProtocol.DownloadTicketAttachmentMethod,
+                TicketId: choice.TicketId, AttachmentId: choice.Attachment.Id));
+            if (response.Error is not null) { result.Text = response.Error; return; }
+            var downloaded = response.DownloadedAttachment;
+            if (downloaded is null || downloaded.Id != choice.Attachment.Id || downloaded.SizeBytes is <= 0 or > 10 * 1024 * 1024)
+                throw new InvalidDataException("Unexpected attachment response.");
+            byte[] bytes;
+            try { bytes = Convert.FromBase64String(downloaded.ContentBase64); }
+            catch (FormatException) { throw new InvalidDataException("Invalid attachment encoding."); }
+            if (bytes.LongLength != downloaded.SizeBytes || bytes.LongLength > 10 * 1024 * 1024)
+                throw new InvalidDataException("Attachment size mismatch.");
+            await File.WriteAllBytesAsync(dialog.FileName, bytes, stop.Token);
+            result.Text = $"Allegato salvato: {Path.GetFileName(dialog.FileName)}";
+        });
+    }
     private Task Reply() => Work(async () => {
         if (selectedTicket is null || string.IsNullOrWhiteSpace(replyText.Text)) { result.Text = "Seleziona un ticket aperto e scrivi una risposta."; return; }
         var response = await Call(new(TrayProtocol.Version,Guid.NewGuid(),TrayProtocol.ReplyToTicketMethod,

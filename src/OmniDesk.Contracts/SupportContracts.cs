@@ -11,4 +11,5 @@ public sealed record SupportTicketView(Guid Id, long Number, Guid DeviceId, stri
     string? Resolution, long Version, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt, bool HasScreenshot, string Category = "general", string Origin = "device", bool ContentPurged = false);
 public sealed record SupportEdit(long ExpectedVersion, string State, string? Resolution);
 public sealed record TraySupportResponse(int Version, Guid RequestId, string? Error, SupportTicketView[] Tickets,
-    SupportRequesterConversation? Conversation = null);
+    SupportRequesterConversation? Conversation = null, SupportAttachmentDownload? DownloadedAttachment = null);
+public sealed record SupportAttachmentDownload(Guid Id, string FileName, long SizeBytes, string ContentBase64);

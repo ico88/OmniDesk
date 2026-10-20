@@ -56,19 +56,31 @@ public sealed class TrayPipeWorker(AgentRuntimeState state, ILogger<TrayPipeWork
             var key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(identity.DeviceId + ":" + logon.UserSid)));
             using var client = AgentConnection.CreateClient();
             var basePath = "api/agent/support/" + key;
-            var ticketPath = request.TicketId is null ? "" : "/" + request.TicketId.Value.ToString("D") + "/messages";
+            var ticketPath = request.TicketId is null ? "" : "/" + request.TicketId.Value.ToString("D");
             var isPost = request.Method is TrayProtocol.CreateTicketMethod or TrayProtocol.ReplyToTicketMethod;
             var path = request.Method == TrayProtocol.CreateTicketMethod ? "api/agent/support" :
-                request.Method == TrayProtocol.ListTicketsMethod ? basePath : basePath + ticketPath;
+                request.Method == TrayProtocol.ListTicketsMethod ? basePath :
+                request.Method == TrayProtocol.TicketConversationMethod ? basePath + ticketPath + "/messages" :
+                request.Method == TrayProtocol.DownloadTicketAttachmentMethod ? basePath + ticketPath + "/attachments/" + request.AttachmentId!.Value.ToString("D") :
+                basePath + ticketPath + "/messages";
             using var message = new HttpRequestMessage(isPost ? HttpMethod.Post : HttpMethod.Get,
                 new Uri(AgentIdentity.ValidateServer(identity.ServerUrl), path));
             message.Headers.Authorization = new AuthenticationHeaderValue("Bearer", identity.Assertion());
             if (request.Method == TrayProtocol.CreateTicketMethod) message.Content = JsonContent.Create(new SupportIntake(key, request.Ticket!));
             else if (request.Method == TrayProtocol.ReplyToTicketMethod)
                 message.Content = JsonContent.Create(new SupportRequesterReply(key, request.ExpectedVersion!.Value, request.Body!));
-            using var response = await client.SendAsync(message, ct);
+            using var response = await client.SendAsync(message, request.Method == TrayProtocol.DownloadTicketAttachmentMethod
+                ? HttpCompletionOption.ResponseHeadersRead : HttpCompletionOption.ResponseContentRead, ct);
             if (!response.IsSuccessStatusCode)
                 return new(TrayProtocol.Version, request.RequestId, $"Richiesta non accettata (HTTP {(int)response.StatusCode}).", []);
+            if (request.Method == TrayProtocol.DownloadTicketAttachmentMethod)
+            {
+                var bytes = await ReadAttachment(response.Content, ct);
+                var name = response.Content.Headers.ContentDisposition?.FileNameStar ?? response.Content.Headers.ContentDisposition?.FileName ?? "allegato";
+                name = SafeDownloadName(name);
+                return new(TrayProtocol.Version, request.RequestId, null, [], DownloadedAttachment:
+                    new SupportAttachmentDownload(request.AttachmentId!.Value, name, bytes.LongLength, Convert.ToBase64String(bytes)));
+            }
             if (request.Method == TrayProtocol.TicketConversationMethod)
                 return new(TrayProtocol.Version, request.RequestId, null, [], await response.Content.ReadFromJsonAsync<SupportRequesterConversation>(ct));
             if (request.Method == TrayProtocol.ReplyToTicketMethod)
@@ -78,8 +90,36 @@ public sealed class TrayPipeWorker(AgentRuntimeState state, ILogger<TrayPipeWork
                 : (await response.Content.ReadFromJsonAsync<SupportTicketView[]>(ct))!;
             return new(TrayProtocol.Version, request.RequestId, null, tickets);
         }
+        catch (InvalidDataException)
+        { return new(TrayProtocol.Version, request.RequestId, "Allegato non disponibile o non valido. Aggiorna i ticket e riprova.", []); }
         catch (Exception e) when (e is HttpRequestException or IOException or OperationCanceledException or System.Text.Json.JsonException)
         { return new(TrayProtocol.Version, request.RequestId, "Server non raggiungibile. Puoi ritentare la stessa richiesta.", []); }
+    }
+    private static async Task<byte[]> ReadAttachment(HttpContent content, CancellationToken ct)
+    {
+        var expected = content.Headers.ContentLength;
+        if (expected is <= 0 or > 10 * 1024 * 1024) throw new InvalidDataException("Attachment length is outside policy.");
+        await using var source = await content.ReadAsStreamAsync(ct);
+        using var destination = new MemoryStream(expected is null ? 64 * 1024 : checked((int)expected.Value));
+        var buffer = new byte[64 * 1024];
+        while (true)
+        {
+            var read = await source.ReadAsync(buffer, ct);
+            if (read == 0) break;
+            if (destination.Length + read > 10 * 1024 * 1024) throw new InvalidDataException("Attachment exceeds policy.");
+            await destination.WriteAsync(buffer.AsMemory(0, read), ct);
+        }
+        if (expected.HasValue && destination.Length != expected.Value) throw new InvalidDataException("Attachment length mismatch.");
+        return destination.ToArray();
+    }
+    private static string SafeDownloadName(string name)
+    {
+        var leaf = name.Trim('"').Replace('\\', '/').Split('/').LastOrDefault() ?? "";
+        var safe = new string(leaf.Where(c => !char.IsControl(c) && c is not ('/' or '\\' or ':' or '\0')).ToArray()).Trim().Trim('.');
+        if (string.IsNullOrWhiteSpace(safe)) return "allegato";
+        var stem = safe.Split('.')[0];
+        if (new[] { "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9" }.Contains(stem, StringComparer.OrdinalIgnoreCase)) safe = "_" + safe;
+        return safe.Length <= 255 ? safe : safe[^255..];
     }
     private async Task Serve(InteractiveLogon logon, CancellationToken ct)
     {
@@ -94,6 +134,7 @@ public sealed class TrayPipeWorker(AgentRuntimeState state, ILogger<TrayPipeWork
                 {
                     var request = await TrayProtocol.Read<TrayRequest>(pipe, timeout.Token, TrayProtocol.MaxSupportPayload);
                     if (!TrayProtocol.Valid(request)) throw new InvalidDataException("IPC request rejected.");
+                    if (request.Method == TrayProtocol.DownloadTicketAttachmentMethod) timeout.CancelAfter(TimeSpan.FromMinutes(2));
                     var allowed = false;
                     pipe.RunAsClient(() => {
                         using var client = WindowsIdentity.GetCurrent(true);
@@ -103,7 +144,11 @@ public sealed class TrayPipeWorker(AgentRuntimeState state, ILogger<TrayPipeWork
                     if (request.Method == TrayProtocol.StatusMethod)
                         await TrayProtocol.Write(pipe, state.Snapshot(request.RequestId), timeout.Token);
                     else
-                        await TrayProtocol.Write(pipe, await Support(request, logon, timeout.Token), timeout.Token, TrayProtocol.MaxSupportPayload);
+                    {
+                        var response = await Support(request, logon, timeout.Token);
+                        var payloadLimit = request.Method == TrayProtocol.DownloadTicketAttachmentMethod ? TrayProtocol.MaxAttachmentPayload : TrayProtocol.MaxSupportPayload;
+                        await TrayProtocol.Write(pipe, response, timeout.Token, payloadLimit);
+                    }
                 }
                 catch (Exception e) when (e is IOException or UnauthorizedAccessException or OperationCanceledException or System.Text.Json.JsonException)
                 { if (!ct.IsCancellationRequested) logger.LogWarning("Tray IPC request denied/failed in session {SessionId}: {Type}", logon.SessionId, e.GetType().Name); }
