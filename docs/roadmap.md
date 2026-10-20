@@ -1,5 +1,24 @@
 # Roadmap
 
+### Endpoint Security — Microsoft Defender (progettazione)
+
+Nuovo modulo proposto per stato Defender, protezione real-time, firme/ultimo
+controllo ed esclusioni visibili per device e gruppo; policy di gruppo e
+conformità periodica; operazioni future tipizzate, RBAC indipendente,
+motivazione/conferma, audit e scadenze. La specifica definisce modello dati,
+schema API, interfaccia e limiti per path/processi/estensioni. Le esclusioni
+gestite da Group Policy, Intune o Tamper Protection devono apparire come
+bloccate e non saranno forzate. Nessuna esclusione automatica per OmniDesk e
+nessuna modifica runtime in questa fase. Analisi completa:
+[Endpoint Security — Microsoft Defender](endpoint-security-defender.md).
+
+La specifica confronta anche il lifecycle MSI: firma Authenticode quando
+disponibile, verifica hash/firma, diagnostica Defender in dashboard, interventi
+solo amministrativi sugli strumenti Windows, health check dopo MSI e rollback
+bounded. Il kit 0.8.12 è ancora pubblicato; 0.8.13 è in test Windows, non ancora
+promosso né installato sul PC. La firma manca e i blocchi Defender non sono
+ancora classificati nella dashboard.
+
 ### Backup — retention locale opt-in
 
 `scripts/backup.sh` ora può applicare una retention locale configurabile tramite

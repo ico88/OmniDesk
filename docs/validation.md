@@ -2127,6 +2127,12 @@ modificato; ogni nuova estensione attende la propria CI sul push.
 - Questi controlli attestano compilazione e test automatizzati, non installazione o funzionamento sul PC Windows. Il binario resta in quarantena secondo l'ultima evidenza fornita; non è stato inviato a Microsoft e non è stato ottenuto un verdetto. Il dossier è in [remote-engine-defender-review.md](remote-engine-defender-review.md).
 - Per la prova di laboratorio l'amministratore può verificare il file e la provenienza, quindi valutare manualmente il ripristino/consenso tramite Protection History; Microsoft avverte che consentire un elemento realmente malevolo può esporre il dispositivo. La soluzione per la distribuzione resta revisione Microsoft e rilascio firmato, non auto-esclusione.
 
+### Progettazione Endpoint Security — Microsoft Defender — 2026-10-20
+
+- Aggiunta la specifica architetturale/API/modello dati/UI in `docs/endpoint-security-defender.md` e l'incremento progettato nella roadmap. Fonti primarie consultate: `Get-MpComputerStatus`, panoramica esclusioni, `Add-MpPreference`/`Remove-MpPreference`, policy Intune/GPO e Tamper Protection.
+- Stato: solo progetto e documentazione. Nessuna rotta, migrazione, interfaccia o operazione Agent Defender implementata; non sono state aggiunte/rimosse esclusioni né cambiate policy Windows. Il lavoro operativo richiede milestone distinta e test dedicati su Windows.
+- `git diff --check` — passato per la specifica e la roadmap. `./scripts/test.sh` e pipeline Windows non sono parte di questa sola modifica documentale; la build/upgrade 0.8.13 resta in corso.
+
 ### Feedback aggiornamento Agent e accesso remoto prioritario — 2026-10-20
 
 - La pagina dispositivo apre su Desktop remoto e la scheda è prima nell'ordine; la gestione/configurazione amministrativa è in fondo al workspace.
