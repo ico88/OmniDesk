@@ -1,0 +1,13 @@
+.email-intake-inbox>p{color:var(--muted)}
+.email-intake-list{display:grid;gap:14px;margin-top:18px}
+.email-intake-item{padding:18px;border:1px solid var(--line);border-radius:14px;background:var(--surface-raised,rgba(255,255,255,.025));min-width:0}
+.email-intake-item>header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
+.email-intake-item h3{margin:0 0 8px;font-size:1rem;overflow-wrap:anywhere}
+.email-intake-item p{margin:0 0 6px;overflow-wrap:anywhere}
+.email-intake-item small{color:var(--muted)}
+.email-intake-item details{margin:14px 0 10px}
+.email-intake-item details summary{cursor:pointer;color:var(--primary);font-weight:600}
+.email-intake-item pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:360px;overflow:auto;margin:10px 0 0;padding:14px;border:1px solid var(--line);border-radius:10px;background:var(--surface);font:inherit;font-size:.9rem}
+.email-intake-item .email-message-id{display:block;overflow-wrap:anywhere}
+.email-intake-item .danger-action{color:var(--danger,#dc2626)}
+@media(max-width:640px){.email-intake-item>header{flex-direction:column}.email-intake-item>header .danger-action{align-self:flex-end}}

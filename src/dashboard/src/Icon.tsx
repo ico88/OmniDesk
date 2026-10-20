@@ -1,5 +1,5 @@
 import {
-  Activity, ArrowRight, BookOpen, CalendarClock, Check, Clock3, Cpu, Download, Files, LayoutDashboard,
+  Activity, ArrowRight, BookOpen, CalendarClock, Check, Clock3, Cpu, Download, Files, Inbox, LayoutDashboard,
   LifeBuoy, LogOut, MessageSquare, Monitor, Palette, Plus, RefreshCw, Search, Settings2,
   ShieldCheck, Users, X, Link2, Workflow, type LucideIcon,
 } from 'lucide-react';
@@ -9,6 +9,7 @@ const icons: Record<string, LucideIcon> = {
   devices: Monitor,
   security: ShieldCheck,
   support: LifeBuoy,
+  emailIntakes: Inbox,
   myTickets: MessageSquare,
   knowledge: BookOpen,
   branding: Palette,

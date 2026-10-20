@@ -12,6 +12,7 @@ import { Notifications } from './Notifications';
 import { CustomerPortal } from './CustomerPortal';
 import { TicketWorkflowAdmin } from './TicketWorkflowAdmin';
 import { SlaPolicyAdmin } from './SlaPolicyAdmin';
+import { EmailIntakeInbox } from './EmailIntakeInbox';
 
 type User = { id: string; email: string; displayName: string | null; globalPermissions: string[]; twoFactorAvailable: boolean; twoFactorEnabled: boolean };
 type Branding = { name: string; logoUrl: string; primaryColor: string; theme: 'light' | 'dark' };
@@ -44,6 +45,7 @@ function App() {
   const [canManageSla,setCanManageSla]=useState(false);
   const admin = user?.globalPermissions.includes('administration') ?? false;
   const canReadKnowledge = user?.globalPermissions.some(p=>p==='knowledge.view'||p==='knowledge.manage') ?? false;
+  const canManageEmailIntake = user?.globalPermissions.includes('tickets.manage') ?? false;
 
   const filteredDevices=devices.filter(d=>d.name.toLocaleLowerCase().includes(search.toLocaleLowerCase()));
 
@@ -101,11 +103,12 @@ function App() {
   return <div className="shell"><aside>
     <div className="brand">{branding.logoUrl ? <img src={branding.logoUrl} alt="Logo" referrerPolicy="no-referrer"/> : <img className="brand-mark" src="/favicon.svg" alt=""/>}<strong>{branding.name}</strong></div>
     <small className="nav-label">WORKSPACE</small>
-    <nav aria-label="Navigazione">{[['overview','Panoramica'],['devices','Dispositivi'],['security','Account e sicurezza'],['myTickets','I miei ticket'],['support','Assistenza'],...(canReadKnowledge ? [['knowledge','Knowledge base']] : []),...(canManageSla ? [['slaPolicies','Policy SLA']] : []),...(admin ? [['branding','Personalizzazione'],['users','Utenti'],['workflows','Workflow ticket'],['audit','Audit']] : [])].map(([id,label]) => <button key={id} className={tab === id ? 'active' : ''} aria-current={tab===id?'page':undefined} onClick={() => { setTab(id); setTotpSetup(null); setRecoveryCodes([]); setEnrollment(''); setStatus(null);  setError(''); setMessage(''); }}><Icon name={id}/><span>{label}</span></button>)}</nav>
+    <nav aria-label="Navigazione">{[['overview','Panoramica'],['devices','Dispositivi'],['security','Account e sicurezza'],['myTickets','I miei ticket'],['support','Assistenza'],...(canManageEmailIntake ? [['emailIntakes','Email da valutare']] : []),...(canReadKnowledge ? [['knowledge','Knowledge base']] : []),...(canManageSla ? [['slaPolicies','Policy SLA']] : []),...(admin ? [['branding','Personalizzazione'],['users','Utenti'],['workflows','Workflow ticket'],['audit','Audit']] : [])].map(([id,label]) => <button key={id} className={tab === id ? 'active' : ''} aria-current={tab===id?'page':undefined} onClick={() => { setTab(id); setTotpSetup(null); setRecoveryCodes([]); setEnrollment(''); setStatus(null);  setError(''); setMessage(''); }}><Icon name={id}/><span>{label}</span></button>)}</nav>
     <div className="account"><small>{user.email}</small><button disabled={busy} onClick={() => void action(async () => { await api('/auth/logout', 'POST'); setUser(null); setTotpSetup(null); setRecoveryCodes([]); setEnrollment(''); setStatus(null); setGroups([]); setBranding(defaults); setAudit([]); setDevices([]); setTab('overview'); await refreshCsrf(); })}><Icon name="logout"/>Esci</button></div>
-  </aside><main className="content" aria-busy={busy}><header><div><small className="eyebrow">WORKSPACE / GESTIONE IT</small><h1>{{overview:'Panoramica',devices:'Dispositivi',branding:'Personalizzazione',users:'Utenti',workflows:'Workflow ticket',slaPolicies:'Policy SLA',audit:'Audit amministrativo',security:'Account e sicurezza',myTickets:'I miei ticket',support:'Assistenza',knowledge:'Knowledge base'}[tab]}</h1></div><div className="header-actions"><Notifications onOpenTicket={id=>{setFocusTicketId(id);setTab('support');}}/><span className="badge"><Icon name="security" size={15}/>{admin?'Amministratore':'Accesso limitato'}</span></div></header>
+  </aside><main className="content" aria-busy={busy}><header><div><small className="eyebrow">WORKSPACE / GESTIONE IT</small><h1>{{overview:'Panoramica',devices:'Dispositivi',branding:'Personalizzazione',users:'Utenti',workflows:'Workflow ticket',slaPolicies:'Policy SLA',audit:'Audit amministrativo',security:'Account e sicurezza',myTickets:'I miei ticket',support:'Assistenza',emailIntakes:'Email da valutare',knowledge:'Knowledge base'}[tab]}</h1></div><div className="header-actions"><Notifications onOpenTicket={id=>{setFocusTicketId(id);setTab('support');}}/><span className="badge"><Icon name="security" size={15}/>{admin?'Amministratore':'Accesso limitato'}</span></div></header>
     {error && <p role="alert" className="error">{error}</p>}{message && <p role="status" className="notice"><Icon name="check"/>{message}</p>}
     {tab === 'support' && <SupportDesk sites={sites} devices={devices} visibleDeviceIds={devices.map(d=>d.id)} focusTicketId={focusTicketId} onTicketFocused={()=>setFocusTicketId(null)} onOpenDevice={id=>action(async()=>{const next=await api<DeviceStatus>(`/devices/${id}/status`);setStatus(next);setTab('devices');})}/>}
+    {tab === 'emailIntakes' && canManageEmailIntake && <EmailIntakeInbox onMessage={setMessage}/>}
     {tab === 'myTickets' && <CustomerPortal onMessage={setMessage}/>}
     {tab === 'knowledge' && canReadKnowledge && <KnowledgeBase canManage={user.globalPermissions.includes('knowledge.manage')} onMessage={setMessage}/>}
     {tab === 'slaPolicies' && canManageSla && <SlaPolicyAdmin onMessage={setMessage}/>}
