@@ -1820,3 +1820,10 @@ modificato; ogni nuova estensione attende la propria CI sul push.
 - `docker build -t omnidesk-api:local -f src/OmniDesk.Api/Dockerfile .` and `docker build -t omnidesk-dashboard:local -f src/dashboard/Dockerfile .` — passed.
 - `./scripts/smoke.sh --browser` — passed on rebuilt local images: migrations/bootstrap, HTTPS, Chromium SLA administration and ticket flows, ClamAV clean/EICAR scan, and isolated DB/blob/Identity-key/CA backup restore. Live LAN services were not modified.
 - Runtime delivery of an actual expired SLA notification on the LAN, email/escalation channels, production restore, and CI for the pending commit remain unverified.
+
+### SLA escalation steps and hosted-worker runtime — 2026-10-20
+
+- `./scripts/test.sh` — passed: 88 API/PostgreSQL tests, production dashboard build, 6/6 Vitest. SLA coverage verifies policy validation/version snapshots, pause/resume and reopen cycles, ordered escalation thresholds, no emission before a step, once-only emission on repeated worker passes, persisted audit/outbox entries, and scoped notification projection.
+- `docker build -t omnidesk-api:local -f src/OmniDesk.Api/Dockerfile .` and `docker build -t omnidesk-dashboard:local -f src/dashboard/Dockerfile .` — passed.
+- `./scripts/smoke.sh --browser` — passed with rebuilt images and isolated PostgreSQL/API/dashboard/Caddy/ClamAV containers. Chromium persisted the escalation policy; the live hosted breach worker processed an overdue fixture, the escalation worker emitted the configured 15-minute step from the persisted breach time, and the notification worker projected it to an authorized recipient. Full DB/blob/Identity-key/CA restore passed. No LAN container or service was modified.
+- `bash -n scripts/smoke.sh`, `git diff --check`, and both production/test Compose configuration checks — passed. Runtime on the LAN, external email/escalation delivery, CI for this pending commit, and release promotion remain unverified.
