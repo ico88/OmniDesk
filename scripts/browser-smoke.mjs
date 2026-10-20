@@ -401,8 +401,8 @@ try {
  assert.equal(await page.getByRole('button',{name:'Utenti',exact:true}).count(),0);
  assert.equal(await page.getByRole('button',{name:'Knowledge base',exact:true}).count(),0,'Viewer does not receive knowledge navigation');
  assert.equal((await context.request.get('https://omnidesk.test/api/knowledge')).status(),403,'Viewer cannot read internal knowledge articles');
- await page.waitForFunction(()=>document.querySelectorAll('.stats .panel').length===3);
- assert.equal(await page.locator('.stats .panel').count(),3,'Viewer layout isolated');
+ await page.waitForFunction(()=>document.querySelectorAll('.stats .panel').length===4);
+ assert.equal(await page.locator('.stats .panel').count(),4,'Viewer layout isolated');
  await page.getByRole('button',{name:'Dispositivi',exact:true}).click();
  await page.getByRole('row').filter({has:page.getByRole('cell',{name:renamed,exact:true})}).getByRole('button',{name:'Apri',exact:true}).click();
  assert.equal(await page.getByRole('heading',{name:'Gestione dispositivo',exact:true}).count(),0);
