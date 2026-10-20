@@ -1,5 +1,9 @@
 # Roadmap
 
+### SD3 — promozione controllata dell’intake email a ticket
+
+La dashboard consente a un operatore con `tickets.manage` di selezionare il dispositivo, rivedere/modificare oggetto e descrizione, impostare categoria/priorità e confermare esplicitamente che il mittente non è verificato. L’API crea un ticket `email` associato al dispositivo selezionato, senza collegare l’email a un account; la promozione è idempotente e transazionale, con routing, workflow, SLA, outbox e audit. Verifiche API/PostgreSQL 90/90, dashboard 6/6, build dei container e smoke Chromium isolato registrati in `validation.md`. Provider reale, binding verificato dei thread e invio/ricezione reply restano aperti; nessuna pubblicazione LAN in questo incremento.
+
 Stato corrente sintetico: [consegna Windows/LAN](completion-status.md). Le sezioni successive conservano lo storico; gli stati iniziali progettato/non compilato sono superati solo dalle verifiche successive esplicitamente registrate.
 
 ### Incremento SD1 — Allegati ticket con quarantena (implementato nel branch, non pubblicato)
