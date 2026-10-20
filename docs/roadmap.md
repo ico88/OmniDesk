@@ -1,5 +1,17 @@
 # Roadmap
 
+### Privacy — retention metriche e inventario Agent
+
+Implementate due policy indipendenti, `OMNIDESK_RETENTION_DEVICE_METRICS_DAYS`
+e `OMNIDESK_RETENTION_DEVICE_INVENTORY_DAYS`, entrambe disattivate con default
+`0`. Gli snapshot scaduti sono eliminati in batch limitati con audit del solo
+conteggio; le metriche vengono rimosse solo quando il dispositivo è già
+offline, mentre l'inventario segue la propria soglia. I record dispositivo non
+vengono eliminati. Suite PostgreSQL 95/95, build dashboard/Vitest, configurazioni
+Compose e build API sono passati. Anche lo smoke Chromium/restore isolato è
+passato, includendo probe browser, ClamAV ed esercizio del ripristino. Non
+distribuito sulla LAN; retention backup/off-site ancora da progettare e validare.
+
 ### Service Desk — notifiche email escalation SLA
 
 La proiezione outbox per breach ed escalation crea consegne email solo per destinatari con `tickets.view` e consenso email già attivo; l'EmailNotificationWorker rivalida account, scope e consenso prima di inviare tramite SMTP configurato. Test PostgreSQL aggiornato dimostra la coda per escalation duplicate-deduplicate, destinatario scoped e consenso esplicito. L'invio SMTP reale, deliverability e test operativi del provider restano da verificare; nessuna credenziale SMTP è stata aggiunta.

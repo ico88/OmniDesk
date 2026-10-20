@@ -1972,3 +1972,10 @@ modificato; ogni nuova estensione attende la propria CI sul push.
 - `./scripts/test.sh` — passato: 94/94 API/PostgreSQL. `SlaPolicyScenario` abilita il consenso email esplicito sul destinatario con grant `tickets.view`, proietta le escalation duplicate-deduplicate e verifica che entrambe producano consegne email associate alle notifiche corrette.
 - Build API inclusa nella suite; build dashboard e Vitest 6/6 passati. L'email SMTP fake e il retry generale sono coperti separatamente da `SupportScenario`; questa verifica non prova SMTP reale o deliverability.
 - Nessuna configurazione SMTP reale o deploy LAN è stato effettuato. Pipeline sul commit di test pendenti finché non termina la run già in corso.
+
+### Privacy — retention metriche e inventario Agent — 2026-10-20
+
+- `./scripts/test.sh` — passato: 95/95 test API/PostgreSQL; lo scenario dedicato verifica policy default disattivate, purge batch delle metriche scadute solo per dispositivi già offline, rimozione inventory oltre soglia, preservazione dei dati recenti e dei record dispositivo, audit con il solo conteggio.
+- Build dashboard TypeScript/Vite e Vitest — passate, 6/6. `docker compose config --quiet`, Compose test, backup-check e restore-check — passati; `docker compose build api` — passato. `git diff --check` — passato.
+- `./scripts/smoke.sh --browser` — passato nello stack isolato: Chromium, probe ClamAV/EICAR, worker SLA/escalation e ripristino completo DB/blob/Identity/CA. Nessun servizio LAN è stato modificato.
+- Le opzioni `OMNIDESK_RETENTION_DEVICE_METRICS_DAYS` e `OMNIDESK_RETENTION_DEVICE_INVENTORY_DAYS` hanno default `0`; nessuna migrazione è richiesta. Non è stata effettuata alcuna cancellazione o verifica su dati live e la retention backup/off-site resta aperta.
