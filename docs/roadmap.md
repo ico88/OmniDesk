@@ -14,7 +14,8 @@ un ticket orfano sia la rimozione del suo ultimo link in `SupportScenario`;
 `MigrationTests` verifica anche il backfill legacy;
 95/95 test API/PostgreSQL, build dashboard, 6/6 Vitest, build Docker API,
 configurazione Compose e smoke Chromium/restore isolato passano. CI per questo
-incremento resta da eseguire; nessun deploy LAN effettuato. Dettagli in
+incremento Linux `39382194435` e Windows `39382194419` passano; nessun deploy
+LAN effettuato. Dettagli in
 [validation.md](validation.md).
 
 ### CI Windows — timeout del test MSI
