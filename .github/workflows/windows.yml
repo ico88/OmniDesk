@@ -46,6 +46,9 @@ jobs:
       - name: Verify masked enrollment prompt
         shell: powershell
         run: '& .\installer\Test-OmniDeskEnrollmentPrompt.ps1'
+      - name: Verify Setup existing identity replacement flow
+        shell: powershell
+        run: '& .\installer\Test-OmniDeskSetupEnrollment.ps1'
       - name: Verify installer source retention and sensitive cleanup
         shell: powershell
         run: '& .\installer\Test-OmniDeskInstallerCleanup.ps1'
