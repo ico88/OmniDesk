@@ -1,12 +1,12 @@
 # Stato e verifiche — 18 ottobre 2026
 
-### Timeout diagnosi MSI — 2026-10-20
+### Diagnostica processo node ID MSI — 2026-10-20
 
-- Le run Windows recenti hanno mostrato tempi lunghi nel lifecycle MSI. Il test installazione aveva già timeout su `msiexec` e SCM, ma invocava senza limite `MeshService64.exe -nodeid`; aggiunto un limite di 15 secondi, output temporaneo e pulizia anche in caso di errore. La chiamata non può più lasciare bloccato il job all'infinito.
-- Verifica locale: `git diff --check` passato. Non è disponibile PowerShell sull'host, quindi parsing ed esecuzione Windows sono demandati al workflow Windows sul commit successivo.
-- Al momento della modifica, le run `39371440706`, `39370263899` e `39369087920` erano ancora attive. La correzione non le interrompe né modifica i processi già in corso; il suo effetto si potrà verificare solo su una nuova run.
+- La prima implementazione bounded è fallita su Windows [run 39371845078](https://github.com/ico88/OmniDesk/actions/runs/39371845078): MSI installato correttamente, ma `Start-Process` non ha esposto un `ExitCode` utilizzabile per la sonda `-nodeid`. Nessun errore MSI o timeout del binario.
+- Sostituita la cattura con `System.Diagnostics.Process`, stream letti in modo asincrono, timeout 15 secondi, terminazione del processo al timeout e diagnostica dello stderr limitata a 300 caratteri. Il chiamante verifica che il risultato sia un node ID esadecimale di 96 caratteri.
+- `git diff --check` passa. PowerShell non è disponibile sull'host: parsing ed esecuzione della correzione sono demandati alla nuova pipeline Windows.
 - Linux [run 39371440650](https://github.com/ico88/OmniDesk/actions/runs/39371440650) — passata sul commit `2a82a4f`: test applicativi, Compose, build API/dashboard e smoke Chromium con restore isolato. Non esercita il test MSI Windows.
-- Windows [run 39371440706](https://github.com/ico88/OmniDesk/actions/runs/39371440706) — passata sul commit `2a82a4f`: build Agent/Tray/MSI, installazione, recovery, disinstallazione e upgrade/repair/rollback con baseline fissata. La run non include il timeout node ID aggiunto nel commit `f4e46d7`; quella verifica è ancora in corso nella run `39371845078`.
+- Windows [run 39371440706](https://github.com/ico88/OmniDesk/actions/runs/39371440706) — passata sul commit `2a82a4f`: build Agent/Tray/MSI, installazione, recovery, disinstallazione e upgrade/repair/rollback con baseline fissata. La run non include la nuova implementazione di `Get-RemoteNodeId`; la run `39371845078`, sul commit `0b6aada`, ha fallito soltanto nella sonda node ID e la correzione è in attesa di una nuova pipeline Windows.
 
 ### Migrazione GitHub Actions a Node 24 — 2026-10-20
 

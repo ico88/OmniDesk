@@ -4,9 +4,10 @@
 
 Le verifiche MSI avevano timeout per installazione e SCM, ma l'interrogazione
 `MeshService64.exe -nodeid` poteva bloccare il job senza limite. Il test ora
-termina quella chiamata dopo 15 secondi e rimuove gli output temporanei. La
-correzione è in attesa di una nuova run Windows; le run già attive non sono
-state interrotte e non possono validare il cambiamento. Vedi
+termina quella chiamata dopo 15 secondi. La prima sonda in CI è fallita perché
+`Start-Process` non ha restituito un codice uscita leggibile; ora usa
+`System.Diagnostics.Process` con stream asincroni e diagnostica d'errore limitata.
+La correzione aggiornata attende una nuova run Windows. Vedi
 [validation.md](validation.md) per gli ID e il limite delle prove.
 
 ### Backup — convalida automatica prima del marker READY
