@@ -49,6 +49,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
     public DbSet<SupportSlaPolicy> SupportSlaPolicies => Set<SupportSlaPolicy>();
     public DbSet<SupportSlaPolicyVersion> SupportSlaPolicyVersions => Set<SupportSlaPolicyVersion>();
     public DbSet<SupportTicketSlaTarget> SupportTicketSlaTargets => Set<SupportTicketSlaTarget>();
+    public DbSet<SupportTicketSlaEscalation> SupportTicketSlaEscalations => Set<SupportTicketSlaEscalation>();
     public DbSet<SupportQueue> SupportQueues => Set<SupportQueue>();
     public DbSet<SupportQueueMember> SupportQueueMembers => Set<SupportQueueMember>();
     public DbSet<SupportQueueRoutingRule> SupportQueueRoutingRules => Set<SupportQueueRoutingRule>();
@@ -202,6 +203,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
             .HasForeignKey(x => new { x.PolicyId, x.PolicyVersion }).OnDelete(DeleteBehavior.Restrict);
         b.Entity<SupportTicketSlaTarget>().HasIndex(x => new { x.TicketId, x.TargetType, x.Cycle }).IsUnique();
         b.Entity<SupportTicketSlaTarget>().HasIndex(x => new { x.DueAt, x.CompletedAt, x.BreachedAt });
+        b.Entity<SupportTicketSlaEscalation>().HasKey(x => new { x.TargetId, x.StepMinutes });
+        b.Entity<SupportTicketSlaEscalation>().HasOne<SupportTicketSlaTarget>().WithMany()
+            .HasForeignKey(x => x.TargetId).OnDelete(DeleteBehavior.Cascade);
 
         b.Entity<DashboardLayout>().HasKey(x => x.UserId);
         b.Entity<DashboardLayout>().HasOne<AppUser>().WithOne().HasForeignKey<DashboardLayout>(x => x.UserId).OnDelete(DeleteBehavior.Cascade);

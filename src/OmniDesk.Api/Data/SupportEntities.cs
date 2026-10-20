@@ -90,6 +90,13 @@ public sealed class SupportTicketSlaTarget
     public long AccumulatedPauseSeconds { get; set; }
 }
 
+public sealed class SupportTicketSlaEscalation
+{
+    public Guid TargetId { get; set; }
+    public int StepMinutes { get; set; }
+    public DateTimeOffset EscalatedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
 public sealed class SupportTicket
 {
     public Guid Id { get; set; } = Guid.NewGuid();

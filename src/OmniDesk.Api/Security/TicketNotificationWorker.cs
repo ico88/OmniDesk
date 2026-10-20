@@ -124,9 +124,9 @@ public sealed class TicketNotificationWorker(IServiceScopeFactory scopes, ILogge
             await AddAssigneeOrQueue(db, root, recipients, ct);
             await AddTicketParticipants(db, ticket.Id, evt.OccurredAt, recipients, ct);
         }
-        else if (evt.EventType == "ticket.sla.breached")
+        else if (evt.EventType is "ticket.sla.breached" or "ticket.sla.escalated")
         {
-            kind = "ticket.sla.breached";
+            kind = evt.EventType;
             await AddAssigneeOrQueue(db, root, recipients, ct);
             await AddTicketParticipants(db, ticket.Id, evt.OccurredAt, recipients, ct);
         }

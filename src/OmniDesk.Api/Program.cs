@@ -69,6 +69,7 @@ builder.Services.AddHostedService<RemoteSessionGuard>();
 builder.Services.AddHostedService<RemoteProvisioningGuard>();
 builder.Services.AddHostedService<TicketNotificationWorker>();
 builder.Services.AddHostedService<SlaBreachWorker>();
+builder.Services.AddHostedService<SlaEscalationWorker>();
 builder.Services.Configure<RetentionOptions>(builder.Configuration.GetSection(RetentionOptions.SectionName));
 builder.Services.AddHostedService<CoreOutboxRetentionWorker>();
 builder.Services.AddAuthorization();

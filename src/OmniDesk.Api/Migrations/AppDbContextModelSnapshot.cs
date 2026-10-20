@@ -1606,11 +1606,30 @@ namespace OmniDesk.Api.Migrations
                     b.ToTable("SupportTicketParticipants");
                 });
 
+            modelBuilder.Entity("OmniDesk.Api.Data.SupportTicketSlaEscalation", b =>
+                {
+                    b.Property<Guid>("TargetId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("StepMinutes")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("EscalatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("TargetId", "StepMinutes");
+
+                    b.ToTable("SupportTicketSlaEscalations");
+                });
+
             modelBuilder.Entity("OmniDesk.Api.Data.SupportTicketSlaTarget", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
+
+                    b.Property<long>("AccumulatedPauseSeconds")
+                        .HasColumnType("bigint");
 
                     b.Property<DateTimeOffset?>("BreachedAt")
                         .HasColumnType("timestamp with time zone");
@@ -1618,16 +1637,13 @@ namespace OmniDesk.Api.Migrations
                     b.Property<DateTimeOffset?>("CompletedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<long>("AccumulatedPauseSeconds")
-                        .HasColumnType("bigint");
-
                     b.Property<int>("Cycle")
                         .HasColumnType("integer");
 
-                    b.Property<DateTimeOffset?>("PausedAt")
+                    b.Property<DateTimeOffset>("DueAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<DateTimeOffset>("DueAt")
+                    b.Property<DateTimeOffset?>("PausedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid>("PolicyId")
@@ -2248,6 +2264,15 @@ namespace OmniDesk.Api.Migrations
                     b.HasOne("OmniDesk.Api.Data.AppUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("OmniDesk.Api.Data.SupportTicketSlaEscalation", b =>
+                {
+                    b.HasOne("OmniDesk.Api.Data.SupportTicketSlaTarget", null)
+                        .WithMany()
+                        .HasForeignKey("TargetId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

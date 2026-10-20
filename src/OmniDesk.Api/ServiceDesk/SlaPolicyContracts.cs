@@ -4,6 +4,7 @@ public sealed record SlaCalendarInput(string TimeZoneId, Dictionary<DayOfWeek, B
 public sealed record SlaPolicyDefinition(int FirstResponseMinutes, int ResolutionMinutes, SlaCalendarInput Calendar)
 {
     public string[] PauseStates { get; init; } = [];
+    public int[] EscalationMinutes { get; init; } = [];
 }
 public sealed record SlaPolicyCreate(string Name, Guid? SiteId, SlaPolicyDefinition Definition);
 public sealed record SlaPolicyVersionCreate(long ExpectedVersion, string Name, SlaPolicyDefinition Definition);

@@ -118,7 +118,11 @@ public static class SlaPolicyEndpoints
             definition.PauseStates is null || definition.PauseStates.Length > 20 ||
             definition.PauseStates.Distinct(StringComparer.Ordinal).Count() != definition.PauseStates.Length ||
             definition.PauseStates.Any(state => state is null || state is "resolved" or "closed" ||
-                !Regex.IsMatch(state, "^[a-z][a-z0-9_]{0,39}$", RegexOptions.CultureInvariant)))
+                !Regex.IsMatch(state, "^[a-z][a-z0-9_]{0,39}$", RegexOptions.CultureInvariant)) ||
+            definition.EscalationMinutes is null || definition.EscalationMinutes.Length > 20 ||
+            definition.EscalationMinutes.Any(minutes => minutes is < 1 or > 525600) ||
+            definition.EscalationMinutes.Distinct().Count() != definition.EscalationMinutes.Length ||
+            !definition.EscalationMinutes.SequenceEqual(definition.EscalationMinutes.Order()))
         {
             error = "Definizione SLA fuori dai limiti supportati.";
             return false;
