@@ -1,5 +1,14 @@
 # Roadmap
 
+### Windows Agent — scelta identità esistente — in sviluppo
+
+Setup 0.8.15 rileva l'identità protetta locale e chiede se conservarla per
+aggiornare l'Agent oppure revocarla sul server d'origine prima di registrare il
+PC come nuovo. La revoca deve riuscire prima di rimuovere l'identità locale; se
+il server d'origine non è raggiungibile, Setup interrompe la sostituzione e
+conserva l'identità. Compilazione e collaudo Windows CI in attesa; non ancora
+pubblicato né verificato su un PC reale.
+
 ### Dashboard — console Desktop remoto e gestione server — 2026-10-20
 
 - Nella scheda dispositivo la console remota è ora il primo contenuto; stato
@@ -258,6 +267,10 @@ Accesso da client LAN confermato dall'utente. Incremento console M5: elenco uten
 Incremento lifecycle M5: sospensione/riattivazione account, sostituzione ruoli globali e revoca sessioni web, ultimo amministratore protetto e controllo cookie/stamp a ogni richiesta. Compilato e verificato con PostgreSQL/Chromium. Guard sessioni remote con revoca persistente/retry dopo perdita permessi: test con fake, chiusura tunnel reale ancora aperta. Migrazione UserLifecycle versionata. Backup locale, restore DB e restore runtime isolato di un backup storico con chiavi Identity/CA verificati; backup recente con allegati, off-site e retention non chiusi. Prossimi gate: lifecycle ruoli/gruppi avanzato, reset assistito e collaudi Windows/MSI, firma e motore remoto. Le fasi WT/SD rimangono separate dal completamento della baseline.
 
 Incremento gestione dispositivi: etichetta/gruppo e revoca identità dalla console, conflitti di modifica rilevati, rivalidazione job queued al claim e dopo cambio gruppo, revoca idempotente con cancellazione queued e richiesta chiusura sessioni remote. Verificati PostgreSQL (anche concorrenza), Chromium e build. Nessuna nuova migrazione o modifica all'Agent; MSI/Windows, remoto reale, Tray, lifecycle ruoli/gruppi avanzato e Service Desk restano aperti.
+
+## Nuovo host pubblico omnidesk
+
+Preparazione configurazione in corso per `omnidesk.cricatania.it` (`151.3.161.202`, host LAN `10.0.0.53`): Caddy pubblico, progetto/immagini/volumi Compose separati dallo sviluppo e nuova installazione senza import dati. La configurazione è validata staticamente; installazione reale, test TLS pubblico, database, backup/restore e gate MeshCentral restano da collaudare. Stato registrato in [validation.md](validation.md).
 
 ## Percorso futuro OmniDesk Service Desk
 

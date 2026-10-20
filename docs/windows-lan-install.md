@@ -8,6 +8,8 @@ Il kit Agent/Setup 0.8.14 per `https://omnidesk.cricatania.it` è pubblicato nel
 
 La pipeline Windows 39419828634 ha superato build, installazione, recupero e disinstallazione MSI, oltre ai test di upgrade dai baseline supportati. Il pacchetto è unsigned per laboratorio; il checksum verifica l'integrità, non l'identità dell'editore. Non include MeshCentral Agent, quindi il desktop remoto non è disponibile con questo kit. L'installazione/enrollment su un PC Windows reale resta da verificare.
 
+La prossima build 0.8.15 aggiunge una scelta esplicita quando trova `%ProgramData%\OmniDesk\agent.json`: mantenere l'identità per l'aggiornamento, oppure revocarla sul server d'origine e registrare il PC come nuovo. L'opzione di sostituzione richiede che il vecchio server sia raggiungibile; se la revoca fallisce, l'identità locale resta conservata. La build Windows e la pubblicazione di questa correzione sono in corso; fino alla pubblicazione il kit disponibile resta 0.8.14.
+
 **Kit precedente (LAN):** l'artifact 0.8.12 della CI Windows `39397632990` era stato verificato e promosso al download amministrativo sul vecchio server. Includeva il pin CA LAN e non va usato per il nuovo dominio pubblico. Il pacchetto era unsigned per laboratorio; checksum e TLS non equivalgono ad Authenticode. Nessuna protezione assoluta contro amministratori locali o accesso fisico privilegiato.
 
 Per stato verificato vedere [completion-status.md](completion-status.md) e [validation.md](validation.md). Il kit LAN concordato usa `https://192.168.1.233:8085`; Agent non richiede porte inbound sul PC per heartbeat/inventario. La procedura MSI non modifica regole firewall.
