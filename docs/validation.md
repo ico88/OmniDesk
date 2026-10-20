@@ -6,6 +6,11 @@
 - `npm view meshcentral version dependencies.node-forge` — registro: 1.2.5 con node-forge 1.4.0; `npm view node-forge version` — 1.4.0. L'advisory GitHub al controllo odierno non elenca release corrette e il [PR di correzione upstream #1152](https://github.com/digitalbazaar/forge/pull/1152) è aperto.
 - Nessuna dipendenza o sorgente crittografica modificata. Il motore MeshCentral resta escluso dalle release pubbliche fino a una versione mantenuta e verificata; la build di laboratorio non chiude il gate. Nessuna installazione LAN effettuata.
 
+### Freshness immagini nella verifica release — 2026-10-20
+
+- `bash -n scripts/validate-release.sh`, Compose produzione/test e `git diff --check` — passati.
+- `docker compose build api dashboard` — passata sulle immagini locali. `validate-release.sh` ora ricostruisce API e dashboard dal checkout prima dei test e dello smoke, impedendo che immagini preesistenti facciano verificare una revisione diversa. Questo comando non distribuisce né riavvia servizi LAN.
+
 ### Presenza persistente dell'Agent — 2026-10-20
 
 - `./scripts/test.sh` — passato: 91 test API/PostgreSQL, build dashboard e 6/6 Vitest. Il flusso Agent inizializza la baseline senza audit sintetico, emette un audit offline una sola volta su sweep ripetuti e registra il ritorno online al successivo heartbeat. L'audit contiene solo l'ID dispositivo e l'azione; credenziali e payload non vengono registrati.
