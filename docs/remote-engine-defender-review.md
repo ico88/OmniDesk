@@ -56,3 +56,25 @@ ristretta. Il portale Microsoft richiede account sviluppatore, CAPTCHA e invio
 esplicito; inoltre richiede di accettare i termini che indicano conservazione
 negli Stati Uniti. Non risultano credenziali Microsoft o interazione autenticata
 nel workspace: preparazione completata, invio a Microsoft non ancora trasmesso.
+
+## Controllo dipendenza node-forge (20 ottobre 2026)
+
+La release MeshCentral del workspace resta fissata a 1.2.5 con `node-forge`
+1.4.0. Il controllo upstream aggiornato non consente di chiudere il gate con un
+semplice aggiornamento di MeshCentral: `npm view` conferma che la versione
+pubblicata è ancora 1.2.5 con `node-forge` 1.4.0; il `package.json` del branch
+upstream dichiara 1.2.6, che dipende ancora da `node-forge` 1.4.0.
+
+Il GitHub Advisory Database per
+[GHSA-86w9-cpqp-85rv](https://github.com/advisories/GHSA-86w9-cpqp-85rv)
+riporta `node-forge <=1.4.0` come vulnerabile e nessuna versione corretta. La
+correzione proposta a monte in
+[digitalbazaar/forge#1152](https://github.com/digitalbazaar/forge/pull/1152)
+è ancora aperta; l’issue collegata documenta il test di regressione e il fatto
+che la release npm corretta non è ancora disponibile.
+
+Quindi il gate di release rimane aperto. Non abbiamo applicato un fork o una
+patch locale al codice crittografico, né dichiarato il rilevamento Defender un
+falso positivo. Dopo la pubblicazione di una release corretta: aggiornare il
+lockfile a una versione verificabile, ricostruire l’immagine e il pacchetto
+Agent, ripetere audit/test remoti e la revisione Defender prima di distribuire.
