@@ -9,6 +9,22 @@ public static class NotificationEndpoints
     public static void MapNotificationEndpoints(this WebApplication app)
     {
         var api = app.MapGroup("/api/notifications").RequireAuthorization();
+        api.MapGet("/devices", async (HttpContext c, AppDbContext db, PermissionService permissions) =>
+        {
+            var userId = c.User.UserId();
+            var visibleDevices = permissions.VisibleDevices(userId).AsNoTracking();
+            var candidates = await (from presence in db.DevicePresence.AsNoTracking()
+                                    join device in visibleDevices on presence.DeviceId equals device.Id
+                                    join metrics in db.DeviceMetrics.AsNoTracking() on device.Id equals metrics.DeviceId
+                                    where !presence.IsOnline &&
+                                          db.DeviceCredentials.Any(credential => credential.DeviceId == device.Id && credential.RevokedAt == null)
+                                    orderby presence.ChangedAt descending
+                                    select new { device.Id, device.Name, device.SiteId, presence.ChangedAt, metrics.ReceivedAt })
+                .Take(50).Select(item => new { deviceId = item.Id, item.Name, item.ChangedAt, lastSeen = item.ReceivedAt })
+                .ToArrayAsync();
+            c.Response.Headers.CacheControl = "no-store";
+            return Results.Ok(new { offlineDevices = candidates });
+        });
         api.MapGet("", async (HttpContext c, AppDbContext db, PermissionService permissions) =>
         {
             var userId = c.User.UserId();
