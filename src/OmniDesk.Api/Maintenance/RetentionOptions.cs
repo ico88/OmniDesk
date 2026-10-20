@@ -4,4 +4,6 @@ public sealed class RetentionOptions
 {
     public const string SectionName = "Retention";
     public int DeliveredOutboxDays { get; set; } = 180;
+    public int ProcessedEmailIntakesDays { get; set; } = 180;
+    public int PendingEmailIntakesDays { get; set; } = 30;
 }
