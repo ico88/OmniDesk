@@ -62,7 +62,9 @@ public static class RemoteScenario
         Assert.Equal(HttpStatusCode.Accepted, (await scoped.PostAsync($"/api/devices/{device}/remote-sessions/{disconnectSession}/disconnect", null)).StatusCode);
         Assert.Equal(2, mesh.DisconnectedShares.Count);
         var stillActive = await scoped.GetFromJsonAsync<JsonElement>($"/api/devices/{device}/remote-sessions");
-        Assert.Equal("active", stillActive.EnumerateArray().Single(x => x.GetProperty("id").GetGuid() == disconnectSession).GetProperty("state").GetString());
+        var activeSession = stillActive.EnumerateArray().Single(x => x.GetProperty("id").GetGuid() == disconnectSession);
+        Assert.Equal("active", activeSession.GetProperty("state").GetString());
+        Assert.Equal("Federico Operatore", activeSession.GetProperty("operatorName").GetString());
         var disconnectCount = mesh.Calls.Count(x => x == "disconnect");
         Assert.Equal(HttpStatusCode.NoContent, (await scoped.DeleteAsync($"/api/devices/{device}/remote-sessions/{disconnectSession}")).StatusCode);
         Assert.Equal(disconnectCount + 1, mesh.Calls.Count(x => x == "disconnect"));

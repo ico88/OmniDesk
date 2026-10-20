@@ -461,8 +461,12 @@ try {
  const remoteSessionId=randomBytes(16).toString('hex'); let remoteShareState='active';
  await page.route(`**/api/devices/${deviceId}/remote-sessions/availability`,route=>route.fulfill({json:{configured:true,mapped:true,revoked:false,enabled:true,nodeId:null,unattendedAllowed:false}}));
  await page.route(`**/api/devices/${deviceId}/remote-sessions`,async route=>{
-  if(route.request().method()==='GET') return route.fulfill({json:remoteShareState==='revoked'?[]:[{id:remoteSessionId,capability:'remote.control',state:remoteShareState,createdAt:new Date().toISOString(),expiresAt:new Date(Date.now()+10*60_000).toISOString(),consentRequired:true}]});
+  if(route.request().method()==='GET') return route.fulfill({json:remoteShareState==='revoked'?[]:[{id:remoteSessionId,operatorName:'Operatore di prova',capability:'remote.control',state:remoteShareState,createdAt:new Date().toISOString(),expiresAt:new Date(Date.now()+10*60_000).toISOString(),consentRequired:true}]});
   if(route.request().method()==='POST') return route.fulfill({status:201,json:{id:remoteSessionId,url:'https://mesh.example.test/sharing?c=fixture',expiresAt:new Date(Date.now()+10*60_000).toISOString()}});
+  return route.continue();
+ });
+ await page.route(`**/api/devices/${deviceId}/remote-sessions/${remoteSessionId}/disconnect`,async route=>{
+  if(route.request().method()==='POST') return route.fulfill({status:202,json:{id:remoteSessionId,state:'disconnect_requested'}});
   return route.continue();
  });
  await page.route(`**/api/devices/${deviceId}/remote-sessions/${remoteSessionId}`,async route=>{
@@ -471,6 +475,12 @@ try {
  });
  await page.route('https://mesh.example.test/sharing**',route=>route.fulfill({status:200,contentType:'text/html',body:'<!doctype html><title>Remote fixture</title><p>Isolated Mesh fixture</p>'}));
  await page.getByRole('tab',{name:'Desktop remoto',exact:true}).click();
+ await page.locator('.remote-status .count').filter({hasText:'1'}).waitFor();
+ await page.locator('.remote-live-session strong').getByText('Desktop remoto attivo · Operatore di prova',{exact:true}).waitFor();
+ await page.getByRole('button',{name:'Disconnetti temporaneamente',exact:true}).waitFor();
+ page.once('dialog',dialog=>dialog.accept());
+ await page.getByRole('button',{name:'Disconnetti temporaneamente',exact:true}).click();
+ await page.getByText('Sessione interrotta. Operatore di prova può riconnettersi fino alla scadenza del lease.',{exact:true}).waitFor();
  await page.getByRole('button',{name:'Avvia sessione',exact:true}).waitFor();
  await page.getByRole('button',{name:'Avvia sessione',exact:true}).click();
  await page.locator(`iframe[title="Desktop remoto: ${renamed}"]`).waitFor();
