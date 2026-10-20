@@ -15,6 +15,54 @@ public sealed class SerializedSharedDatabaseCollection;
 public sealed class RetentionScenario(ApiFactory factory) : IClassFixture<ApiFactory>
 {
     [Fact]
+    public async Task Audit_retention_is_disabled_by_default_and_purges_old_events_in_audited_batches()
+    {
+        var marker = "retention-audit-" + Guid.NewGuid().ToString("N");
+        var testStartedAt = DateTimeOffset.UtcNow;
+        var oldAt = DateTimeOffset.UtcNow.AddDays(-400);
+        var recentAt = DateTimeOffset.UtcNow.AddDays(-20);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            await TestDatabaseMigration.ApplyAsync(db);
+            db.AuditEvents.AddRange(
+                new AuditEvent { At = oldAt, Action = marker, Target = "old-1" },
+                new AuditEvent { At = oldAt.AddMinutes(1), Action = marker, Target = "old-2" },
+                new AuditEvent { At = oldAt, Action = "retention.audit-events.purged", Target = "historic" },
+                new AuditEvent { At = recentAt, Action = marker, Target = "recent" });
+            await db.SaveChangesAsync();
+        }
+
+        try
+        {
+            var scopeFactory = factory.Services.GetRequiredService<IServiceScopeFactory>();
+            var disabled = new CoreOutboxRetentionWorker(scopeFactory,
+                Options.Create(new RetentionOptions()), NullLogger<CoreOutboxRetentionWorker>.Instance);
+            Assert.Equal(0, await disabled.PurgeAuditEventsBatchAsync());
+            var worker = new CoreOutboxRetentionWorker(scopeFactory,
+                Options.Create(new RetentionOptions { AuditEventsDays = 365 }), NullLogger<CoreOutboxRetentionWorker>.Instance);
+            Assert.Equal(2, await worker.PurgeAuditEventsBatchAsync());
+
+            using var verificationScope = factory.Services.CreateScope();
+            var verificationDb = verificationScope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var remaining = await verificationDb.AuditEvents.Where(item => item.Action == marker ||
+                    item.Action == "retention.audit-events.purged" && item.Target == "historic")
+                .Select(item => item.Target).ToArrayAsync();
+            Assert.Equal(new[] { "recent", "historic" }.OrderBy(x => x), remaining.OrderBy(x => x));
+            Assert.Contains(await verificationDb.AuditEvents.ToArrayAsync(), item =>
+                item.Action == "retention.audit-events.purged" && item.Target == "2");
+        }
+        finally
+        {
+            using var cleanupScope = factory.Services.CreateScope();
+            var cleanupDb = cleanupScope.ServiceProvider.GetRequiredService<AppDbContext>();
+            await cleanupDb.AuditEvents.Where(item => item.Action == marker ||
+                    item.Action == "retention.audit-events.purged" && item.At >= testStartedAt)
+                .ExecuteDeleteAsync();
+        }
+    }
+
+    [Fact]
     public async Task Ticket_attachment_retention_purges_only_old_resolved_content_and_preserves_auditable_ticket_metadata()
     {
         var now = DateTimeOffset.UtcNow;
