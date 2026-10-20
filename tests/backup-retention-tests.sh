@@ -6,6 +6,20 @@ trap 'rm -rf -- "$temp"' EXIT
 root="$temp/backups"
 mkdir -m 700 "$root"
 
+prepared=$(bash "$repo/scripts/prepare-backup-directory.sh" "$temp/prepared")
+[[ "$prepared" == "$temp/prepared" && -d "$prepared" ]]
+[[ "$(stat -c '%a' "$prepared")" == 700 ]]
+ln -s "$root" "$temp/backups-link"
+if bash "$repo/scripts/prepare-backup-directory.sh" "$temp/backups-link" >/dev/null 2>&1; then
+  echo 'FAIL: a symbolic link was accepted as the backup directory.' >&2
+  exit 1
+fi
+printf 'not a directory\n' > "$temp/backups-file"
+if bash "$repo/scripts/prepare-backup-directory.sh" "$temp/backups-file" >/dev/null 2>&1; then
+  echo 'FAIL: a regular file was accepted as the backup directory.' >&2
+  exit 1
+fi
+
 old="$root/20200101T000000Z.old123"
 incomplete="$root/20200101T000000Z.pending123"
 current="$root/20990101T000000Z.new123"
@@ -42,5 +56,9 @@ if bash "$repo/scripts/prune-backups.sh" "$target/READY" 90 >/dev/null 2>&1; the
   echo 'FAIL: a file was accepted as the backup directory.' >&2
   exit 1
 fi
+if ! bash "$repo/scripts/prune-backups.sh" --validate-only 90 >/dev/null; then
+  echo 'FAIL: valid retention configuration was rejected by the preflight.' >&2
+  exit 1
+fi
 
-echo 'PASS: backup retention is opt-in, prunes only old READY direct children, and preserves incomplete backups and symlinks.'
+echo 'PASS: backup retention is opt-in, validates early, prunes only old READY direct children, rejects unsafe roots, and preserves incomplete backups and symlinks.'

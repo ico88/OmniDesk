@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - run: bash -n setup.sh scripts/test.sh scripts/smoke.sh scripts/backup.sh scripts/prune-backups.sh scripts/verify-backup.sh scripts/validate-release.sh tests/backup-verification-tests.sh tests/backup-retention-tests.sh
+      - run: bash -n setup.sh scripts/test.sh scripts/smoke.sh scripts/backup.sh scripts/prepare-backup-directory.sh scripts/prune-backups.sh scripts/verify-backup.sh scripts/validate-release.sh tests/backup-verification-tests.sh tests/backup-retention-tests.sh
       - run: bash tests/backup-verification-tests.sh
       - run: bash tests/backup-retention-tests.sh
       - run: node --check scripts/restore-runtime-smoke.mjs
