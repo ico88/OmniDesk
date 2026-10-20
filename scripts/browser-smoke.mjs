@@ -299,7 +299,7 @@ try {
  assert.equal(correlatedInterventions.status(),200);
  assert.equal((await correlatedInterventions.json()).length,1,'RMM job is linked to the ticket');
  assert.equal((await (await context.request.get(`https://omnidesk.test/api/support/${smokeTicketId}/intervention-candidates`)).json()).length,0,'Linked RMM job is removed from the candidate list');
- await page.getByLabel('Stato',{exact:true}).selectOption('resolved');
+ await page.locator('#ticket-state').selectOption('resolved');
  assert.equal(await page.getByLabel('Risposta visibile al richiedente',{exact:true}).evaluate(e=>e.checkValidity()),false,'Resolution requires a response before submit');
  await page.getByRole('img',{name:'Screenshot allegato alla richiesta',exact:true}).evaluate(async img=>{await img.decode();if(img.naturalWidth!==1)throw Error('Screenshot not rendered');});
  await page.getByRole('button',{name:'Ingrandisci screenshot',exact:true}).click();
