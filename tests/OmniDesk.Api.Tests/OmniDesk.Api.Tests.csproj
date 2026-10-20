@@ -4,6 +4,7 @@
 <Compile Include="../../src/OmniDesk.Windows.Ipc/PipeConnectionRetry.cs" Link="PipeConnectionRetry.cs" />
 <Compile Include="../../src/OmniDesk.Agent.Windows/AgentConnection.cs" Link="AgentConnection.cs" />
 <Compile Include="../../src/OmniDesk.Agent.Windows/NetworkAdapterSelection.cs" Link="NetworkAdapterSelection.cs" />
+<Compile Include="../../src/OmniDesk.Agent.Windows/AgentInstallLayout.cs" Link="AgentInstallLayout.cs" />
 <PackageReference Include="Otp.NET" Version="1.4.1" />
 <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
 <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.13" />
