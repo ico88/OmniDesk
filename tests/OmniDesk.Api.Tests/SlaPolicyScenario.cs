@@ -89,6 +89,8 @@ public sealed class SlaPolicyScenario(ApiFactory factory) : IClassFixture<ApiFac
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             await using var tx = await db.Database.BeginTransactionAsync();
             var publisher = await db.Users.SingleAsync(x => x.UserName == userName);
+            publisher.EmailNotificationsEnabled = true;
+            publisher.EmailNotificationsEnabledAt = createdAt;
             var globalPolicy = new SupportSlaPolicy { ScopeKey = "global", Name = "Global fallback", CurrentVersion = 1 };
             db.SupportSlaPolicies.Add(globalPolicy);
             db.SupportSlaPolicyVersions.Add(new SupportSlaPolicyVersion
@@ -288,11 +290,15 @@ public sealed class SlaPolicyScenario(ApiFactory factory) : IClassFixture<ApiFac
                 .Where(x => x.EventType == "ticket.sla.escalated" && x.AggregateId == alertTicket.Id).ToArrayAsync();
             foreach (var escalationEvent in escalationEvents)
                 await TicketNotificationWorker.ProjectNotifications(db, new PermissionService(db), escalationEvent,
-                    DateTimeOffset.UtcNow, CancellationToken.None);
+                    DateTimeOffset.UtcNow, CancellationToken.None, outboundEmailEnabled: true);
             await db.SaveChangesAsync();
             Assert.Equal(2, await db.UserNotifications.AsNoTracking().CountAsync(x =>
                 escalationEvents.Select(evt => evt.Id).Contains(x.EventId) && x.UserId == publisher.Id &&
                 x.Kind == "ticket.sla.escalated"));
+            Assert.Equal(2, await db.EmailNotificationDeliveries.AsNoTracking().CountAsync(delivery =>
+                db.UserNotifications.Any(notification => notification.Id == delivery.NotificationId &&
+                    escalationEvents.Select(evt => evt.Id).Contains(notification.EventId) &&
+                    notification.UserId == publisher.Id && notification.Kind == "ticket.sla.escalated")));
             await tx.RollbackAsync();
         }
     }
