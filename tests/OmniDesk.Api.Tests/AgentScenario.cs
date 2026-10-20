@@ -5,6 +5,8 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
 using OmniDesk.Api.Data;
@@ -94,6 +96,11 @@ public static class AgentScenario
         Assert.True(listed.GetProperty("online").GetBoolean());
         Assert.False(listed.GetProperty("revoked").GetBoolean());
         Assert.True(listed.GetProperty("lastSeen").ValueKind != JsonValueKind.Null);
+        var presenceWorker = new OmniDesk.Api.Maintenance.DevicePresenceWorker(
+            factory.Services.GetRequiredService<IServiceScopeFactory>(),
+            Options.Create(new OmniDesk.Api.Maintenance.DevicePresenceOptions()),
+            NullLogger<OmniDesk.Api.Maintenance.DevicePresenceWorker>.Instance);
+        await presenceWorker.SweepOnceAsync();
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -101,11 +108,25 @@ public static class AgentScenario
             metricsRow.ReceivedAt = DateTimeOffset.UtcNow.AddMinutes(-4);
             await db.SaveChangesAsync();
         }
+        await presenceWorker.SweepOnceAsync();
+        await presenceWorker.SweepOnceAsync();
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.Equal(1, await db.AuditEvents.CountAsync(e => e.Target == id.ToString() && e.Action == "device.presence.offline"));
+        }
         listed = (await scoped.GetFromJsonAsync<JsonElement[]>("/api/devices"))!.Single(x => x.GetProperty("id").GetGuid() == id);
         Assert.False(listed.GetProperty("online").GetBoolean());
         Assert.True(listed.GetProperty("lastSeen").ValueKind != JsonValueKind.Null);
         agent.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Assertion(key));
         Assert.Equal(HttpStatusCode.NoContent, (await agent.PostAsJsonAsync("/api/agent/metrics", metrics)).StatusCode);
+        await presenceWorker.SweepOnceAsync();
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.Equal(1, await db.AuditEvents.CountAsync(e => e.Target == id.ToString() && e.Action == "device.presence.offline"));
+            Assert.Equal(1, await db.AuditEvents.CountAsync(e => e.Target == id.ToString() && e.Action == "device.presence.online"));
+        }
         listed = (await scoped.GetFromJsonAsync<JsonElement[]>("/api/devices"))!.Single(x => x.GetProperty("id").GetGuid() == id);
         Assert.True(listed.GetProperty("online").GetBoolean());
         Assert.Equal(42.5, status.GetProperty("metrics").GetProperty("cpuPercent").GetDouble());

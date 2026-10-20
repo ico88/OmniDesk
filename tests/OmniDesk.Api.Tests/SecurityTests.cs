@@ -32,7 +32,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     }
     protected override void ConfigureWebHost(IWebHostBuilder builder) => builder.ConfigureServices(s => {
         // Integration scenarios invoke these workers explicitly so their retries do not race the assertions.
-        var workers = new[] { typeof(AssertionCleanup), typeof(RemoteSessionGuard), typeof(RemoteProvisioningGuard), typeof(TicketNotificationWorker), typeof(AttachmentScanWorker), typeof(CoreOutboxRetentionWorker), typeof(SlaBreachWorker), typeof(SlaEscalationWorker) };
+        var workers = new[] { typeof(AssertionCleanup), typeof(RemoteSessionGuard), typeof(RemoteProvisioningGuard), typeof(TicketNotificationWorker), typeof(AttachmentScanWorker), typeof(CoreOutboxRetentionWorker), typeof(SlaBreachWorker), typeof(SlaEscalationWorker), typeof(DevicePresenceWorker) };
         foreach (var descriptor in s.Where(x => x.ServiceType == typeof(IHostedService) && x.ImplementationType is not null && workers.Contains(x.ImplementationType)).ToArray()) s.Remove(descriptor);
         foreach (var descriptor in s.Where(x => x.ServiceType == typeof(IAttachmentScanner)).ToArray()) s.Remove(descriptor);
         s.AddSingleton<IMeshCentralClient>(Mesh);
