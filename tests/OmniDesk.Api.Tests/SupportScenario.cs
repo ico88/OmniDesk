@@ -3,6 +3,7 @@ using System.IO.Compression;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -219,10 +220,11 @@ public static class SupportScenario
         var notificationWorker = new TicketNotificationWorker(factory.Services.GetRequiredService<IServiceScopeFactory>(), NullLogger<TicketNotificationWorker>.Instance);
         while (await notificationWorker.ProcessNext(CancellationToken.None)) { }
         var inbox = await scoped.GetFromJsonAsync<System.Text.Json.JsonElement>("/api/notifications");
-        var ticketNotices = inbox.GetProperty("notifications").EnumerateArray().Where(x => x.GetProperty("ticketId").GetGuid() == ticket.Id).ToArray();
+        var ticketNotices = inbox.GetProperty("notifications").EnumerateArray().Where(x => x.TryGetProperty("ticketId", out var ticketTarget) &&
+            ticketTarget.ValueKind == JsonValueKind.String && ticketTarget.GetGuid() == ticket.Id).ToArray();
         var newTicketNotice = ticketNotices.Single(x => x.GetProperty("kind").GetString() == "ticket.new");
         var replyNotice = ticketNotices.Single(x => x.GetProperty("kind").GetString() == "ticket.reply");
-        Assert.Equal(2, inbox.GetProperty("unreadCount").GetInt32());
+        Assert.Equal(ticketNotices.Length + 1, inbox.GetProperty("unreadCount").GetInt32());
         Guid emailNotificationId = replyNotice.GetProperty("id").GetGuid();
         using (var scope = factory.Services.CreateScope())
         {
@@ -242,7 +244,7 @@ public static class SupportScenario
                 Username = "omni", PasswordFile = "/tmp/smtp-test-secret", DashboardUrl = "https://desk.example.test"
             }));
         Assert.True(await emailWorker.ProcessNext(CancellationToken.None));
-        var deliveredEmail = Assert.Single(factory.OutboundEmail.Sent);
+        var deliveredEmail = Assert.Single(factory.OutboundEmail.Sent, email => email.Subject.Contains($"#{ticket.Number}", StringComparison.Ordinal));
         Assert.Contains($"#{ticket.Number}", deliveredEmail.Subject);
         Assert.Contains("https://desk.example.test/?ticket=", deliveredEmail.TextBody);
         Assert.DoesNotContain(ticket.Subject, deliveredEmail.Subject + deliveredEmail.TextBody, StringComparison.Ordinal);
@@ -279,7 +281,9 @@ public static class SupportScenario
         Assert.Equal(HttpStatusCode.NoContent, (await scoped.PostAsync($"/api/notifications/{newTicketNotice.GetProperty("id").GetGuid()}/read", null)).StatusCode);
         Assert.Equal(HttpStatusCode.NoContent, (await scoped.PostAsync($"/api/notifications/{replyNotice.GetProperty("id").GetGuid()}/read", null)).StatusCode);
         inbox = await scoped.GetFromJsonAsync<System.Text.Json.JsonElement>("/api/notifications");
-        Assert.Equal(0, inbox.GetProperty("unreadCount").GetInt32());
+        Assert.Equal(1, inbox.GetProperty("unreadCount").GetInt32());
+        Assert.Contains(inbox.GetProperty("notifications").EnumerateArray(), notification =>
+            notification.GetProperty("kind").GetString() == "device.offline" && notification.GetProperty("readAt").ValueKind == JsonValueKind.Null);
         Assert.False(await notificationWorker.ProcessNext(CancellationToken.None));
         var brokenOutboxId = Guid.NewGuid();
         using (var scope = factory.Services.CreateScope())
@@ -670,7 +674,8 @@ public static class SupportScenario
             Assert.DoesNotContain(readerPassword, (await db.CoreOutboxEvents.Where(x => x.AggregateId == participantTicketId).ToArrayAsync()).Select(x => x.Payload).Aggregate("", (a, b) => a + b));
         }
         var readerNotifications = await readerClient.GetFromJsonAsync<System.Text.Json.JsonElement>("/api/notifications");
-        Assert.Contains(readerNotifications.GetProperty("notifications").EnumerateArray(), x => x.GetProperty("ticketId").GetGuid() == participantTicketId && x.GetProperty("kind").GetString() == "ticket.reply");
+        Assert.Contains(readerNotifications.GetProperty("notifications").EnumerateArray(), x => x.TryGetProperty("ticketId", out var ticketTarget) &&
+            ticketTarget.ValueKind == JsonValueKind.String && ticketTarget.GetGuid() == participantTicketId && x.GetProperty("kind").GetString() == "ticket.reply");
         Assert.Equal(HttpStatusCode.NoContent, (await admin.DeleteAsync($"{participantsUrl}/{readerParticipant.GetProperty("id").GetGuid()}?expectedVersion=3")).StatusCode);
         Assert.Empty((await readerClient.GetFromJsonAsync<System.Text.Json.JsonElement[]>(participantsUrl))!);
         var attachmentUrl = $"/api/support/{participantTicketId}/attachments";
@@ -746,7 +751,8 @@ public static class SupportScenario
         while (await attachmentNotifications.ProcessNext(CancellationToken.None)) { }
         var readerInbox = await readerClient.GetFromJsonAsync<System.Text.Json.JsonElement>("/api/notifications");
         var attachmentNotices = readerInbox.GetProperty("notifications").EnumerateArray()
-            .Where(x => x.GetProperty("ticketId").GetGuid() == participantTicketId && x.GetProperty("kind").GetString() == "ticket.attachment").ToArray();
+            .Where(x => x.TryGetProperty("ticketId", out var ticketTarget) && ticketTarget.ValueKind == JsonValueKind.String &&
+                ticketTarget.GetGuid() == participantTicketId && x.GetProperty("kind").GetString() == "ticket.attachment").ToArray();
         Assert.Single(attachmentNotices);
         using (var scope = factory.Services.CreateScope())
         {

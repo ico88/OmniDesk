@@ -77,7 +77,7 @@ try {
  await page.getByRole('button',{name:'Salva nome',exact:true}).click();
  await page.getByText('Nome operatore aggiornato',{exact:true}).waitFor();
  await page.getByRole('button',{name:'Email invii',exact:true}).click();
- await page.getByRole('heading',{name:'Consegne email ticket',exact:true}).waitFor();
+ await page.getByRole('heading',{name:'Consegne email',exact:true}).waitFor();
  await page.getByText('Non ci sono consegne email in attesa.',{exact:true}).waitFor();
  await page.getByRole('button',{name:'Panoramica',exact:true}).click();
  const scopeToken=(await (await context.request.get('https://omnidesk.test/api/auth/csrf')).json()).token;

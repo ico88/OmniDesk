@@ -125,6 +125,44 @@ public static class AgentScenario
         var deviceAlerts = await scoped.GetFromJsonAsync<JsonElement>("/api/notifications/devices");
         Assert.Contains(deviceAlerts.GetProperty("offlineDevices").EnumerateArray(), alert => alert.GetProperty("deviceId").GetGuid() == id);
         Assert.DoesNotContain(deviceAlerts.GetProperty("offlineDevices").EnumerateArray(), alert => alert.GetProperty("deviceId").GetGuid() == hiddenDeviceId);
+        Guid offlineNotificationId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var offlineEvent = await db.CoreOutboxEvents.SingleAsync(evt => evt.EventType == "device.presence.offline" && evt.AggregateId == id);
+            var recipient = await db.Users.SingleAsync(user => user.Id == scopedId);
+            recipient.Email = "scoped@example.test";
+            recipient.EmailConfirmed = true;
+            recipient.EmailNotificationsEnabled = true;
+            recipient.EmailNotificationsEnabledAt = DateTimeOffset.UtcNow.AddMinutes(-1);
+            await db.SaveChangesAsync();
+            Assert.True(await db.Users.AnyAsync(candidate => candidate.Id == scopedId && candidate.EmailNotificationsEnabled &&
+                candidate.EmailNotificationsEnabledAt != null && candidate.Email != null), "The persisted opt-in must satisfy the email queue policy.");
+            await OmniDesk.Api.Security.TicketNotificationWorker.ProjectNotifications(db, new OmniDesk.Api.Security.PermissionService(db),
+                offlineEvent, DateTimeOffset.UtcNow, CancellationToken.None, outboundEmailEnabled: true);
+            await db.SaveChangesAsync();
+            offlineNotificationId = await db.UserNotifications.Where(n => n.EventId == offlineEvent.Id && n.UserId == scopedId)
+                .Select(n => n.Id).SingleAsync();
+            Assert.True(await db.EmailNotificationDeliveries.AnyAsync(delivery => delivery.NotificationId == offlineNotificationId),
+                $"Offline email projection was not queued (enabled={recipient.EmailNotificationsEnabled}, consent={recipient.EmailNotificationsEnabledAt}, email={recipient.Email ?? "<null>"}).");
+        }
+        var persistedAlerts = await scoped.GetFromJsonAsync<JsonElement>("/api/notifications");
+        Assert.Contains(persistedAlerts.GetProperty("notifications").EnumerateArray(), alert =>
+            alert.GetProperty("kind").GetString() == "device.offline" && alert.GetProperty("deviceId").GetGuid() == id);
+        Assert.DoesNotContain(persistedAlerts.GetProperty("notifications").EnumerateArray(), alert =>
+            alert.TryGetProperty("deviceId", out var target) && target.ValueKind == JsonValueKind.String && target.GetGuid() == hiddenDeviceId);
+        var offlineEmailWorker = new OmniDesk.Api.ServiceDesk.EmailNotificationWorker(
+            factory.Services.GetRequiredService<IServiceScopeFactory>(), NullLogger<OmniDesk.Api.ServiceDesk.EmailNotificationWorker>.Instance,
+            Options.Create(new OmniDesk.Api.ServiceDesk.OutboundEmailOptions
+            {
+                Enabled = true, Host = "smtp.example.test", Port = 587, FromAddress = "help@example.test",
+                Username = "omni", PasswordFile = "/tmp/smtp-test-secret", DashboardUrl = "https://desk.example.test"
+            }));
+        for (var i = 0; i < 100 && !factory.OutboundEmail.Sent.Any(email => email.Subject.Contains("Dispositivo non raggiungibile", StringComparison.Ordinal)) &&
+             await offlineEmailWorker.ProcessNext(CancellationToken.None); i++) { }
+        var offlineEmail = Assert.Single(factory.OutboundEmail.Sent, email => email.Subject.Contains("Dispositivo non raggiungibile", StringComparison.Ordinal));
+        Assert.Contains("Dispositivo non raggiungibile", offlineEmail.Subject);
+        Assert.Contains("Windows fixture", offlineEmail.TextBody);
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
