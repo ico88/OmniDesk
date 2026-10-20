@@ -6,6 +6,7 @@
 - Verifica locale: `git diff --check` passato. Non è disponibile PowerShell sull'host, quindi parsing ed esecuzione Windows sono demandati al workflow Windows sul commit successivo.
 - Al momento della modifica, le run `39371440706`, `39370263899` e `39369087920` erano ancora attive. La correzione non le interrompe né modifica i processi già in corso; il suo effetto si potrà verificare solo su una nuova run.
 - Linux [run 39371440650](https://github.com/ico88/OmniDesk/actions/runs/39371440650) — passata sul commit `2a82a4f`: test applicativi, Compose, build API/dashboard e smoke Chromium con restore isolato. Non esercita il test MSI Windows.
+- Windows [run 39371440706](https://github.com/ico88/OmniDesk/actions/runs/39371440706) — passata sul commit `2a82a4f`: build Agent/Tray/MSI, installazione, recovery, disinstallazione e upgrade/repair/rollback con baseline fissata. La run non include il timeout node ID aggiunto nel commit `f4e46d7`; quella verifica è ancora in corso nella run `39371845078`.
 
 ### Migrazione GitHub Actions a Node 24 — 2026-10-20
 
