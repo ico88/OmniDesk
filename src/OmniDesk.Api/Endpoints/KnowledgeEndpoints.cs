@@ -41,17 +41,18 @@ public static partial class KnowledgeEndpoints
                 if (allowedSiteIds.Count == 0 && allowedGroupIds.Count == 0) return Results.Forbid();
             }
 
-            var query = db.KnowledgeArticles.AsNoTracking().AsQueryable();
+            // Full-text matching is executed in PostgreSQL against the generated GIN-indexed vector.
+            // Scope and publication filters are composed on the same query before results are returned.
+            var query = db.KnowledgeArticles
+                .FromSqlInterpolated($"SELECT * FROM \"KnowledgeArticles\" WHERE \"SearchVector\" @@ plainto_tsquery('simple', {term})")
+                .AsNoTracking();
             if (!canManage) query = query.Where(x => x.IsPublished);
             if (!canManage && !canViewGlobally)
                 query = query.Where(x => (x.SiteId != null && allowedSiteIds.Contains(x.SiteId.Value)) ||
                                          (x.GroupId != null && allowedGroupIds.Contains(x.GroupId.Value)));
-            var normalizedTerm = term.ToLowerInvariant();
-            var matches = await query.Where(x => x.Title.ToLower().Contains(normalizedTerm) ||
-                                                   x.Summary.ToLower().Contains(normalizedTerm) ||
-                                                   x.Body.ToLower().Contains(normalizedTerm))
-                .OrderByDescending(x => x.Title.ToLower().Contains(normalizedTerm))
-                .ThenByDescending(x => x.Summary.ToLower().Contains(normalizedTerm))
+            var matches = await query
+                .OrderByDescending(x => EF.Functions.ILike(x.Title, $"%{term}%"))
+                .ThenByDescending(x => EF.Functions.ILike(x.Summary, $"%{term}%"))
                 .ThenByDescending(x => x.UpdatedAt)
                 .Take(50)
                 .Select(x => new { x.Id, x.Slug, x.Title, x.Summary, x.IsPublished, x.SiteId, x.GroupId, x.Version, x.CreatedAt, x.UpdatedAt, x.PublishedAt })
