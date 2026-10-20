@@ -1862,3 +1862,8 @@ modificato; ogni nuova estensione attende la propria CI sul push.
 - `docker build -t omnidesk-api:local -f src/OmniDesk.Api/Dockerfile .`, `docker compose config --quiet`, `docker compose -f compose.test.yaml config --quiet`, `bash -n scripts/smoke.sh` e `git diff --check` — passati.
 - `./scripts/smoke.sh --browser` — passato: API con il nuovo worker avviata nello stack isolato, smoke Chromium, ClamAV, worker SLA/escalation/notifica e ripristino runtime DB/blob/Identity/CA completati. Nessun servizio LAN è stato toccato.
 - Nessuna modifica allo schema o dipendenza. La retention intake non cancella il ticket promosso né i suoi messaggi; backup preesistenti seguono la policy separata. Retention ticket/allegati/audit/backup e test sulla LAN restano da definire/eseguire.
+
+### Verifica read-only istanza LAN — 2026-10-20
+
+- `python3 scripts/verify-lan.py` — passato contro l’origine configurata nello script con CA locale: readiness HTTPS, bundle dashboard e rifiuto di `/api/auth/me` anonimo (`401`). Il controllo non esegue login, mutazioni, sessioni remote o test Windows.
+- Questa evidenza descrive solo l’istanza già pubblicata al momento della verifica; non certifica né distribuisce il branch `feature/windows-support-lan`. Il server non è stato riavviato o modificato.
