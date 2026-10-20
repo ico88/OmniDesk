@@ -100,16 +100,39 @@ public static class AgentScenario
             factory.Services.GetRequiredService<IServiceScopeFactory>(),
             Options.Create(new OmniDesk.Api.Maintenance.DevicePresenceOptions()),
             NullLogger<OmniDesk.Api.Maintenance.DevicePresenceWorker>.Instance);
+        Guid hiddenDeviceId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var hiddenDevice = await db.Devices.SingleAsync(x => x.Name == "Other");
+            hiddenDeviceId = hiddenDevice.Id;
+            db.DeviceCredentials.Add(new DeviceCredential { DeviceId = hiddenDeviceId, PublicKeyPem = "fixture-only" });
+            db.DeviceMetrics.Add(new DeviceMetrics { DeviceId = hiddenDeviceId, ReceivedAt = DateTimeOffset.UtcNow });
+            await db.SaveChangesAsync();
+        }
         await presenceWorker.SweepOnceAsync();
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             var metricsRow = await db.DeviceMetrics.SingleAsync(x => x.DeviceId == id);
             metricsRow.ReceivedAt = DateTimeOffset.UtcNow.AddMinutes(-4);
+            var hiddenMetrics = await db.DeviceMetrics.SingleAsync(x => x.DeviceId == hiddenDeviceId);
+            hiddenMetrics.ReceivedAt = DateTimeOffset.UtcNow.AddMinutes(-4);
             await db.SaveChangesAsync();
         }
         await presenceWorker.SweepOnceAsync();
         await presenceWorker.SweepOnceAsync();
+        var deviceAlerts = await scoped.GetFromJsonAsync<JsonElement>("/api/notifications/devices");
+        Assert.Contains(deviceAlerts.GetProperty("offlineDevices").EnumerateArray(), alert => alert.GetProperty("deviceId").GetGuid() == id);
+        Assert.DoesNotContain(deviceAlerts.GetProperty("offlineDevices").EnumerateArray(), alert => alert.GetProperty("deviceId").GetGuid() == hiddenDeviceId);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            db.DevicePresence.Remove(await db.DevicePresence.SingleAsync(x => x.DeviceId == hiddenDeviceId));
+            db.DeviceMetrics.Remove(await db.DeviceMetrics.SingleAsync(x => x.DeviceId == hiddenDeviceId));
+            db.DeviceCredentials.Remove(await db.DeviceCredentials.SingleAsync(x => x.DeviceId == hiddenDeviceId));
+            await db.SaveChangesAsync();
+        }
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();

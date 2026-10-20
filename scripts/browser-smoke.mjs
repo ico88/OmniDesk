@@ -25,6 +25,9 @@ try {
  await page.getByLabel('Password',{exact:true}).fill(readFileSync('/run/secrets/bootstrap_password','utf8').trim());
  await page.getByRole('button',{name:'Accedi',exact:true}).click();
  await page.getByRole('heading',{name:'Panoramica',exact:true}).waitFor();
+ const offlineDeviceAlerts=await context.request.get('https://omnidesk.test/api/notifications/devices');
+ assert.equal(offlineDeviceAlerts.status(),200,'Device alert inbox is available to an authenticated operator');
+ assert.ok(Array.isArray((await offlineDeviceAlerts.json()).offlineDevices),'Device alert inbox returns a scoped list');
  const emailSubject='Browser email intake '+randomBytes(5).toString('hex');
  const emailBody='Plain text only: <script>window.__emailIntakeInjected=true</script>';
  const emailPayload=Buffer.from(JSON.stringify({messageId:`<${randomBytes(8).toString('hex')}@smoke.example.test>`,mailbox:'support@example.test',sender:'requester@example.test',subject:emailSubject,textBody:emailBody,receivedAt:new Date().toISOString()}));
@@ -334,7 +337,7 @@ try {
  assert.equal(diagnosticJob.status(),201,'Authorized RMM diagnostic job created for ticket correlation');
  const diagnosticJobId=(await diagnosticJob.json()).id;
  await page.locator('.notification-trigger').click();
- await page.getByLabel('Notifiche ticket').getByRole('button',{name:'Aggiorna',exact:true}).click();
+ await page.getByLabel('Notifiche e stato dispositivi').getByRole('button',{name:'Aggiorna',exact:true}).click();
  const newTicketNotification=page.getByRole('button').filter({hasText:ticketSubject});
  await newTicketNotification.waitFor();
  assert.equal(await page.locator('.notification-count').textContent(),'3','Outbox worker publishes ticket, clean-attachment and Agent ticket notifications');
