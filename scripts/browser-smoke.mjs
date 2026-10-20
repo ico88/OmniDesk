@@ -365,7 +365,7 @@ try {
  await page.getByRole('row').filter({has:page.getByRole('cell',{name:renamed,exact:true})}).getByRole('button',{name:'Apri',exact:true}).click();
  await page.setViewportSize({width:1440,height:1000});
  await page.getByRole('heading',{name:renamed,exact:true}).waitFor();
- for (const tab of ['Panoramica','Desktop remoto','Terminale e PowerShell','Trasferimento file','Processi','Servizi Windows','Software installato','Aggiornamenti','Eventi e log','Ticket e interventi']) await page.getByRole('tab',{name:tab,exact:true}).waitFor();
+ for (const tab of ['Panoramica','Desktop remoto','Processi','Servizi Windows','Software installato','Aggiornamenti','Eventi e log','Ticket e interventi']) await page.getByRole('tab',{name:tab,exact:true}).waitFor();
  await page.waitForFunction(()=>document.querySelector('main.content')?.getAttribute('aria-busy')==='false');
  const deviceId=(await (await context.request.get('https://omnidesk.test/api/devices')).json()).find(d=>d.name===renamed).id;
  const remoteSessionId=randomBytes(16).toString('hex'); let remoteShareState='active';
