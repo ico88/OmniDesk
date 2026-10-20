@@ -690,4 +690,9 @@ migrazioni; probe HTTPS/CA, asset e rifiuto anonimo passano. Il kit Agent+Tray
 0.8.9 è pubblicato nel download amministrativo, unsigned da laboratorio. CI
 Linux `39378646434` e Windows `39378646489` passate. Restano il download
 autenticato con account admin e il collaudo sul PC Windows pilota per confermare
-heartbeat IP/MAC e caricamento remoto incorporato.
+heartbeat IP/MAC e caricamento remoto incorporato. La dashboard ora confronta la
+versione Agent del heartbeat con la soglia 0.8.12: nasconde le metriche rete
+storiche non filtrate, segnala l’aggiornamento necessario e mostra la versione
+rilevata nell’intestazione del dispositivo. Build e test unitari della soglia
+passano; il codice UI non è ancora pubblicato sulla LAN né verificato sul browser
+live. Vedi [validation.md](validation.md).

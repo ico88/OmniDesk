@@ -2111,3 +2111,10 @@ modificato; ogni nuova estensione attende la propria CI sul push.
 - Promosso il bundle Windows 0.8.12 generato dalla CI Windows `39397632990` nel mount `/packages`; aggiornato atomicamente `windows-release.json`. Il bundle 0.8.9 resta nel mount come candidato rollback. ZIP SHA-256 `58c170a706d631051fc1b879f57c100d9c3500f389f23e3cd295f0d98029e1fa` (116113120 byte), MSI SHA-256 `67d9af6b84ceef3a9755903e2a632487f530074f86bec67d69a93910e421fc47`.
 - Hash e manifest verificati sia sul filesystem host sia da `/packages` nel container API; HTTPS `/api/health/ready` ha risposto 200 e il download Windows senza sessione ha risposto 401. Non è stato fatto restart, deploy del codice API, migrazione DB o installazione sul PC Windows.
 - Il collector 0.8.12 include solo interfacce operative `Up` con IP unicast e gateway configurato; i dati di rete già registrati per un dispositivo non cambiano finché l’Agent aggiornato non invia il prossimo heartbeat. Resta da verificare sul PC pilota che i livelli filtro NDIS e la VirtualBox host-only siano assenti dopo l’aggiornamento. Il bundle è unsigned da laboratorio e contiene MeshCentral; firma Authenticode e gate Defender restano aperti.
+
+
+### Dashboard — metriche rete Agent precedenti — 2026-10-20
+
+- La panoramica dispositivo mostra la versione Agent riportata dall’ultimo heartbeat. Per versioni precedenti a 0.8.12 o non rilevate, nasconde gli elenchi rete storici non filtrati e mostra un avviso che richiede l’aggiornamento e il heartbeat successivo; i dati non vengono presentati come connessioni attive. Per Agent 0.8.12+ mostra le interfacce selezionate dal collector.
+- Test Vitest `deviceNetwork.test.ts`: soglie 0.8.11/0.8.12, versioni successive, versione nulla e valore non valido. Build TypeScript/Vite riuscita; suite dashboard 12/12; `git diff --check` passato.
+- Modifica nel branch, non ancora distribuita sulla dashboard LAN; nessun container o servizio riavviato. La visualizzazione dopo l’aggiornamento del PC pilota resta da verificare nel browser reale.
