@@ -27,9 +27,11 @@ function Get-ProductCode([string]$path) {
 }
 function Install-Package([string]$path,[string]$operation,[string]$name) {
     $log=Join-Path (Get-Location) "artifacts/msi-$name.log"
+    Write-Host "MSI check '$name' started ($operation)."
     $p=Start-Process msiexec.exe -ArgumentList @($operation,('"'+$path+'"'),'/qn','/norestart','/l*v',('"'+$log+'"')) -PassThru
     if (!$p.WaitForExit(180000)) { $p.Kill(); throw ('MSI test timeout: ' + $name) }
     $p.Refresh()
+    Write-Host "MSI check '$name' completed with exit code $($p.ExitCode)."
     return $p.ExitCode
 }
 function Assert-Installed([switch]$RequireRemote) {

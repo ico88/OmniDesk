@@ -64,6 +64,7 @@ jobs:
           if ($msi.Count -ne 1) { throw "Atteso un singolo MSI" }
           & .\installer\Test-OmniDeskMsi.ps1 -MsiPath $msi[0].FullName
       - name: Build pinned baseline and verify upgrade, repair and rollback
+        timeout-minutes: 20
         shell: powershell
         run: |
           $baselines = @(
@@ -71,12 +72,14 @@ jobs:
             @{ Commit='742d13f1c6a82dc035613e2ee86d9b1e0c0df2b0'; Version='0.7.0' }
           )
           foreach ($spec in $baselines) {
+            Write-Host "Preparing pinned MSI baseline $($spec.Version) ($($spec.Commit))"
             $baseline = Join-Path $env:RUNNER_TEMP ('OmniDesk-baseline-' + $spec.Version)
             git fetch origin $spec.Commit --depth=1
             if ($LASTEXITCODE -ne 0) { throw "Baseline source fetch failed" }
             git worktree add --detach $baseline FETCH_HEAD
             if ($LASTEXITCODE -ne 0) { throw "Baseline worktree failed" }
             & (Join-Path $baseline 'installer/Build-OmniDeskWindows.ps1')
+            Write-Host "Running upgrade/repair/rollback checks from $($spec.Version)"
             $old = Join-Path $baseline ('artifacts/windows-' + $spec.Version + '/OmniDesk.Agent.msi')
             $new = @(Get-ChildItem artifacts/windows-*/OmniDesk.Agent.msi)
             if ($new.Count -ne 1) { throw "Expected a single current MSI" }
