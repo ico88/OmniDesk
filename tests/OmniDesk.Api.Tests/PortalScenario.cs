@@ -58,6 +58,15 @@ public static class PortalScenario
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var ticket = await response.Content.ReadFromJsonAsync<JsonElement>();
         var ticketId = ticket.GetProperty("id").GetGuid();
+        long publicMessageId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var message = new SupportMessage { TicketId = ticketId, Kind = "portal_reply", Body = "Riferimento allegato", Visibility = "public" };
+            db.SupportMessages.Add(message);
+            await db.SaveChangesAsync();
+            publicMessageId = message.Id;
+        }
         Assert.Equal("portal-user@example.test", (await portal.GetFromJsonAsync<JsonElement>("/api/auth/me")).GetProperty("email").GetString());
         Assert.Equal(HttpStatusCode.OK, (await portal.PostAsJsonAsync("/api/portal/tickets", request)).StatusCode);
         var image = await portal.GetAsync($"/api/portal/tickets/{ticketId}/screenshot");
@@ -90,6 +99,7 @@ public static class PortalScenario
         {
             form.Add(new StringContent("1"), "expectedVersion");
             form.Add(new StringContent("true"), "consent");
+            form.Add(new StringContent(publicMessageId.ToString()), "messageId");
             var content = new ByteArrayContent("portal attachment clean fixture"u8.ToArray());
             content.Headers.ContentType = new MediaTypeHeaderValue("text/plain");
             form.Add(content, "file", "manual.txt");
@@ -101,6 +111,10 @@ public static class PortalScenario
             Assert.Equal(HttpStatusCode.NotFound, (await portal.GetAsync($"{attachmentPath}/{attachmentId}")).StatusCode);
             var listed = Assert.Single(await portal.GetFromJsonAsync<JsonElement[]>(attachmentPath) ?? []);
             Assert.Equal("manual.txt", listed.GetProperty("fileName").GetString());
+            Assert.Equal(publicMessageId, listed.GetProperty("messageId").GetInt64());
+            var ticketDetail = await portal.GetFromJsonAsync<JsonElement>($"/api/portal/tickets/{ticketId}");
+            var linked = ticketDetail.GetProperty("messages").EnumerateArray().Single(message => message.GetProperty("id").GetInt64() == publicMessageId);
+            Assert.Equal("manual.txt", Assert.Single(linked.GetProperty("attachments").EnumerateArray()).GetProperty("fileName").GetString());
             Assert.Equal(HttpStatusCode.NotFound, (await outsider.GetAsync($"{attachmentPath}/{attachmentId}")).StatusCode);
         }
 
