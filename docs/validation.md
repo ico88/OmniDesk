@@ -1,5 +1,12 @@
 # Stato e verifiche — 18 ottobre 2026
 
+### Windows Agent 0.8.16 — CI completata, kit pronto per promozione — 2026-10-20
+
+- Linux Actions [39499614555](https://github.com/ico88/OmniDesk/actions/runs/39499614555) completata con successo: test API/PostgreSQL e dashboard, Compose, build API/dashboard, smoke browser, verifica backup e restore isolato.
+- Windows Actions [39499614562](https://github.com/ico88/OmniDesk/actions/runs/39499614562) completata con successo: contratti Agent/Tray, MSI 0.8.16, installazione, recovery e disinstallazione; upgrade, repair e rollback dalle baseline 0.6.0 e 0.7.0.
+- Il candidato LAN 0.8.16 preparato dall'artifact Windows unsigned ha superato `python3 -m zipfile -t`. ZIP SHA-256 `6b67c618e7c42b31791ee5ce44980e27fe8039c4230eb97f4c81732f82b727c3` (116093122 byte); MSI SHA-256 `9198f41f890fd52ab14fa7aec799105835e2457361cc6272baa79a84cd2b611a` (70639616 byte). Nessuna chiave privata o credenziale è inclusa.
+- Il kit è pronto per la promozione sul mount `/packages`; la verifica dell’Agent su un PC Windows reale e il supporto SMART del suo hardware restano aperti. Il kit non è firmato Authenticode; nessuna policy Defender o servizio/firewall Windows è stata modificata.
+
 ### Windows MSI — isolamento baseline upgrade — 2026-10-20
 
 - Il run iniziale `39386842846` era `in_progress` nella matrice combinata quando fu registrata la prima verifica; una verifica successiva lo trova `cancelled` su GitHub. Nessun comando di cancellazione è stato inviato in questo incremento. Build MSI e install/recovery/uninstall erano passati.

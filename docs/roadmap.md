@@ -52,11 +52,14 @@ disco che espone il provider Windows `MSStorageDriver_FailurePredictStatus` la
 previsione SMART (guasto predetto / nessun guasto predetto), inviata nei
 heartbeat e mostrata in Archiviazione. Se driver, controller o disco non
 espongono il dato, lo stato resta non disponibile. Nessuna migrazione database:
-la telemetria esistente è JSON. Il codice 0.8.16 è aggiornato nel workspace e la versione WiX dell’MSI ora è
-allineata ai tre progetti. Publish self-contained win-x64 di Agent, Tray e Setup
-e test API per payload seriale/SMART passano; il workflow Windows deve ancora
-produrre e collaudare MSI/upgrade prima della pubblicazione del kit. Vedere
-[validation](validation.md).
+la telemetria esistente è JSON. Il codice 0.8.16 e la versione WiX dell’MSI
+sono allineati. CI Linux [39499614555](https://github.com/ico88/OmniDesk/actions/runs/39499614555)
+e Windows [39499614562](https://github.com/ico88/OmniDesk/actions/runs/39499614562)
+sono passate; la Windows CI ha prodotto MSI e superato installazione, recovery,
+disinstallazione e prove upgrade/repair/rollback da baseline 0.6.0 e 0.7.0. Il
+kit 0.8.16 è pronto per la pubblicazione LAN. Restano il collaudo su un PC
+Windows reale e la verifica del provider SMART specifico per disco/controller.
+Vedere [validation](validation.md).
 
 ### RustDesk OSS pilot — standard native transport
 
