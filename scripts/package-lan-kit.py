@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
-"""Package the verified GitHub Windows artifact and public LAN CA; no credentials."""
+"""Package the verified Windows artifact for the public HTTPS OmniDesk server; no credentials."""
 import argparse
 import hashlib
 import json
 import uuid
 from pathlib import Path
 import re
-import ssl
 import zipfile
 
 parser = argparse.ArgumentParser(description=__doc__)
@@ -16,7 +15,6 @@ parser.add_argument('--commit', required=True)
 parser.add_argument('--output', type=Path, required=True)
 parser.add_argument('--version')
 parser.add_argument('--remote-engine', action='store_true')
-parser.add_argument('--ca', type=Path, default=Path('omnidesk-local-ca.crt'))
 args = parser.parse_args()
 if args.version is None:
     match = re.fullmatch(r'windows-([0-9]+\.[0-9]+\.[0-9]+)', args.artifact.name)
@@ -50,16 +48,10 @@ if not files['OmniDesk.Agent.msi'].startswith(bytes.fromhex('D0CF11E0A1B11AE1'))
     parser.error('Formato MSI non riconosciuto')
 if not files['OmniDesk.Setup.exe'].startswith(bytes.fromhex('4D5A')):
     parser.error('Setup nativo non riconosciuto')
-ca = args.ca.read_text()
-if 'PRIVATE KEY' in ca or ca.count('BEGIN CERTIFICATE') != 1:
-    parser.error('Attesa solo la CA pubblica')
-fingerprint = hashlib.sha256(ssl.PEM_cert_to_DER_cert(ca)).hexdigest().upper()
-if fingerprint != '45926C7ACA3D49E6619E377AD0FA2110951F6F0E54DF9B83A6C6E3AD712BE5B2':
-    parser.error('CA diversa da quella LAN concordata; verificarla prima di cambiare il pin')
-files['omnidesk-local-ca.crt'] = ca.encode()
-files['LEGGIMI.txt'] = f'''OmniDesk Agent + Tray - installazione LAN x64
+files['LEGGIMI.txt'] = f'''OmniDesk Agent + Tray - Windows x64
 Origine: https://github.com/ico88/OmniDesk/actions/runs/{args.run}
 Commit: {args.commit}
+Server: https://omnidesk.cricatania.it
 
 Pacchetto unsigned per laboratorio. I checksum non sostituiscono una firma.
 Non include credenziali, token o chiavi private.
@@ -71,15 +63,16 @@ Non include credenziali, token o chiavi private.
    è già registrato sullo stesso server, non serve un nuovo token: Setup conserva
    l'identità esistente durante l'aggiornamento.
 3. Avvia OmniDesk.Setup.exe con autorizzazione amministrativa. Incolla il token
-   nel campo mascherato solo per un nuovo dispositivo. Setup verifica CA/HTTPS,
-   installa il pacchetto e invia l'eventuale token su pipe standard, mai in
-   argomenti o file.
+   nel campo mascherato solo per un nuovo dispositivo. Setup verifica il
+   certificato HTTPS tramite le autorità pubbliche attendibili di Windows e la
+   readiness del server, installa il pacchetto e invia l'eventuale token su pipe
+   standard, mai in argomenti o file. Nessuna CA aggiuntiva viene installata.
 4. La Tray si avvia al prossimo accesso dell'utente; il servizio è indipendente.
 
 Rimozione: Impostazioni Windows > App > OmniDesk Agent > Disinstalla. Prima della
 rimozione il programma revoca identità e autorizzazioni remote sul server. Se il
 server non è raggiungibile, Windows Installer interrompe la disinstallazione per
-non lasciare valide le credenziali server. La CA resta installata intenzionalmente.
+non lasciare valide le credenziali server.
 Nessuna protezione assoluta contro amministratori locali o accesso fisico privilegiato.
 '''.encode()
 files['SHA256SUMS.txt'] = ''.join(f'{hashlib.sha256(data).hexdigest()}  {name}\n' for name, data in sorted(files.items())).encode()

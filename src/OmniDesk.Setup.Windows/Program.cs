@@ -1,15 +1,12 @@
 using System.Diagnostics;
 using System.Net.Http.Json;
-using System.Security.Cryptography;
-using System.Security.Cryptography.X509Certificates;
 using System.Text.RegularExpressions;
 
 namespace OmniDesk.Setup.Windows;
 
 internal static class Program
 {
-    private const string Server = "https://192.168.1.233:8085";
-    private const string CaSha256 = "45926C7ACA3D49E6619E377AD0FA2110951F6F0E54DF9B83A6C6E3AD712BE5B2";
+    private const string Server = "https://omnidesk.cricatania.it";
     private static readonly string ProgramFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "OmniDesk Agent");
     private static readonly string Agent = Path.Combine(ProgramFolder, "OmniDesk.Agent.Windows.exe");
     private static readonly string Identity = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "OmniDesk", "agent.json");
@@ -59,18 +56,16 @@ internal static class Program
         {
             if (busy) return;
             var msi = Path.Combine(AppContext.BaseDirectory, "OmniDesk.Agent.msi");
-            var caPath = Path.Combine(AppContext.BaseDirectory, "omnidesk-local-ca.crt");
             var isEnrolled = File.Exists(Identity);
             var secret = token.Text.Trim();
             if (!isEnrolled && !Regex.IsMatch(secret, "\\A[0-9A-Fa-f]{64}\\z"))
             { status.Text = "Incolla il token di 64 caratteri generato dalla console."; token.Focus(); return; }
-            if (!File.Exists(msi) || !File.Exists(caPath))
-            { status.Text = "Nel kit mancano OmniDesk.Agent.msi o la CA pubblica."; return; }
+            if (!File.Exists(msi))
+            { status.Text = "Nel kit manca OmniDesk.Agent.msi."; return; }
             busy = true; install.Enabled = false; token.Enabled = false;
             try
             {
                 status.Text = "Verifica del certificato e del server…";
-                await Task.Run(() => TrustPinnedCa(caPath));
                 using (var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false }) { Timeout = TimeSpan.FromSeconds(20) })
                 using (var response = await client.GetAsync(new Uri(new Uri(Server), "api/health/ready")))
                 {
@@ -102,17 +97,6 @@ internal static class Program
             { status.Text = ex.Message; }
             finally { secret = string.Empty; token.Clear(); token.Enabled = true; install.Enabled = true; busy = false; }
         }
-    }
-
-    private static void TrustPinnedCa(string path)
-    {
-        using var certificate = X509CertificateLoader.LoadCertificateFromFile(path);
-        if (certificate.HasPrivateKey || !certificate.Extensions.OfType<X509BasicConstraintsExtension>().Any(x => x.CertificateAuthority) ||
-            !string.Equals(Convert.ToHexString(SHA256.HashData(certificate.RawData)), CaSha256, StringComparison.Ordinal))
-            throw new CryptographicException("La CA del kit non corrisponde all'impronta OmniDesk attesa.");
-        using var store = new X509Store(StoreName.Root, StoreLocation.LocalMachine);
-        store.Open(OpenFlags.ReadWrite);
-        if (store.Certificates.Find(X509FindType.FindByThumbprint, certificate.Thumbprint, false).Count == 0) store.Add(certificate);
     }
 
     private static async Task<(int Code, string Output)> RunAsync(string exe, string[] arguments, string? standardInput = null)

@@ -3,9 +3,9 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)][string]$MsiPath,
-    [string]$ServerUrl = 'https://192.168.1.233:8085',
-    [Parameter(Mandatory = $true)][string]$CaCertificatePath,
-    [Parameter(Mandatory = $true)][ValidatePattern('^[A-Fa-f0-9]{64}$')][string]$CaSha256,
+    [string]$ServerUrl = 'https://omnidesk.cricatania.it',
+    [string]$CaCertificatePath,
+    [ValidatePattern('^[A-Fa-f0-9]{64}$')][string]$CaSha256,
     [string]$EnrollmentTokenFile,
     [switch]$TrustServerCa,
     [switch]$AllowUnsignedForTesting,
@@ -16,8 +16,10 @@ if (-not [Environment]::Is64BitOperatingSystem -or -not [Environment]::Is64BitPr
 $server = $null
 if (-not [Uri]::TryCreate($ServerUrl, [UriKind]::Absolute, [ref]$server) -or $server.Scheme -ne 'https' -or
     $server.UserInfo -or $server.Query -or $server.Fragment -or $server.AbsolutePath -ne '/') {
-    throw 'ServerUrl must be an HTTPS origin, for example https://192.168.1.233:8085'
+    throw 'ServerUrl must be an HTTPS origin, for example https://omnidesk.cricatania.it'
 }
+if ([bool]$CaCertificatePath -ne [bool]$CaSha256) { throw 'Provide both CaCertificatePath and CaSha256 for a private server CA, or neither for a publicly trusted certificate.' }
+if ($TrustServerCa -and -not $CaCertificatePath) { throw 'TrustServerCa requires a pinned CaCertificatePath and CaSha256.' }
 $root = Join-Path $env:ProgramData ('OmniDesk-Install-' + [Guid]::NewGuid().ToString('N'))
 $directory = [IO.Directory]::CreateDirectory($root)
 $acl = New-Object Security.AccessControl.DirectorySecurity
@@ -35,7 +37,9 @@ $stagedToken = Join-Path $root 'enrollment.txt'
 $keepPackage = $false
 try {
     [IO.File]::Copy((Resolve-Path -LiteralPath $MsiPath).Path, $stagedMsi, $false)
-    [IO.File]::Copy((Resolve-Path -LiteralPath $CaCertificatePath).Path, $stagedCa, $false)
+    if ($CaCertificatePath) {
+        [IO.File]::Copy((Resolve-Path -LiteralPath $CaCertificatePath).Path, $stagedCa, $false)
+    }
     $msiHash = (Get-FileHash -LiteralPath $stagedMsi -Algorithm SHA256).Hash
     if ($MsiSha256 -and $msiHash -ne $MsiSha256) { throw 'MSI SHA256 mismatch.' }
     $signature = Get-AuthenticodeSignature -LiteralPath $stagedMsi
@@ -45,27 +49,29 @@ try {
         }
         Write-Warning 'Unsigned lab MSI explicitly accepted by SHA256. Not a production release.'
     }
-    $certificate = New-Object Security.Cryptography.X509Certificates.X509Certificate2($stagedCa)
-    try {
-        $hash = [Security.Cryptography.SHA256]::Create()
-        try { $actualCa = [BitConverter]::ToString($hash.ComputeHash($certificate.RawData)).Replace('-', '') } finally { $hash.Dispose() }
-        if ($actualCa -ne $CaSha256) { throw 'CA SHA256 mismatch. Obtain the expected fingerprint independently from the server administrator.' }
-        $constraints = $certificate.Extensions | Where-Object { $_.Oid.Value -eq '2.5.29.19' } | Select-Object -First 1
-        if ($certificate.HasPrivateKey -or -not $constraints -or -not $constraints.CertificateAuthority -or
-            $certificate.NotBefore.ToUniversalTime() -gt [DateTime]::UtcNow -or $certificate.NotAfter.ToUniversalTime() -le [DateTime]::UtcNow) {
-            throw 'A valid public CA certificate without private key is required.'
-        }
-        $store = New-Object Security.Cryptography.X509Certificates.X509Store('Root', 'LocalMachine')
+    if ($CaCertificatePath) {
+        $certificate = New-Object Security.Cryptography.X509Certificates.X509Certificate2($stagedCa)
         try {
-            $store.Open([Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
-            $existing = $store.Certificates.Find([Security.Cryptography.X509Certificates.X509FindType]::FindByThumbprint, $certificate.Thumbprint, $false)
-            if ($existing.Count -eq 0) {
-                if (-not $TrustServerCa) { throw 'CA not trusted for the Windows service. Re-run with -TrustServerCa after independently verifying its SHA256.' }
-                $store.Add($certificate)
-                Write-Output 'Verified public CA installed in LocalMachine Root. Trust remains installed if subsequent steps fail.'
+            $hash = [Security.Cryptography.SHA256]::Create()
+            try { $actualCa = [BitConverter]::ToString($hash.ComputeHash($certificate.RawData)).Replace('-', '') } finally { $hash.Dispose() }
+            if ($actualCa -ne $CaSha256) { throw 'CA SHA256 mismatch. Obtain the expected fingerprint independently from the server administrator.' }
+            $constraints = $certificate.Extensions | Where-Object { $_.Oid.Value -eq '2.5.29.19' } | Select-Object -First 1
+            if ($certificate.HasPrivateKey -or -not $constraints -or -not $constraints.CertificateAuthority -or
+                $certificate.NotBefore.ToUniversalTime() -gt [DateTime]::UtcNow -or $certificate.NotAfter.ToUniversalTime() -le [DateTime]::UtcNow) {
+                throw 'A valid public CA certificate without private key is required.'
             }
-        } finally { $store.Dispose() }
-    } finally { $certificate.Dispose() }
+            $store = New-Object Security.Cryptography.X509Certificates.X509Store('Root', 'LocalMachine')
+            try {
+                $store.Open([Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
+                $existing = $store.Certificates.Find([Security.Cryptography.X509Certificates.X509FindType]::FindByThumbprint, $certificate.Thumbprint, $false)
+                if ($existing.Count -eq 0) {
+                    if (-not $TrustServerCa) { throw 'CA not trusted for the Windows service. Re-run with -TrustServerCa after independently verifying its SHA256.' }
+                    $store.Add($certificate)
+                    Write-Output 'Verified public CA installed in LocalMachine Root. Trust remains installed if subsequent steps fail.'
+                }
+            } finally { $store.Dispose() }
+        } finally { $certificate.Dispose() }
+    }
     $identityPath = Join-Path $env:ProgramData 'OmniDesk\agent.json'
     if (Test-Path -LiteralPath $identityPath) {
         $identity = Get-Content -LiteralPath $identityPath -Raw | ConvertFrom-Json

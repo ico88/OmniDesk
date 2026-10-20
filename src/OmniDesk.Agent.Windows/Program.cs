@@ -8,7 +8,7 @@ if (args.Length == 3 && args[0] == "--apply-agent-update") { await AgentUpdater.
 if (args.Length == 1 && args[0] == "self-test") { await WindowsSelfTest.Run(); return; }
 if (args.Length == 1 && args[0] == "--help")
 {
-    Console.WriteLine("OmniDesk Agent: connect-test --server https://192.168.1.233:8085 | enroll --server <HTTPS-origin> --token-file <protected-file> | enroll --server <HTTPS-origin> --token-stdin | revoke | self-test");
+    Console.WriteLine("OmniDesk Agent: connect-test --server https://omnidesk.cricatania.it | enroll --server <HTTPS-origin> --token-file <protected-file> | enroll --server <HTTPS-origin> --token-stdin | revoke | self-test");
     return;
 }
 if (args.Length > 0 && args[0] == "connect-test")
