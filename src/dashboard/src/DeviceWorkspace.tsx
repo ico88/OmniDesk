@@ -9,10 +9,11 @@ import { SupportDesk } from './SupportDesk';
 import { Icon } from './Icon';
 
 type MetricDisk = { name: string; totalBytes: number; freeBytes: number };
+type NetworkAdapter = { name: string; type: string; macAddress: string; ipAddresses: string[] };
 export type DeviceStatus = {
   id: string; name: string; groupId: string | null; siteId: string | null; capabilities: string[]; online: boolean; revoked: boolean; lastSeen: string | null;
   metrics: { cpuPercent: number | null; totalMemoryBytes: number; availableMemoryBytes: number; networkReceivedBytes: number; networkSentBytes: number; uptimeSeconds: number; disks: MetricDisk[]; agentVersion?: string | null } | null;
-  inventory: { operatingSystem: string; architecture: string; manufacturer: string | null; model: string | null; processor: string | null; logicalProcessors: number; software: { name: string; version: string | null; publisher: string | null }[]; warnings: string[] } | null;
+  inventory: { operatingSystem: string; architecture: string; manufacturer: string | null; model: string | null; processor: string | null; logicalProcessors: number; software: { name: string; version: string | null; publisher: string | null }[]; warnings: string[]; networkAdapters?: NetworkAdapter[] | null } | null;
 };
 type Group = { id: string; name: string };
 type UpdateItem = { UpdateId: string; Revision: number; Title: string; Kb: string[]; ResultCode: number | null };
@@ -160,7 +161,14 @@ export function DeviceWorkspace({ device, admin, groups, sites, onDeviceChanged,
       {inventory && <div className="device-summary-grid">
         <article className="device-info-card"><h3><Server size={16}/>Sistema</h3><p>{inventory.operatingSystem} · {inventory.architecture}</p><p>{inventory.manufacturer ?? 'Produttore non rilevato'} {inventory.model ?? ''}</p><small>{inventory.processor ?? 'CPU non rilevata'} · {inventory.logicalProcessors} processori logici</small></article>
         <article className="device-info-card"><h3><HardDrive size={16}/>Archiviazione</h3>{metrics?.disks.length ? metrics.disks.map(d => <div className="disk-row" key={d.name}><span>{d.name}</span><strong>{byteCount(d.freeBytes)} liberi</strong><small>di {byteCount(d.totalBytes)}</small><div className="meter"><i style={{ width: `${Math.min(100, Math.max(0, (d.totalBytes - d.freeBytes) / d.totalBytes * 100))}%` }}/></div></div>) : <p>Dati disco non disponibili.</p>}</article>
-        <article className="device-info-card"><h3><Network size={16}/>Rete</h3>{metrics ? <><p>{byteCount(metrics.networkReceivedBytes)} ricevuti</p><p>{byteCount(metrics.networkSentBytes)} inviati</p><small>Contatori cumulativi dall’avvio dell’agente</small></> : <p>Dati rete non disponibili.</p>}</article>
+        <article className="device-info-card"><h3><Network size={16}/>Rete</h3>
+          {inventory?.networkAdapters?.length ? <div className="network-adapter-list">{inventory.networkAdapters.map((adapter, index) => <div className="network-adapter" key={`${adapter.name}-${index}`}>
+            <strong>{adapter.type === 'Wireless80211' ? 'Wi-Fi' : adapter.type.startsWith('Ethernet') ? 'Ethernet' : adapter.type} · {adapter.name}</strong>
+            <span>IP {adapter.ipAddresses.length ? adapter.ipAddresses.join(', ') : 'non disponibile'}</span>
+            <span>MAC {adapter.macAddress || 'non disponibile'}</span>
+          </div>)}</div> : <p>Interfacce attive non ancora rilevate.</p>}
+          {metrics && <><p>{byteCount(metrics.networkReceivedBytes)} ricevuti · {byteCount(metrics.networkSentBytes)} inviati</p><small>Contatori cumulativi dall’avvio dell’agente</small></>}
+        </article>
       </div>}
       {!!inventory?.warnings.length && <div className="device-warning-list">{inventory.warnings.map((warning, index) => <p key={index}><AlertTriangle size={15}/>{warning}</p>)}</div>}
       {inventory && <div className="device-summary-footer"><span>Software rilevato</span><strong>{inventory.software.length}</strong><button className="secondary compact" onClick={() => setActiveTab('software')}>Apri inventario <Icon name="arrow" size={14}/></button></div>}

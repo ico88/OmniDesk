@@ -78,8 +78,27 @@ public sealed class WindowsCollector
         }
         var distinct = software.Distinct().OrderBy(x => x.Name).ToArray();
         if (distinct.Length > 2000) warnings.Add("Software inventory truncated to 2000 entries");
+        var networkAdapters = new List<NetworkAdapterItem>();
+        foreach (var adapter in NetworkInterface.GetAllNetworkInterfaces()
+                     .Where(x => x.OperationalStatus == OperationalStatus.Up && x.NetworkInterfaceType != NetworkInterfaceType.Loopback)
+                     .Take(32))
+        {
+            try
+            {
+                var mac = adapter.GetPhysicalAddress().ToString();
+                var addresses = adapter.GetIPProperties().UnicastAddresses
+                    .Select(x => x.Address)
+                    .Where(x => !System.Net.IPAddress.IsLoopback(x) && !x.Equals(System.Net.IPAddress.Any) && !x.Equals(System.Net.IPAddress.IPv6Any))
+                    .Select(x => x.ToString())
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Take(32)
+                    .ToArray();
+                networkAdapters.Add(new(Limit(adapter.Name, 256)!, adapter.NetworkInterfaceType.ToString(), mac, addresses));
+            }
+            catch (NetworkInformationException) { /* Adapter changed during collection; omit the incomplete interface. */ }
+        }
         return new(RuntimeInformation.OSDescription, RuntimeInformation.OSArchitecture.ToString(), hardware["Manufacturer"], hardware["Model"],
-            bios["SerialNumber"], processor["Name"], Environment.ProcessorCount, distinct.Take(2000).ToArray(), warnings.ToArray());
+            bios["SerialNumber"], processor["Name"], Environment.ProcessorCount, distinct.Take(2000).ToArray(), warnings.ToArray(), networkAdapters.ToArray());
     }
     private static string? Limit(string? s, int length) => s is null ? null : s[..Math.Min(s.Length, length)];
     [StructLayout(LayoutKind.Sequential)] private struct MemoryStatus

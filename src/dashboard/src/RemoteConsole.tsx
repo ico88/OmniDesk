@@ -3,7 +3,7 @@ import { Expand, ExternalLink, LoaderCircle, MonitorPlay, RotateCcw, ShieldCheck
 import { api } from './api';
 
 type RemoteSession = { id: string; url: string; expiresAt: string };
-type ViewState = 'idle' | 'creating' | 'renewing' | 'revoking' | 'revocation-pending' | 'loading' | 'page-loaded' | 'error' | 'expired';
+type ViewState = 'idle' | 'creating' | 'renewing' | 'revoking' | 'revocation-pending' | 'loading' | 'slow-loading' | 'page-loaded' | 'error' | 'expired';
 
 function remaining(expiresAt: string, now: number) {
   const seconds = Math.max(0, Math.floor((new Date(expiresAt).getTime() - now) / 1000));
@@ -42,8 +42,7 @@ export function RemoteConsole({ deviceId, deviceName, capability, allowed, ready
   useEffect(() => {
     if (!session || viewState !== 'loading') return;
     const timer = window.setTimeout(() => {
-      setViewState(current => current === 'loading' ? 'error' : current);
-      setError('La sessione è autorizzata, ma MeshCentral non ha completato il caricamento. Verifica il motore remoto sul dispositivo o apri la sessione in una nuova scheda.');
+      setViewState(current => current === 'loading' ? 'slow-loading' : current);
     }, 20000);
     return () => window.clearTimeout(timer);
   }, [session, viewState]);
@@ -165,6 +164,7 @@ export function RemoteConsole({ deviceId, deviceName, capability, allowed, ready
       </div>
     </div>
     {error && <p className="remote-inline-error" role="alert"><X size={16}/>{error}</p>}
+    {active && viewState === 'slow-loading' && <p className="remote-inline-info" role="status">La sessione è autorizzata, ma il browser non ha confermato il caricamento dell’anteprima. Puoi attendere ancora o aprirla in una nuova scheda.</p>}
     {revoked && <p className="remote-empty-state"><ShieldCheck size={20}/>Dispositivo revocato: l’apertura di sessioni remote è disabilitata.</p>}
     {!revoked && !allowed && <p className="remote-empty-state"><ShieldCheck size={20}/>Il tuo account non ha il permesso necessario per questa sessione.</p>}
     {!revoked && allowed && !ready && <p className="remote-empty-state"><ShieldCheck size={20}/>Motore remoto disattivato o non ancora associato. In Desktop remoto un amministratore può verificare la configurazione.</p>}
@@ -180,7 +180,7 @@ export function RemoteConsole({ deviceId, deviceName, capability, allowed, ready
         referrerPolicy="no-referrer"
         allow="clipboard-read; clipboard-write; fullscreen; display-capture"
         sandbox="allow-forms allow-scripts allow-same-origin allow-downloads allow-popups allow-popups-to-escape-sandbox allow-modals allow-pointer-lock"
-        onLoad={() => { setError(''); setViewState(current => current === 'loading' || current === 'error' ? 'page-loaded' : current); }}
+        onLoad={() => { setError(''); setViewState(current => current === 'loading' || current === 'slow-loading' || current === 'error' ? 'page-loaded' : current); }}
       />
       <div className="remote-frame-footnote">La pagina MeshCentral è incorporata in modo isolato. Lo stato di caricamento non conferma da solo che il flusso video sia attivo.</div>
     </div> : !revoked && allowed && ready && <div className="remote-empty-state">

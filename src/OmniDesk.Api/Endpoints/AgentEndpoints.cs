@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Net;
 using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
@@ -96,7 +97,11 @@ public static class AgentEndpoints
                 new[] { r.Manufacturer, r.Model, r.SerialNumber, r.Processor }.Any(x => x?.Length > 500) ||
                 r.LogicalProcessors is < 1 or > 65536 || r.Software is null || r.Software.Length > 2000 ||
                 r.Software.Any(x => x is null || string.IsNullOrWhiteSpace(x.Name) || x.Name.Length > 500 || x.Version?.Length > 200 || x.Publisher?.Length > 500) ||
-                r.Warnings is null || r.Warnings.Length > 50 || r.Warnings.Any(x => x is null || x.Length > 500)) return Results.BadRequest();
+                r.Warnings is null || r.Warnings.Length > 50 || r.Warnings.Any(x => x is null || x.Length > 500) ||
+                r.NetworkAdapters is { Length: > 32 } || r.NetworkAdapters?.Any(x => x is null || string.IsNullOrWhiteSpace(x.Name) || x.Name.Length > 256 ||
+                    string.IsNullOrWhiteSpace(x.Type) || x.Type.Length > 64 || x.MacAddress is null || x.MacAddress.Length > 32 ||
+                    x.MacAddress.Any(ch => !Uri.IsHexDigit(ch)) || x.IpAddresses is null || x.IpAddresses.Length > 32 ||
+                    x.IpAddresses.Any(ip => ip is null || ip.Length > 64 || !IPAddress.TryParse(ip, out _))) == true) return Results.BadRequest();
             var id = Guid.Parse(c.User.UserId()); var now = DateTimeOffset.UtcNow; var payload = JsonSerializer.Serialize(r);
             var updated = await db.DeviceInventories.Where(x => x.DeviceId == id).ExecuteUpdateAsync(s => s.SetProperty(x => x.ReceivedAt, now).SetProperty(x => x.Payload, payload));
             if (updated == 0) { db.DeviceInventories.Add(new DeviceInventory { DeviceId = id, ReceivedAt = now, Payload = payload }); await db.SaveChangesAsync(); }
