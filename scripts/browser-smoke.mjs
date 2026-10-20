@@ -276,7 +276,7 @@ try {
  assert.equal(remainingParticipantCandidates.some(x=>x.id===participantUserId),false,'An existing participant is no longer a candidate');
  await participantsRegion.getByRole('button',{name:`Rimuovi ${participantEmail}`,exact:true}).click();
  await participantsRegion.getByText('Nessun partecipante aggiuntivo.',{exact:true}).waitFor();
- await page.waitForFunction(()=>{const select=[...document.querySelectorAll('select')].find(x=>x.labels?.[0]?.textContent?.trim()==='Stato');return select?.options.length>0;});
+ await page.locator('#ticket-state').waitFor();
  assert.deepEqual(await page.getByLabel('Stato',{exact:true}).locator('option').evaluateAll(options=>options.map(option=>option.value)),['open','in_progress','resolved'],'Ticket UI lists only server-approved transitions');
  const interventionPicker=page.locator('.ticket-intervention-link select');
  await interventionPicker.waitFor();
