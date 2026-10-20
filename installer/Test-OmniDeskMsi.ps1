@@ -48,6 +48,8 @@ function Get-RemoteNodeId {
             try { $process.Kill(); $null = $process.WaitForExit(5000) } catch { }
             throw 'Timeout interrogando il node ID del motore remoto.'
         }
+        if (-not $stdoutTask.Wait(5000)) { throw 'Timeout acquisendo stdout del node ID.' }
+        if (-not $stderrTask.Wait(5000)) { throw 'Timeout acquisendo stderr del node ID.' }
         $output = $stdoutTask.GetAwaiter().GetResult().Trim()
         $errorOutput = $stderrTask.GetAwaiter().GetResult().Trim()
         if ($process.ExitCode -ne 0) {
