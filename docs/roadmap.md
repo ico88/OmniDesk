@@ -511,3 +511,7 @@ sono passati e registrati in [validation.md](validation.md); CI Linux
 `39326865633` passata. Non distribuito sull'istanza LAN; workflow Windows MSI
 `39326865702` in coda e run precedente `39324222524` ancora attivo.
 Allegati generici/quarantena, email, allarmi, SLA e automazioni restano aperti.
+
+### SD4 — notifiche email outbound (validato localmente; CI e provider reali restano aperti)
+
+Preferenza individuale esplicita, SMTP MailKit solo TLS su 465/587 con password in secret file, coda lease/retry/dead-letter, autorizzazione rivalidata al momento dell'invio e messaggi generici senza conversazioni o note. Il link apre il ticket nel dashboard con autorizzazione server-side. Migrazione EF, 91 test API/PostgreSQL, build dashboard e 6 Vitest, build immagini e tre configurazioni Compose passano localmente. Non inviato a provider SMTP reale e non distribuito sulla LAN; consegna at-least-once può duplicare una email se il processo si arresta dopo l'accettazione SMTP.

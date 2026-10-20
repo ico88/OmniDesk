@@ -1914,3 +1914,10 @@ modificato; ogni nuova estensione attende la propria CI sul push.
 
 - `python3 scripts/verify-lan.py` — passato contro l’origine configurata nello script con CA locale: readiness HTTPS, bundle dashboard e rifiuto di `/api/auth/me` anonimo (`401`). Il controllo non esegue login, mutazioni, sessioni remote o test Windows.
 - Questa evidenza descrive solo l’istanza già pubblicata al momento della verifica; non certifica né distribuisce il branch `feature/windows-support-lan`. Il server non è stato riavviato o modificato.
+
+### SD4 — notifiche email outbound — 2026-10-20
+
+- `./scripts/test.sh` — passato: 91 test API/PostgreSQL; il test integrato esercita il worker con SMTP fake, verifica stato `sent`, include numero/link ticket e controlla che il soggetto del ticket non venga divulgato. Build TypeScript/Vite e 6/6 Vitest passati.
+- `docker build -t omnidesk-api:local -f src/OmniDesk.Api/Dockerfile .` e `docker build -t omnidesk-dashboard:local -f src/dashboard/Dockerfile .` — passati.
+- `docker compose config --quiet`, `docker compose -f compose.test.yaml config --quiet` e overlay `compose.email.yaml` con configurazione SMTP temporanea — passati; `git diff --check` — passato.
+- Migrazione `20261020023034_OutboundEmailNotifications` generata con EF Core 10.0.13 e applicata dalla suite sul PostgreSQL usa-e-getta. SMTP reale, ricezione mailbox, deploy LAN e CI per questi commit non sono stati verificati. La feature resta disabilitata nella configurazione Compose base; l'overlay richiede opt-in esplicito e secret esterno al repository.
