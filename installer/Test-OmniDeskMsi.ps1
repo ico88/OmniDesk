@@ -29,6 +29,25 @@ function Invoke-Msi {
     $process.Refresh()
     return $process.ExitCode
 }
+function Get-RemoteNodeId {
+    param([string]$Executable)
+    $tempRoot = if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { [IO.Path]::GetTempPath() }
+    $stdout = Join-Path $tempRoot ('OmniDesk-nodeid-' + [Guid]::NewGuid().ToString('N') + '.out')
+    $stderr = "$stdout.err"
+    $process = Start-Process -FilePath $Executable -ArgumentList @('-nodeid') -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+    try {
+        if (-not $process.WaitForExit(15000)) {
+            try { $process.Kill() } catch { }
+            throw 'Timeout interrogando il node ID del motore remoto.'
+        }
+        $process.Refresh()
+        if ($process.ExitCode -ne 0) { throw "Lettura node ID fallita: $($process.ExitCode)" }
+        return (Get-Content -LiteralPath $stdout -Raw).Trim()
+    }
+    finally {
+        Remove-Item -LiteralPath $stdout,$stderr -Force -ErrorAction SilentlyContinue
+    }
+}
 $installLog = Join-Path (Get-Location) 'artifacts/msi-install.log'
 $uninstallLog = Join-Path (Get-Location) 'artifacts/msi-uninstall.log'
 $attempted = $false
@@ -83,7 +102,7 @@ try {
     $nodeDeadline = [DateTime]::UtcNow.AddSeconds(45)
     do {
         Start-Sleep -Seconds 2
-        $node = (& $remoteExe -nodeid | Out-String).Trim()
+        $node = Get-RemoteNodeId -Executable $remoteExe
     } while ($node -notmatch '^[0-9A-Fa-f]{96}$' -and [DateTime]::UtcNow -lt $nodeDeadline)
     if ($node -notmatch '^[0-9A-Fa-f]{96}$') { throw 'Identita nativa non generata o formato inatteso.' }
     $agentController = Get-Service OmniDeskAgent
