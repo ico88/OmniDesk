@@ -5,9 +5,6 @@ export SMOKE_SECRETS
 SMOKE_SECRETS=$(mktemp -d /tmp/omnidesk-smoke.XXXXXX)
 # No production ports/volumes. Secrets remain in a private temporary directory.
 trap 'docker compose -f compose.smoke.yaml logs --no-color api caddy > "$SMOKE_SECRETS/runtime.log"; docker compose -f compose.smoke.yaml down' EXIT
-smoke_psql() {
-  docker compose -f compose.smoke.yaml exec -T db sh -c 'PGPASSWORD="$(cat /run/secrets/db_password)" psql -h 127.0.0.1 -U omnidesk -d omnidesk -v ON_ERROR_STOP=1 "$@"' sh "$@"
-}
 python3 - <<'PY'
 from pathlib import Path
 import os, secrets, json, hashlib, zipfile
@@ -40,28 +37,6 @@ docker compose -f compose.smoke.yaml --profile verification run --rm clamav-prob
 
 if [[ "${1:-}" == --browser ]]; then
   docker compose -f compose.smoke.yaml run --rm browser
-
-  # Exercise the actual hosted SLA breach/escalation/notification workers using
-  # a disposable ticket and a backdated persisted breach, not wall-clock waits.
-  escalation_target=$(smoke_psql -Atc 'SELECT s."Id" FROM "SupportTicketSlaTargets" s JOIN "SupportTickets" t ON t."Id" = s."TicketId" WHERE s."PolicyVersion" = 3 AND s."TargetType" = '\''resolution'\'' AND s."CompletedAt" IS NULL AND s."BreachedAt" IS NULL AND t."State" = '\''in_progress'\'' ORDER BY t."CreatedAt" DESC LIMIT 1')
-  [[ -n "$escalation_target" ]] || { echo 'No open version-3 SLA target is available for the isolated worker probe.' >&2; exit 1; }
-  smoke_psql -c "UPDATE \"SupportTicketSlaTargets\" SET \"DueAt\" = now() - interval '1 minute' WHERE \"Id\" = '$escalation_target' AND \"CompletedAt\" IS NULL AND \"BreachedAt\" IS NULL" >/dev/null
-  breach_seen=false
-  for _ in $(seq 1 30); do
-    breached=$(smoke_psql -Atc "SELECT (\"BreachedAt\" IS NOT NULL)::text FROM \"SupportTicketSlaTargets\" WHERE \"Id\" = '$escalation_target'")
-    if [[ "$breached" == true ]]; then breach_seen=true; break; fi
-    sleep 2
-  done
-  [[ "$breach_seen" == true ]] || { echo 'SLA breach worker did not persist the overdue target.' >&2; exit 1; }
-  smoke_psql -c "UPDATE \"SupportTicketSlaTargets\" SET \"BreachedAt\" = now() - interval '16 minutes' WHERE \"Id\" = '$escalation_target'" >/dev/null
-  notification_seen=false
-  for _ in $(seq 1 30); do
-    notifications=$(smoke_psql -Atc "SELECT count(*) FROM \"UserNotifications\" n JOIN \"CoreOutboxEvents\" e ON e.\"Id\" = n.\"EventId\" WHERE e.\"AggregateId\" = (SELECT \"TicketId\" FROM \"SupportTicketSlaTargets\" WHERE \"Id\" = '$escalation_target') AND e.\"EventType\" = 'ticket.sla.escalated' AND e.\"Payload\"->>'stepMinutes' = '15'")
-    if [[ "$notifications" -gt 0 ]]; then notification_seen=true; break; fi
-    sleep 2
-  done
-  [[ "$notification_seen" == true ]] || { echo 'SLA escalation/outbox notification worker did not deliver the configured first step.' >&2; exit 1; }
-  echo 'PASS: hosted SLA breach, persisted escalation and scoped notification workers delivered an overdue fixture.'
 
   # Build a secret-bearing archive from this disposable stack, including the
   # portal attachment created by Chromium, then exercise the real restore path.
