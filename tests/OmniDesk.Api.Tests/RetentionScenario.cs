@@ -58,6 +58,70 @@ public sealed class RetentionScenario(ApiFactory factory) : IClassFixture<ApiFac
         }
     }
 
+    [Fact]
+    public async Task Email_intake_retention_purges_expired_pending_and_terminal_records_without_logging_content()
+    {
+        var oldPendingId = Guid.NewGuid();
+        var oldDiscardedId = Guid.NewGuid();
+        var oldPromotedId = Guid.NewGuid();
+        var recentPendingId = Guid.NewGuid();
+        var recentDiscardedId = Guid.NewGuid();
+        var unknownStateId = Guid.NewGuid();
+        var now = DateTimeOffset.UtcNow;
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            await TestDatabaseMigration.ApplyAsync(db);
+            db.SupportEmailIntakes.AddRange(
+                Intake(oldPendingId, "pending", now.AddDays(-31)),
+                Intake(oldDiscardedId, "discarded", now.AddDays(-181)),
+                Intake(oldPromotedId, "promoted", now.AddDays(-181)),
+                Intake(recentPendingId, "pending", now.AddDays(-29)),
+                Intake(recentDiscardedId, "discarded", now.AddDays(-179)),
+                Intake(unknownStateId, "future-state", now.AddDays(-400)));
+            await db.SaveChangesAsync();
+        }
+
+        var worker = new CoreOutboxRetentionWorker(
+            factory.Services.GetRequiredService<IServiceScopeFactory>(),
+            Options.Create(new RetentionOptions { DeliveredOutboxDays = 180, ProcessedEmailIntakesDays = 180, PendingEmailIntakesDays = 30 }),
+            NullLogger<CoreOutboxRetentionWorker>.Instance);
+        Assert.Equal(3, await worker.PurgeEmailIntakesBatchAsync());
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var remaining = await db.SupportEmailIntakes.Where(item =>
+                    item.Id == oldPendingId || item.Id == oldDiscardedId || item.Id == oldPromotedId ||
+                    item.Id == recentPendingId || item.Id == recentDiscardedId || item.Id == unknownStateId)
+                .Select(item => item.Id).ToArrayAsync();
+            Assert.DoesNotContain(oldPendingId, remaining);
+            Assert.DoesNotContain(oldDiscardedId, remaining);
+            Assert.DoesNotContain(oldPromotedId, remaining);
+            Assert.Contains(recentPendingId, remaining);
+            Assert.Contains(recentDiscardedId, remaining);
+            Assert.Contains(unknownStateId, remaining);
+            var audit = await db.AuditEvents.SingleAsync(item => item.Action == "retention.email-intakes.purged");
+            Assert.Equal("3", audit.Target);
+            Assert.DoesNotContain("retention@example.test", audit.Target ?? "");
+        }
+    }
+
+    private static SupportEmailIntake Intake(Guid id, string state, DateTimeOffset receivedAt) => new()
+    {
+        Id = id,
+        MailboxAddress = "support@example.test",
+        MessageId = $"<{id:N}@retention.example.test>",
+        SenderAddress = "retention@example.test",
+        Subject = "Retention fixture — personal data",
+        BodyText = "This content must be purged by the retention policy.",
+        PayloadSha256 = new string('a', 64),
+        MessageReceivedAt = receivedAt,
+        ReceivedAt = receivedAt,
+        State = state
+    };
+
     private static CoreOutboxEvent Event(Guid id, DateTimeOffset occurredAt) => new()
     {
         Id = id,
