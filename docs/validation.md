@@ -4,7 +4,8 @@
 
 - L'endpoint macchina associa alla conversazione solo metadati pubblici di allegati collegati a messaggi dello stesso ticket e non redatti. La Tray mostra nome/dimensione per file puliti e indicazioni generiche durante scansione, in caso di errore o file bloccato; nessuna chiave storage o URL firmato transita nell'IPC.
 - `./scripts/test.sh` — 95/95 API/PostgreSQL, build dashboard e 6/6 Vitest; `SupportScenario` verifica la proiezione del nome allegato nella risposta macchina autenticata. `git diff --check` passato.
-- L'host non dispone del comando `dotnet`; build nativa Tray e MSI sono demandate alla CI Windows. Nessuna esecuzione runtime su Windows, nessun aggiornamento del pacchetto LAN e nessun deploy eseguiti per questa revisione.
+- L'host non dispone del comando `dotnet`; la CI Windows ha compilato Agent/Tray/Setup/MSI e verificato lifecycle, upgrade, repair e rollback sui runner isolati. Le UI Tray e IPC non sono state collaudate manualmente su un PC pilota. Nessun aggiornamento del pacchetto LAN o deploy eseguiti.
+- CI Linux [`39385189484`](https://github.com/ico88/OmniDesk/actions/runs/39385189484) e Windows [`39385189469`](https://github.com/ico88/OmniDesk/actions/runs/39385189469) — entrambe passate sul commit `98e6815`; l'artifact Windows non è stato promosso al download LAN.
 
 ### Diagnostica processo node ID MSI — 2026-10-20
 

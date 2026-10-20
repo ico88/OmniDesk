@@ -7,8 +7,10 @@ allegati pubblici collegati ai messaggi: nome e stato antivirus, senza chiavi o
 percorsi storage. Allegati di note interne e messaggi redatti non vengono
 restituiti. La Tray mostra il nome solo dopo scansione pulita; file infetti sono
 indicati senza esporre il nome. Versione Agent/Tray/Setup/MSI portata a 0.8.10.
-La suite locale API/PostgreSQL e dashboard passa; build Windows e test MSI sono
-delegati alla CI. Nessun aggiornamento del pacchetto web o deploy LAN eseguito.
+La suite locale API/PostgreSQL e dashboard passa. CI Linux `39385189484` e
+Windows `39385189469` passano; la pipeline Windows ha compilato il pacchetto e
+verificato installazione, recovery, uninstall, upgrade, repair e rollback.
+Nessun aggiornamento del pacchetto web o deploy LAN eseguito.
 
 ### Allegati contestuali alla conversazione ticket
 
