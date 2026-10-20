@@ -1,5 +1,16 @@
 # Roadmap
 
+### Allegati contestuali alla conversazione ticket
+
+Gli allegati possono essere associati a un messaggio pubblico o a una nota interna
+della stessa visibilità e dello stesso ticket. Il server valida il collegamento
+anche nella transazione di upload, mantiene separati i permessi pubblici/interni
+e restituisce in chat soltanto gli allegati visibili; download abilitato dopo
+scansione pulita. La sezione allegati conserva anche i file senza messaggio
+associato. Verificati 95/95 test API/PostgreSQL, build dashboard, 6/6 Vitest e
+smoke Chromium con migrazione e restore completo isolato. Nessun deploy LAN
+eseguito per questo incremento.
+
 ### Integrità dei collegamenti ticket-dispositivo
 
 La migrazione `20261020090000_TicketDeviceBindingIntegrity` aggiunge trigger
