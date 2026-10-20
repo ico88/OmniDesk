@@ -2074,6 +2074,7 @@ modificato; ogni nuova estensione attende la propria CI sul push.
 # Tray Windows — download autenticato allegati — 2026-10-20
 
 - `./scripts/test.sh` — passato: 96/96 test API/PostgreSQL, build dashboard e 6/6 Vitest. I test coprono download byte-per-byte, `no-store`/`nosniff`, diniego per chiave richiedente non corrispondente e rifiuto di allegati infetti; il test IPC copre payload download oltre il limite ordinario e richieste malformate.
-- `docker compose config --quiet` e `git diff --check` — passati. La build MSI richiede il runner Windows CI; la prova interattiva Tray resta da eseguire sul PC Windows pilota.
-- Versione 0.8.11, push e CI non ancora verificati al momento della registrazione. Nessun pacchetto promosso e nessun deploy LAN.
+- `./scripts/smoke.sh --browser` — passato: Chromium ha verificato la scheda Rete con Wi-Fi ed Ethernet, IP multipli e MAC dal primo heartbeat; ClamAV/EICAR, worker SLA/escalation e restore isolato completo (52 migrazioni, fixture DB/blob/Identity/CA) sono passati. Nessun servizio LAN è stato modificato.
+- CI Linux `39390505418` e Windows `39390505409` — passate sul codice 0.8.11. La matrice Windows ha completato build MSI, install/recovery/uninstall e upgrade/repair/rollback da baseline 0.6.0 e 0.7.0. Artifact unsigned di laboratorio, non promosso sulla LAN; prova interattiva Tray/download sul PC pilota ancora aperta.
+- Il run Windows precedente `39386842846` è ancora `in_progress` su un commit precedente; non è stato interrotto. La nuova matrice isolata è terminata con successo.
 
