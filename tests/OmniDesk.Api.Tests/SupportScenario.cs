@@ -95,22 +95,47 @@ public static class SupportScenario
         Auth();
         Assert.Equal(HttpStatusCode.Conflict, (await agent.PostAsJsonAsync($"/api/agent/support/{owner}/{ticket.Id}/messages", new SupportRequesterReply(owner, 1, "Risposta obsoleta"))).StatusCode);
         long requesterReplyId;
+        var attachmentIdForTray = Guid.NewGuid();
+        var infectedAttachmentIdForTray = Guid.NewGuid();
+        var attachmentBytesForTray = Enumerable.Range(0, 64).Select(value => (byte)value).ToArray();
+        var attachmentKeyForTray = Guid.NewGuid().ToString("N");
+        Directory.CreateDirectory(factory.AttachmentRoot);
+        await File.WriteAllBytesAsync(Path.Combine(factory.AttachmentRoot, attachmentKeyForTray), attachmentBytesForTray);
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             var requesterReply = await db.SupportMessages.SingleAsync(message => message.TicketId == ticket.Id && message.Kind == "requester_reply");
             requesterReplyId = requesterReply.Id;
-            db.SupportAttachments.Add(new SupportAttachment { TicketId = ticket.Id, MessageId = requesterReplyId,
-                StorageKey = Guid.NewGuid().ToString("N"), OriginalFileName = "riscontro.txt", MediaType = "application/octet-stream",
-                SizeBytes = 64, Sha256 = new string('a', 64), Visibility = "public", ScanState = "clean" });
+            db.SupportAttachments.Add(new SupportAttachment { Id = attachmentIdForTray, TicketId = ticket.Id, MessageId = requesterReplyId,
+                StorageKey = attachmentKeyForTray, OriginalFileName = "riscontro.txt", MediaType = "application/octet-stream",
+                SizeBytes = attachmentBytesForTray.Length, Sha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(attachmentBytesForTray)).ToLowerInvariant(),
+                Visibility = "public", ScanState = "clean" });
+            db.SupportAttachments.Add(new SupportAttachment { Id = infectedAttachmentIdForTray, TicketId = ticket.Id, MessageId = requesterReplyId,
+                StorageKey = Guid.NewGuid().ToString("N"), OriginalFileName = "quarantena.txt", MediaType = "application/octet-stream",
+                SizeBytes = 64, Sha256 = new string('b', 64), Visibility = "public", ScanState = "infected" });
             await db.SaveChangesAsync();
         }
+        Auth();
+        Assert.Equal(HttpStatusCode.NotFound, (await agent.GetAsync($"/api/agent/support/{owner}/{ticket.Id}/attachments/{infectedAttachmentIdForTray}")).StatusCode);
+        Auth();
+        using (var trayDownload = await agent.GetAsync($"/api/agent/support/{owner}/{ticket.Id}/attachments/{attachmentIdForTray}"))
+        {
+            Assert.Equal(HttpStatusCode.OK, trayDownload.StatusCode);
+            Assert.Equal("no-store", trayDownload.Headers.CacheControl?.ToString());
+            Assert.Equal("nosniff", trayDownload.Headers.GetValues("X-Content-Type-Options").Single());
+            Assert.Equal(attachmentBytesForTray, await trayDownload.Content.ReadAsByteArrayAsync());
+        }
+        File.Delete(Path.Combine(factory.AttachmentRoot, attachmentKeyForTray));
+        Auth();
+        Assert.Equal(HttpStatusCode.NotFound, (await agent.GetAsync($"/api/agent/support/{other}/{ticket.Id}/attachments/{attachmentIdForTray}")).StatusCode);
         Auth();
         requesterThread = await agent.GetFromJsonAsync<System.Text.Json.JsonElement>($"/api/agent/support/{owner}/{ticket.Id}/messages");
         Assert.Equal(2, requesterThread.GetProperty("version").GetInt64());
         Assert.Contains(requesterThread.GetProperty("messages").EnumerateArray(), m => m.GetProperty("body").GetString() == "Il problema è ancora presente.");
         var requesterReplyView = requesterThread.GetProperty("messages").EnumerateArray().Single(message => message.GetProperty("id").GetInt64() == requesterReplyId);
-        Assert.Equal("riscontro.txt", Assert.Single(requesterReplyView.GetProperty("attachments").EnumerateArray()).GetProperty("fileName").GetString());
+        var requesterAttachments = requesterReplyView.GetProperty("attachments").EnumerateArray().ToArray();
+        Assert.Equal("riscontro.txt", requesterAttachments.Single(item => item.GetProperty("scanState").GetString() == "clean").GetProperty("fileName").GetString());
+        Assert.Contains(requesterAttachments, item => item.GetProperty("scanState").GetString() == "infected");
         Guid remoteSessionId = Guid.NewGuid(), updateJobId = Guid.NewGuid();
         var utcNow = DateTimeOffset.UtcNow;
         var jobStartedAt = new DateTimeOffset(utcNow.Ticks - utcNow.Ticks % 10, TimeSpan.Zero).AddMinutes(-2);

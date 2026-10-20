@@ -60,6 +60,25 @@ public sealed class TrayProtocolTests
         Assert.True(TrayProtocol.Valid(reply));
         Assert.False(TrayProtocol.Valid(reply with { ExpectedVersion = 0 }));
         Assert.False(TrayProtocol.Valid(reply with { Body = " " }));
+        var download = new TrayRequest(TrayProtocol.Version, Guid.NewGuid(), TrayProtocol.DownloadTicketAttachmentMethod,
+            TicketId: Guid.NewGuid(), AttachmentId: Guid.NewGuid());
+        Assert.True(TrayProtocol.Valid(download));
+        Assert.False(TrayProtocol.Valid(download with { AttachmentId = null }));
+        Assert.False(TrayProtocol.Valid(download with { Body = "unexpected" }));
+        Assert.False(TrayProtocol.Valid(download with { AttachmentId = Guid.Empty }));
+    }
+    [Fact]
+    public async Task Attachment_download_frames_allow_bounded_payloads_larger_than_support_messages()
+    {
+        var attachment = new SupportAttachmentDownload(Guid.NewGuid(), "report.bin", 10 * 1024 * 1024, new string('A', 14 * 1024 * 1024));
+        var response = new TraySupportResponse(TrayProtocol.Version, Guid.NewGuid(), null, [], DownloadedAttachment: attachment);
+        using var stream = new MemoryStream();
+        await Assert.ThrowsAsync<InvalidDataException>(() => TrayProtocol.Write(stream, response, CancellationToken.None, TrayProtocol.MaxSupportPayload));
+        stream.SetLength(0);
+        await TrayProtocol.Write(stream, response, CancellationToken.None, TrayProtocol.MaxAttachmentPayload);
+        stream.Position = 0;
+        var decoded = await TrayProtocol.Read<TraySupportResponse>(stream, CancellationToken.None, TrayProtocol.MaxAttachmentPayload);
+        Assert.Equal(attachment, decoded.DownloadedAttachment);
     }
     [Fact]
     public async Task Nested_duplicate_fields_are_rejected()
