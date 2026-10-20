@@ -11,7 +11,22 @@ printf 'Backup directory: %s\n' "$backup_path"
 docker compose exec -T db pg_dump -U omnidesk -d omnidesk --format=custom > "$backup_path/database.dump.partial"
 mv -- "$backup_path/database.dump.partial" "$backup_path/database.dump"
 docker compose cp api:/keys "$backup_path/identity_keys"
-docker compose cp api:/attachments "$backup_path/attachments"
+attachment_table=$(docker compose exec -T db psql -U omnidesk -d omnidesk -Atc \
+  "SELECT to_regclass('public.\"SupportAttachments\"') IS NOT NULL")
+api_container=$(docker compose ps -q api)
+[[ -n "$api_container" ]] || { echo 'Cannot verify attachment storage: API container is not running' >&2; exit 1; }
+attachment_mount=$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/attachments"}}{{.Name}}{{end}}{{end}}' "$api_container")
+if [[ "$attachment_table" == t ]]; then
+  [[ -n "$attachment_mount" ]] || { echo 'Attachment table exists but persistent /attachments volume is not mounted' >&2; exit 1; }
+  docker compose cp api:/attachments "$backup_path/attachments"
+elif [[ "$attachment_table" == f && -z "$attachment_mount" ]]; then
+  # Older releases predate ticket attachments and their named volume. The
+  # database has no references and no blob mount exists to preserve.
+  mkdir -- "$backup_path/attachments"
+else
+  echo 'Attachment schema/storage are inconsistent; refusing an incomplete backup' >&2
+  exit 1
+fi
 (
   cd -- "$backup_path"
   find attachments -type f -print0 | sort -z | xargs -0 -r sha256sum > attachments.sha256
