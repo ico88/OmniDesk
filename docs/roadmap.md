@@ -715,5 +715,9 @@ MeshCentral è già scaduto e conferma la revoca persistente tramite risposta
 finale del server. Per link scaduti usa l’identità del servizio per chiudere i
 viewer; il nome operatore registrato nel link resta la fonte preferita. La
 durata massima configurata lato MeshCentral è allineata ai 30 minuti richiesti
-da OmniDesk (prima era limitata a 5). Il server LAN non è stato riavviato e
-richiede una distribuzione coordinata prima che la correzione sia attiva.
+da OmniDesk (prima era limitata a 5). Il deploy LAN del commit `22e690b` è stato
+completato il 2026-10-20: 53 migrazioni applicate, API e dashboard pronti via
+HTTPS, limite sessione API configurato a 30 minuti e nessuna sessione attiva o
+pendente di revoca al controllo. Le prove applicative e CI sono in
+[validation.md](validation.md); il test interattivo successivo dal PC Windows
+pilota resta aperto.
