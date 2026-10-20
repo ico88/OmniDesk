@@ -1,5 +1,12 @@
 # Stato e verifiche — 18 ottobre 2026
 
+### Presenza persistente dell'Agent — 2026-10-20
+
+- `./scripts/test.sh` — passato: 91 test API/PostgreSQL, build dashboard e 6/6 Vitest. Il flusso Agent inizializza la baseline senza audit sintetico, emette un audit offline una sola volta su sweep ripetuti e registra il ritorno online al successivo heartbeat. L'audit contiene solo l'ID dispositivo e l'azione; credenziali e payload non vengono registrati.
+- Migrazione EF Core `20261020013520_DevicePresenceAudit` generata e applicata nello smoke isolato. `./scripts/smoke.sh --browser` — passato con API/worker, PostgreSQL, ClamAV, Chromium e restore completo database/blob/chiavi Identity/CA. Il worker hosted è partito nello stack; gli assert di transizione sono eseguiti direttamente contro PostgreSQL nella suite d'integrazione.
+- `docker compose config --quiet`, `docker compose -f compose.test.yaml config --quiet`, `docker compose build api dashboard` e `git diff --check` — passati. Un tentativo di validare `compose.smoke.yaml` senza `SMOKE_SECRETS` non è applicabile fuori dallo script che genera i segreti temporanei; lo smoke completo sopra lo configura correttamente.
+- Nessun servizio LAN modificato. Le notifiche degli allarmi, la retention telemetria e il deploy LAN sono ancora da fare.
+
 Documento cronologico: le sezioni M1 descrivono la prima consegna; M2–M5 registrano gli avanzamenti successivi. Lo stato corrente è nel riepilogo finale.
 
 ## Ambiente effettivo

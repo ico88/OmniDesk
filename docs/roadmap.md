@@ -1,5 +1,9 @@
 # Roadmap
 
+### Telemetria — transizioni di presenza Agent
+
+Lo stato operativo Online/Offline continua a derivare dall'ultimo heartbeat firmato; un worker persistente ora inizializza la baseline senza creare eventi retroattivi e registra una sola voce audit al cambio, con target device e senza dati telemetrici. Dispositivi revocati sono esclusi. La soglia (180 secondi) e la frequenza (30 secondi) sono configurabili e allineate alle API di stato e aggiornamento. Migrazione versionata e verifiche PostgreSQL 91/91, dashboard 6/6, smoke Chromium/restore e build Docker sono passati in locale. Rimangono allarmi e notifiche operatore, retention della telemetria e pubblicazione LAN.
+
 ### Privacy — retention dei record intake email
 
 Worker retention configurabile: i messaggi ancora pending vengono eliminati dopo 30 giorni; quelli scartati o promossi dopo 180, con riferimento intake rimosso senza cancellare il ticket. La data è quella server-side di ricezione; stati sconosciuti restano preservati. Batch transazionali limitati e auditano solo il conteggio, senza PII o payload. Test PostgreSQL 91/91, build API, configurazioni Compose e smoke runtime Chromium/restore sono passati localmente. La retention di ticket, allegati e backup rimane separata; nessun servizio LAN è stato toccato.
