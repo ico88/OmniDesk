@@ -158,17 +158,17 @@ export function DeviceWorkspace({ device, admin, groups, sites, onDeviceChanged,
         <article><span><MemoryStick size={16}/>Memoria disponibile</span><strong>{byteCount(metrics.availableMemoryBytes)}</strong><small>su {byteCount(metrics.totalMemoryBytes)} totali</small><div className="meter"><i style={{ width: `${100 - (metrics.availableMemoryBytes / metrics.totalMemoryBytes * 100)}%` }}/></div></article>
         <article><span><Timer size={16}/>Uptime</span><strong>{Math.floor(metrics.uptimeSeconds / 3600)} <small>ore</small></strong><small>Dall’ultimo avvio del sistema</small></article>
       </div> : <div className="remote-empty-state"><Activity size={20}/>Metriche non ancora ricevute dall’agente.</div>}
-      {inventory && <div className="device-summary-grid">
-        <article className="device-info-card"><h3><Server size={16}/>Sistema</h3><p>{inventory.operatingSystem} · {inventory.architecture}</p><p>{inventory.manufacturer ?? 'Produttore non rilevato'} {inventory.model ?? ''}</p><small>{inventory.processor ?? 'CPU non rilevata'} · {inventory.logicalProcessors} processori logici</small></article>
-        <article className="device-info-card"><h3><HardDrive size={16}/>Archiviazione</h3>{metrics?.disks.length ? metrics.disks.map(d => <div className="disk-row" key={d.name}><span>{d.name}</span><strong>{byteCount(d.freeBytes)} liberi</strong><small>di {byteCount(d.totalBytes)}</small><div className="meter"><i style={{ width: `${Math.min(100, Math.max(0, (d.totalBytes - d.freeBytes) / d.totalBytes * 100))}%` }}/></div></div>) : <p>Dati disco non disponibili.</p>}</article>
-        <article className="device-info-card"><h3><Network size={16}/>Rete</h3>
+      {(inventory || metrics) && <div className="device-summary-grid">
+        {inventory && <article className="device-info-card"><h3><Server size={16}/>Sistema</h3><p>{inventory.operatingSystem} · {inventory.architecture}</p><p>{inventory.manufacturer ?? 'Produttore non rilevato'} {inventory.model ?? ''}</p><small>{inventory.processor ?? 'CPU non rilevata'} · {inventory.logicalProcessors} processori logici</small></article>}
+        {metrics && <article className="device-info-card"><h3><HardDrive size={16}/>Archiviazione</h3>{metrics.disks.length ? metrics.disks.map(d => <div className="disk-row" key={d.name}><span>{d.name}</span><strong>{byteCount(d.freeBytes)} liberi</strong><small>di {byteCount(d.totalBytes)}</small><div className="meter"><i style={{ width: `${Math.min(100, Math.max(0, (d.totalBytes - d.freeBytes) / d.totalBytes * 100))}%` }}/></div></div>) : <p>Dati disco non disponibili.</p>}</article>}
+        {metrics && <article className="device-info-card"><h3><Network size={16}/>Rete</h3>
           {metrics?.networkAdapters?.length ? <div className="network-adapter-list">{metrics.networkAdapters.map((adapter, index) => <div className="network-adapter" key={`${adapter.name}-${index}`}>
             <strong>{adapter.type === 'Wireless80211' ? 'Wi-Fi' : adapter.type.startsWith('Ethernet') ? 'Ethernet' : adapter.type} · {adapter.name}</strong>
             <span>IP {adapter.ipAddresses.length ? adapter.ipAddresses.join(', ') : 'non disponibile'}</span>
             <span>MAC {adapter.macAddress || 'non disponibile'}</span>
           </div>)}</div> : <p>Interfacce attive non ancora rilevate nell’ultimo heartbeat.</p>}
           {metrics && <><p>{byteCount(metrics.networkReceivedBytes)} ricevuti · {byteCount(metrics.networkSentBytes)} inviati</p><small>Contatori cumulativi dall’avvio dell’agente</small></>}
-        </article>
+        </article>}
       </div>}
       {!!inventory?.warnings.length && <div className="device-warning-list">{inventory.warnings.map((warning, index) => <p key={index}><AlertTriangle size={15}/>{warning}</p>)}</div>}
       {inventory && <div className="device-summary-footer"><span>Software rilevato</span><strong>{inventory.software.length}</strong><button className="secondary compact" onClick={() => setActiveTab('software')}>Apri inventario <Icon name="arrow" size={14}/></button></div>}
