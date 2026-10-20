@@ -94,10 +94,23 @@ public static class SupportScenario
         Assert.Equal(HttpStatusCode.NoContent, (await agent.PostAsJsonAsync($"/api/agent/support/{owner}/{ticket.Id}/messages", new SupportRequesterReply(owner, 1, "Il problema è ancora presente."))).StatusCode);
         Auth();
         Assert.Equal(HttpStatusCode.Conflict, (await agent.PostAsJsonAsync($"/api/agent/support/{owner}/{ticket.Id}/messages", new SupportRequesterReply(owner, 1, "Risposta obsoleta"))).StatusCode);
+        long requesterReplyId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var requesterReply = await db.SupportMessages.SingleAsync(message => message.TicketId == ticket.Id && message.Kind == "requester_reply");
+            requesterReplyId = requesterReply.Id;
+            db.SupportAttachments.Add(new SupportAttachment { TicketId = ticket.Id, MessageId = requesterReplyId,
+                StorageKey = Guid.NewGuid().ToString("N"), OriginalFileName = "riscontro.txt", MediaType = "application/octet-stream",
+                SizeBytes = 64, Sha256 = new string('a', 64), Visibility = "public", ScanState = "clean" });
+            await db.SaveChangesAsync();
+        }
         Auth();
         requesterThread = await agent.GetFromJsonAsync<System.Text.Json.JsonElement>($"/api/agent/support/{owner}/{ticket.Id}/messages");
         Assert.Equal(2, requesterThread.GetProperty("version").GetInt64());
         Assert.Contains(requesterThread.GetProperty("messages").EnumerateArray(), m => m.GetProperty("body").GetString() == "Il problema è ancora presente.");
+        var requesterReplyView = requesterThread.GetProperty("messages").EnumerateArray().Single(message => message.GetProperty("id").GetInt64() == requesterReplyId);
+        Assert.Equal("riscontro.txt", Assert.Single(requesterReplyView.GetProperty("attachments").EnumerateArray()).GetProperty("fileName").GetString());
         Guid remoteSessionId = Guid.NewGuid(), updateJobId = Guid.NewGuid();
         var utcNow = DateTimeOffset.UtcNow;
         var jobStartedAt = new DateTimeOffset(utcNow.Ticks - utcNow.Ticks % 10, TimeSpan.Zero).AddMinutes(-2);
