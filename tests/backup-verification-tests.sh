@@ -7,7 +7,10 @@ mkdir -p "$temp/bin" "$temp/archive/attachments"
 cat > "$temp/bin/docker" <<'SH'
 #!/usr/bin/env bash
 set -Eeuo pipefail
-if [[ " $* " == *' psql '* ]]; then exit 0; fi
+if [[ " $* " == *' psql '* ]]; then
+  if [[ " $* " == *' to_regclass('* ]]; then echo f; fi
+  exit 0
+fi
 if [[ " $* " == *' pg_restore '* ]]; then exit 0; fi
 exit 0
 SH
@@ -23,7 +26,9 @@ fi
 
 PATH="$temp/bin:$PATH" bash "$repo/scripts/verify-backup.sh" --staging "$temp/archive" > "$temp/verify.log"
 grep -Fq 'Database restore verified in an isolated temporary PostgreSQL instance.' "$temp/verify.log"
+grep -Fq 'Legacy database has no attachment table; empty attachment payload verified.' "$temp/verify.log"
 touch "$temp/archive/READY"
 PATH="$temp/bin:$PATH" bash "$repo/scripts/verify-backup.sh" "$temp/archive" > "$temp/ready.log"
 grep -Fq 'Database restore verified in an isolated temporary PostgreSQL instance.' "$temp/ready.log"
+grep -Fq 'Legacy database has no attachment table; empty attachment payload verified.' "$temp/ready.log"
 echo 'PASS: backup verifier rejects unmarked archives and verifies staging before READY.'
