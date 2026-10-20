@@ -459,6 +459,12 @@ Migrazione e test PostgreSQL passano; dashboard TypeScript/Vite e Vitest passano
 La migrazione è stata verificata soltanto sul database temporaneo. Rimangono
 smoke browser dedicato, pubblicazione LAN e prova autenticata; screenshot,
 allegati, email e notifiche in tempo reale non sono inclusi in questa fase.
+Il portale aggiorna ora elenco dispositivi, stato dei ticket e conversazione
+aperta ogni 30 secondi, conservando l'ultima vista riuscita durante errori di
+rete temporanei; resta disponibile l'aggiornamento manuale. Build TypeScript e
+suite dashboard passano. Lo smoke Chromium ha verificato lo stato e una nuova
+risposta pubblica arrivati senza ricaricare la pagina, oltre all'esclusione
+delle note interne. Prova isolata, non ancora eseguita con un account reale.
 
 ### Marchio condiviso Tray, installer e favicon
 
