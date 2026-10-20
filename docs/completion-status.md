@@ -27,8 +27,16 @@ Il workflow Windows è stato aggiornato nel commit `1bf8ee7`: pubblica il
 candidate MSI dopo il lifecycle test e divide le verifiche sulle baseline 0.6.0
 e 0.7.0 in due job isolati. La nuova struttura è stata verificata dalla CI
 `39390505409`; il precedente run `39386842846` resta attivo e non è stato
-interrotto. La disponibilità dell’artifact non equivale alla promozione del
-pacchetto LAN.
+interrotto. GitHub ora riporta quel run come `cancelled`; nessun comando di
+cancellazione è stato inviato in questo incremento. La disponibilità
+dell’artifact non equivale alla promozione del pacchetto LAN.
+
+Aggiornamento backup 2026-10-20: il branch include retention locale opt-in
+`OMNIDESK_BACKUP_RETENTION_DAYS` (default `0`), che elimina solo backup diretti
+verificati e scaduti dopo il completamento di un nuovo backup. Test shell,
+suite applicativa, smoke/restore e CI Linux `39392940229` passano; CI Windows
+`39392940145` completa la matrice MSI. Nessuna retention è stata attivata sui
+backup live; cifratura e copia off-site restano aperte.
 
 | Parte | Implementazione | Verifica disponibile | Gate rimanente |
 | --- | --- | --- | --- |

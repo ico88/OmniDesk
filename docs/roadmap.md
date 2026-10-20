@@ -7,8 +7,9 @@
 il nuovo backup e scritto `READY`, elimina soltanto directory dirette in
 `.backups` con nome generato dal backup e marker regolare, più vecchie della
 soglia; staging e symlink sono preservati. Test shell dedicati e controlli
-`bash -n` passano. La cifratura e la copia off-site restano aperte; la policy non
-è stata attivata né applicata ai backup presenti.
+`bash -n` passano. CI Linux `39392940229` passa con suite e smoke restore; CI
+Windows `39392940145` passa la matrice MSI. La cifratura e la copia off-site
+restano aperte; la policy non è stata attivata né applicata ai backup presenti.
 
 ### Tray Windows — download degli allegati ticket puliti
 
@@ -23,7 +24,8 @@ dedicato. Versione Agent/Tray/Setup/MSI 0.8.11. La suite API/PostgreSQL passa
 verde con build container e smoke Chromium/restore isolato; Windows/MSI
 `39390505409` è verde: build MSI, install/recovery/uninstall e upgrade/repair/
 rollback da entrambe le baseline 0.6.0 e 0.7.0. Il run precedente
-`39386842846` è rimasto attivo oltre il limite previsto e non è stato annullato.
+`39386842846` è poi risultato `cancelled` secondo GitHub; nessun comando di
+cancellazione è stato inviato durante questo incremento.
 Il workflow separato ha concluso in circa sei minuti e ha prodotto l’artifact
 unsigned 0.8.11, non promosso sul server LAN. Resta la prova interattiva Tray
 sul PC pilota. Il riepilogo della scheda

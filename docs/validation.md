@@ -2,7 +2,7 @@
 
 ### Windows MSI — isolamento baseline upgrade — 2026-10-20
 
-- Il run iniziale `39386842846` è rimasto `in_progress` per oltre 20 minuti nella matrice combinata; non è stato interrotto. Build MSI e install/recovery/uninstall erano passati.
+- Il run iniziale `39386842846` era `in_progress` nella matrice combinata quando fu registrata la prima verifica; una verifica successiva lo trova `cancelled` su GitHub. Nessun comando di cancellazione è stato inviato in questo incremento. Build MSI e install/recovery/uninstall erano passati.
 - Il workflow separato nel commit `1bf8ee7` ha superato la nuova CI Windows [run 39390505409](https://github.com/ico88/OmniDesk/actions/runs/39390505409): il candidato è stato caricato prima delle prove e due job paralleli hanno compilato/testato le baseline 0.6.0 e 0.7.0. Entrambe hanno verificato upgrade, repair e rollback; la run completa è terminata in circa sei minuti.
 - La CI Linux [run 39390505418](https://github.com/ico88/OmniDesk/actions/runs/39390505418) è passata con suite, build container, Compose e smoke Chromium/restore isolato. L’artifact unsigned 0.8.11 è presente nel run Windows; non è stato promosso al download LAN. La prova Tray sul PC pilota resta aperta.
 - Artifact scaricato in una directory temporanea per controllo: MSI 70,619,136 byte e Setup 116,231,680 byte; `sha256sum -c SHA256SUMS.txt` — entrambi `OK`. Nessuna installazione sul PC pilota o pubblicazione LAN eseguita.
@@ -2076,12 +2076,13 @@ modificato; ogni nuova estensione attende la propria CI sul push.
 - `./scripts/test.sh` — passato: 96/96 test API/PostgreSQL, build dashboard e 6/6 Vitest. I test coprono download byte-per-byte, `no-store`/`nosniff`, diniego per chiave richiedente non corrispondente e rifiuto di allegati infetti; il test IPC copre payload download oltre il limite ordinario e richieste malformate.
 - `./scripts/smoke.sh --browser` — passato: Chromium ha verificato la scheda Rete con Wi-Fi ed Ethernet, IP multipli e MAC dal primo heartbeat; ClamAV/EICAR, worker SLA/escalation e restore isolato completo (52 migrazioni, fixture DB/blob/Identity/CA) sono passati. Nessun servizio LAN è stato modificato.
 - CI Linux `39390505418` e Windows `39390505409` — passate sul codice 0.8.11. La matrice Windows ha completato build MSI, install/recovery/uninstall e upgrade/repair/rollback da baseline 0.6.0 e 0.7.0. Artifact unsigned di laboratorio, non promosso sulla LAN; prova interattiva Tray/download sul PC pilota ancora aperta.
-- Il run Windows precedente `39386842846` è ancora `in_progress` su un commit precedente; non è stato interrotto. La nuova matrice isolata è terminata con successo.
+- Alla verifica successiva, GitHub riporta il run Windows precedente `39386842846` come `cancelled`; questo lavoro non ha inviato un comando di cancellazione. La nuova matrice isolata è terminata con successo.
 
 ### Backup — retention locale opt-in — 2026-10-20
 
 - `bash -n scripts/backup.sh scripts/prune-backups.sh tests/backup-retention-tests.sh` e `bash tests/backup-retention-tests.sh` — passati. Il test dimostra default disattivato, rimozione solo di backup vecchi diretti con `READY`, preservazione di staging, backup futuri e symlink, e rifiuto di soglie/percorso non validi.
 - `bash tests/backup-verification-tests.sh`, `docker compose config --quiet`, `git diff --check` e `./scripts/test.sh` — passati; suite API/PostgreSQL 96/96, build dashboard e Vitest 6/6.
 - Il backup invoca la pulizia solo dopo aver verificato e marcato `READY` il nuovo archivio. `OMNIDESK_BACKUP_RETENTION_DAYS` si configura nell'ambiente o nel `.env`; default `0`. La pulizia non è stata eseguita sui backup del repository/deployment. Nessuna migrazione o modifica LAN.
-- CI per il nuovo script e smoke operativo completo di backup sono ancora da eseguire dopo il push. La retention locale non aggiunge cifratura né copia off-site.
+- CI Linux [`39392940229`](https://github.com/ico88/OmniDesk/actions/runs/39392940229) — passata, includendo test retention, suite applicativa e smoke Chromium/restore isolato. CI Windows [`39392940145`](https://github.com/ico88/OmniDesk/actions/runs/39392940145) — passata, inclusi install/recovery/uninstall e upgrade/repair/rollback MSI sulle baseline 0.6.0 e 0.7.0; non esegue la retention backup.
+- La retention locale non aggiunge cifratura né copia off-site e non è stata attivata sui backup del deployment.
 
