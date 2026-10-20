@@ -49,6 +49,14 @@ in [validation.md](validation.md). Sessione Mesh reale e collaudo interattivo
 Windows restano gate separati. Deploy live consentito solo dopo backup e
 verifica che non vi siano sessioni remote o job mutanti attivi.
 
+Controllo sessioni: lo storico dispositivo mostra il nome visualizzato
+dell'operatore. Un amministratore può richiedere la disconnessione temporanea
+di una sessione desktop; il lease resta valido fino alla scadenza e l'operatore
+può riconnettersi. La revoca definitiva rimane un comando distinto e auditato.
+Test API/PostgreSQL e smoke Chromium verificano stato attivo, identità mostrata,
+autorizzazione e messaggio di riconnessione; una sessione Mesh reale resta da
+provare sul client Windows.
+
 - M1: infrastruttura Compose/Caddy/PostgreSQL, setup Ubuntu, schema e migrazioni Identity, bootstrap, autenticazione e CSRF, utenti, permessi globali/gruppo/device, audit, dashboard e branding. Consegna iniziale: vedi validation.md per prove effettive e limiti.
 - M2 (implementazione iniziale compilata; MSI compilato in CI; gate installazione Windows/firma ancora aperto): servizio Windows .NET con enrollment monouso, chiavi dispositivo, revoca, retry/backoff, metriche CPU/RAM/disco/rete/uptime, inventario; MSI unico firmato e aggiornamento sicuro. Test Windows e reti NAT differenti obbligatori.
 - M3 (adapter compilato e permessi testati con fake; gate motore/Windows e audit node-forge aperti): MeshCentral, adapter server con mapping identità e gruppi, sessioni autorizzate e revocabili per remote/terminal/files; MSI coordina i due servizi. Test anti bypass dei permessi e WebSocket/TLS. MeshCentral non viene esposto da M1.

@@ -1936,4 +1936,11 @@ modificato; ogni nuova estensione attende la propria CI sul push.
 - Test mirato `Ticket_attachment_retention...` — passato su PostgreSQL usa-e-getta, inclusa applicazione della nuova migrazione `20261020043000_TicketAttachmentRetention`.
 - `docker build -t omnidesk-api:local -f src/OmniDesk.Api/Dockerfile .`, `docker compose config --quiet`, `docker compose -f compose.test.yaml config --quiet` e `git diff --check` — passati.
 - `./scripts/smoke.sh --browser` — passato su stack isolato: migrazioni/bootstrap, HTTPS, login, favicon, flussi browser, scansione ClamAV, worker SLA/escalation e restore completo DB/blob/Identity/CA. Non esercita direttamente il purge retention, coperto dal test mirato. Nessun servizio LAN è stato modificato.
-- CI per il push `4f87b82` avviata: Linux `39362057583` e Windows `39362057611` risultano ancora in esecuzione al controllo. Nessun deploy LAN.
+- CI per il push `4f87b82`: Linux `39362057583` passata; Windows `39362057611` ha completato build/installer/uninstall e sta terminando upgrade/repair/rollback al controllo. Nessun deploy LAN.
+
+### RMM — disconnessione temporanea operatore — 2026-10-20
+
+- `./scripts/test.sh` — passato: 92/92 test API/PostgreSQL; include il nome operatore restituito nello storico e conferma che `POST .../disconnect` lascia la sessione `active`; la revoca definitiva resta separata.
+- `docker compose build api dashboard` — passato dal checkout corrente.
+- `./scripts/smoke.sh --browser` — passato dopo la rebuild: Chromium verifica il nome operatore, conferma la disconnessione temporanea e il messaggio che consente la riconnessione; gli altri smoke UI, ClamAV, worker SLA e restore completo sono passati. Lo smoke usa una sessione remota simulata; nessun controllo MeshCentral live o Windows è implicato.
+- `node --check scripts/browser-smoke.mjs` e `git diff --check` — passati. Nessun deploy LAN.
