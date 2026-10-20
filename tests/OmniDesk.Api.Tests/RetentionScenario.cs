@@ -163,6 +163,11 @@ public sealed class RetentionScenario(ApiFactory factory) : IClassFixture<ApiFac
                 db.Sites.Add(site);
                 db.Devices.Add(device);
                 db.SupportTickets.AddRange(oldTicket, recentTicket, openTicket);
+                db.SupportTicketDevices.AddRange(new[] { oldTicket, recentTicket, openTicket }.Select(ticket => new SupportTicketDevice
+                {
+                    TicketId = ticket.Id, DeviceId = device.Id, DeviceNameSnapshot = device.Name,
+                    SiteIdSnapshot = site.Id, SiteNameSnapshot = site.Name
+                }).ToArray());
                 db.SupportAttachments.AddRange(
                     Attachment(oldTicket.Id, purgeKeys[0], now.AddDays(-200)),
                     Attachment(oldTicket.Id, purgeKeys[1], now.AddDays(-190)),
@@ -232,6 +237,11 @@ public sealed class RetentionScenario(ApiFactory factory) : IClassFixture<ApiFac
                 db.Sites.Add(site);
                 db.Devices.Add(device);
                 db.SupportTickets.AddRange(oldTicket, recentTicket, openTicket);
+                db.SupportTicketDevices.AddRange(new[] { oldTicket, recentTicket, openTicket }.Select(ticket => new SupportTicketDevice
+                {
+                    TicketId = ticket.Id, DeviceId = device.Id, DeviceNameSnapshot = device.Name,
+                    SiteIdSnapshot = site.Id, SiteNameSnapshot = site.Name
+                }));
                 db.SupportMessages.AddRange(oldReply, oldNote, intervention, recentReply, openReply);
                 await db.SaveChangesAsync();
             }

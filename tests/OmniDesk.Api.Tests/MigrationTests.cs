@@ -42,6 +42,7 @@ public sealed class MigrationTests
                 await migrator.MigrateAsync("20261019155141_KnowledgeBase");
                 var articleId = Guid.NewGuid();
                 await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO \"KnowledgeArticles\" (\"Id\",\"Slug\",\"NormalizedSlug\",\"Title\",\"Summary\",\"Body\",\"IsPublished\",\"Version\",\"CreatedAt\",\"UpdatedAt\",\"PublishedAt\") VALUES ({articleId},'legacy-guide','legacy-guide','Legacy guide','Before scope rollout','Existing content',true,4,now(),now(),now())");
+                await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM \"SupportTicketDevices\" WHERE \"TicketId\" IN ({legacyPriorities.Keys.ElementAt(0)},{legacyPriorities.Keys.ElementAt(1)},{legacyPriorities.Keys.ElementAt(2)},{legacyPriorities.Keys.ElementAt(3)})");
                 await db.Database.MigrateAsync();
                 var legacyRevision = await db.KnowledgeArticleRevisions.AsNoTracking().SingleAsync(x => x.ArticleId == articleId && x.Version == 4);
                 Assert.Equal("Existing content", legacyRevision.Body);
@@ -57,9 +58,15 @@ public sealed class MigrationTests
                 Assert.Equal("p2", upgradedTickets.Single(x => legacyPriorities[x.Id] == "high").Priority);
                 Assert.Equal("p3", upgradedTickets.Single(x => legacyPriorities[x.Id] == "normal").Priority);
                 Assert.Equal("p4", upgradedTickets.Single(x => legacyPriorities[x.Id] == "low").Priority);
+                Assert.Equal(4, await db.SupportTicketDevices.CountAsync(link => legacyPriorities.Keys.Contains(link.TicketId)));
                 var next = new SupportTicket { RequestId = Guid.NewGuid(), DeviceId = deviceId, SiteId = siteId,
                     RequesterKey = new string('D', 64), Subject = "New ticket", Description = "After upgrade" };
                 db.SupportTickets.Add(next);
+                db.SupportTicketDevices.Add(new SupportTicketDevice
+                {
+                    TicketId = next.Id, DeviceId = deviceId, DeviceNameSnapshot = "Existing device",
+                    SiteIdSnapshot = siteId, SiteNameSnapshot = "Migration fixture"
+                });
                 await db.SaveChangesAsync();
                 Assert.True(next.Number > existing.Number);
                 Assert.Equal("general", next.Category);

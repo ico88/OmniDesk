@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Npgsql;
 using OmniDesk.Api.Attachments;
 using OmniDesk.Api.Data;
 using OmniDesk.Api.Endpoints;
@@ -475,6 +476,30 @@ public static class SupportScenario
         Assert.Contains(allLinks, row => row.GetProperty("deviceId").GetGuid() == sameSiteUnmanagedDevice && !row.GetProperty("isPrimary").GetBoolean());
         Assert.Equal(HttpStatusCode.BadRequest, (await admin.DeleteAsync($"/api/support/{manualTicket.Id}/devices/{device}?expectedVersion=2")).StatusCode);
         Assert.Equal(HttpStatusCode.NoContent, (await admin.DeleteAsync($"/api/support/{manualTicket.Id}/devices/{sameSiteUnmanagedDevice}?expectedVersion=2")).StatusCode);
+        Assert.Single(await admin.GetFromJsonAsync<System.Text.Json.JsonElement[]>($"/api/support/{manualTicket.Id}/devices"));
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            await using var transaction = await db.Database.BeginTransactionAsync();
+            await db.SupportTicketDevices.Where(link => link.TicketId == manualTicket.Id).ExecuteDeleteAsync();
+            var constraint = await Assert.ThrowsAsync<PostgresException>(() => transaction.CommitAsync());
+            Assert.Equal(PostgresErrorCodes.CheckViolation, constraint.SqlState);
+            Assert.Equal("CK_SupportTicket_HasDevice", constraint.ConstraintName);
+        }
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            await using var transaction = await db.Database.BeginTransactionAsync();
+            db.SupportTickets.Add(new SupportTicket
+            {
+                DeviceId = device, SiteId = siteId, RequestId = Guid.NewGuid(), RequesterKey = new string('X', 64),
+                Subject = "Unlinked ticket must fail", Description = "Direct write regression"
+            });
+            await db.SaveChangesAsync();
+            var constraint = await Assert.ThrowsAsync<PostgresException>(() => transaction.CommitAsync());
+            Assert.Equal(PostgresErrorCodes.CheckViolation, constraint.SqlState);
+            Assert.Equal("CK_SupportTicket_HasDevice", constraint.ConstraintName);
+        }
         Assert.Single(await admin.GetFromJsonAsync<System.Text.Json.JsonElement[]>($"/api/support/{manualTicket.Id}/devices"));
         Assert.Equal(HttpStatusCode.NoContent, (await admin.PutAsJsonAsync($"/api/support/{manualTicket.Id}", new
         { expectedVersion = 3, state = "resolved", resolution = "Risolto per prova workflow", addReply = true })).StatusCode);
