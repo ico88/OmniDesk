@@ -73,7 +73,7 @@ Schema dettagliato: [modello dati proposto](service-desk-data-model.md). Ordine 
 
 ## Gate di verifica ancora aperti
 
-Suite API/PostgreSQL, Vitest e smoke Chromium isolato coprono già molti flussi di autorizzazione, note interne, intake/promozione email, allegati/quarantena, SLA e restore; vedere [validation.md](validation.md) per l'evidenza e i limiti. Gate ancora aperti: prove portale con account reale; vincolo DB differibile almeno un dispositivo e test di promozione concorrente; provider/thread/reply email; notifiche esterne; restore periodico su host LAN/off-site e retention ticket/allegati; collaudi RMM live. Nessun esito di test indiretti va generalizzato oltre lo scenario descritto.
+Suite API/PostgreSQL, Vitest e smoke Chromium isolato coprono già molti flussi di autorizzazione, note interne, intake/promozione email, allegati/quarantena, SLA e restore; vedere [validation.md](validation.md) per l'evidenza e i limiti. La retention degli allegati e screenshot è opt-in tramite `OMNIDESK_RETENTION_RESOLVED_TICKET_ATTACHMENTS_DAYS` (default `0`): rimuove i file e gli screenshot soltanto per ticket `resolved` o `closed` oltre soglia, preservando record ticket e conversazioni. Il purge è auditato per conteggio e ritenta gli errori filesystem; mentre un file è in purge non è elencato né scaricabile. Gate ancora aperti: prove portale con account reale; vincolo DB differibile almeno un dispositivo e test di promozione concorrente; provider/thread/reply email; notifiche esterne; retention conversazioni/audit/telemetria e backup; restore periodico su host LAN/off-site e collaudi RMM live. Nessun esito di test indiretti va generalizzato oltre lo scenario descritto.
 
 ## Ingresso Windows tramite Tray — implementato nel branch, test client aperto
 

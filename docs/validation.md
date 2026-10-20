@@ -1929,3 +1929,10 @@ modificato; ogni nuova estensione attende la propria CI sul push.
 - Build Docker API/dashboard e configurazioni Compose base/test — passate; dashboard TypeScript/Vite e Vitest 6/6 — passati.
 - `./scripts/smoke.sh --browser` — passato su stack isolato: Chromium apre la pagina amministrativa e verifica la coda vuota; probe HTTPS, ClamAV, worker SLA/notifiche e restore DB/blob/Identity/CA passano. Nessun servizio LAN è stato toccato.
 - CI Linux `39360140407` e Windows `39360140450` sono verdi per i commit outbound `9af0e30`; il pannello di recupero è un commit successivo e richiede nuove pipeline. SMTP reale non verificato.
+
+### SD1 — retention opt-in allegati e screenshot — 2026-10-20
+
+- `./scripts/test.sh` — passato: 92/92 test API/PostgreSQL; build dashboard TypeScript/Vite e 6/6 Vitest. Il test dedicato verifica opt-in disattivato per default, purge dei contenuti vecchi solo su ticket risolti/chiusi, preservazione dei record conversazione/ticket e audit per conteggio.
+- Test mirato `Ticket_attachment_retention...` — passato su PostgreSQL usa-e-getta, inclusa applicazione della nuova migrazione `20261020043000_TicketAttachmentRetention`.
+- `docker build -t omnidesk-api:local -f src/OmniDesk.Api/Dockerfile .`, `docker compose config --quiet`, `docker compose -f compose.test.yaml config --quiet` e `git diff --check` — passati.
+- Non eseguiti smoke runtime completo, deploy LAN o CI per questa revisione; non risultano superati da questi test.
