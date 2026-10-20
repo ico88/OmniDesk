@@ -212,6 +212,9 @@ try {
  assert.ok(promotedTicket,'Operator confirmation creates a ticket from the email intake');
  assert.equal(promotedTicket.origin,'email','Promoted ticket retains email origin');
  assert.equal(promotedTicket.deviceId,fixtureDevice,'Operator-selected device is bound to the ticket');
+ await page.goto(`https://omnidesk.test/?ticket=${promotedTicket.id}`);
+ await page.getByRole('heading',{name:curatedSubject,exact:true}).waitFor();
+ assert.equal(new URL(page.url()).searchParams.get('ticket'),promotedTicket.id,'Ticket notification links open the authorized ticket detail');
  const csrfToken=(await (await context.request.get('https://omnidesk.test/api/auth/csrf')).json()).token;
  const csrfHeaders={'X-CSRF-TOKEN':csrfToken};
  const adminUsers=await (await context.request.get('https://omnidesk.test/api/admin/users')).json();
@@ -443,7 +446,7 @@ try {
  await page.screenshot({path:'/previews/support-device-names.png',fullPage:true});
  await agentTicketRow.getByRole('button',{name:renamed,exact:true}).click();
  await page.getByRole('heading',{name:renamed,exact:true}).waitFor();
- await page.reload(); await page.getByRole('heading',{name:'Panoramica',exact:true}).waitFor();
+ await page.goto('https://omnidesk.test/'); await page.getByRole('heading',{name:'Panoramica',exact:true}).waitFor();
  await page.getByRole('button',{name:'Dispositivi',exact:true}).click();
  await page.getByRole('row').filter({has:page.getByRole('cell',{name:renamed,exact:true})}).getByRole('button',{name:'Apri',exact:true}).click();
  await page.setViewportSize({width:1440,height:1000});
