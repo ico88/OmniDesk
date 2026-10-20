@@ -21,6 +21,7 @@ public sealed class CoreOutboxRetentionWorker(
         ValidateEmailIntakeRetention();
         ValidateTicketAttachmentRetention();
         ValidateTicketContentRetention();
+        ValidateAuditRetention();
         if (retention.DeliveredOutboxDays == 0)
             logger.LogInformation("Delivered outbox event retention is disabled.");
 
@@ -72,6 +73,17 @@ public sealed class CoreOutboxRetentionWorker(
                         }
                     }
                     if (contentTicketsPurged > 0) logger.LogInformation("Retention redacted content for {Count} resolved tickets.", contentTicketsPurged);
+                    var auditEventsRemoved = 0;
+                    if (retention.AuditEventsDays > 0)
+                    {
+                        for (var batch = 0; batch < MaxBatchesPerRun; batch++)
+                        {
+                            var count = await PurgeAuditEventsBatchAsync(stoppingToken);
+                            auditEventsRemoved += count;
+                            if (count < AuditBatchSize) break;
+                        }
+                    }
+                    if (auditEventsRemoved > 0) logger.LogInformation("Retention removed {Count} expired audit events.", auditEventsRemoved);
                     await timer.WaitForNextTickAsync(stoppingToken);
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
@@ -161,6 +173,37 @@ public sealed class CoreOutboxRetentionWorker(
 
     private const int AttachmentBatchSize = 50;
     private const int TicketContentBatchSize = 250;
+    private const int AuditBatchSize = 500;
+
+    public async Task<int> PurgeAuditEventsBatchAsync(CancellationToken cancellationToken = default)
+    {
+        ValidateAuditRetention();
+        if (retention.AuditEventsDays == 0) return 0;
+        var cutoff = DateTimeOffset.UtcNow.AddDays(-retention.AuditEventsDays);
+        using var scope = scopes.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var candidateIds = await db.AuditEvents.AsNoTracking()
+            .Where(item => item.At < cutoff && item.Action != "retention.audit-events.purged")
+            .OrderBy(item => item.At).ThenBy(item => item.Id)
+            .Select(item => item.Id).Take(AuditBatchSize).ToArrayAsync(cancellationToken);
+        if (candidateIds.Length == 0) return 0;
+
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        var deleted = await db.AuditEvents
+            .Where(item => candidateIds.Contains(item.Id) && item.At < cutoff && item.Action != "retention.audit-events.purged")
+            .ExecuteDeleteAsync(cancellationToken);
+        if (deleted > 0)
+        {
+            db.AuditEvents.Add(new AuditEvent
+            {
+                Action = "retention.audit-events.purged",
+                Target = deleted.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            });
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        await transaction.CommitAsync(cancellationToken);
+        return deleted;
+    }
 
     public async Task<int> PurgeResolvedTicketContentBatchAsync(CancellationToken cancellationToken = default)
     {
@@ -333,5 +376,11 @@ public sealed class CoreOutboxRetentionWorker(
     {
         if (retention.ResolvedTicketContentDays is < 0 or > 36500)
             throw new InvalidOperationException("Retention:ResolvedTicketContentDays must be between 0 and 36500.");
+    }
+
+    private void ValidateAuditRetention()
+    {
+        if (retention.AuditEventsDays is < 0 or > 36500)
+            throw new InvalidOperationException("Retention:AuditEventsDays must be between 0 and 36500.");
     }
 }
