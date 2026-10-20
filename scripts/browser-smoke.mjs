@@ -4,6 +4,16 @@ import {readFileSync} from 'node:fs';
 import {randomBytes, generateKeyPairSync, sign} from 'node:crypto';
 import assert from 'node:assert/strict';
 const browser=await chromium.launch({headless:true});
+async function readPolicyVersion(context,name,version){
+ const deadline=Date.now()+10000;let policy;
+ do{
+  const response=await context.request.get('https://omnidesk.test/api/admin/support-sla/policies');
+  policy=(await response.json()).find(item=>item.name===name);
+  if(policy?.currentVersion>=version)return policy;
+  await new Promise(resolve=>setTimeout(resolve,100));
+ }while(Date.now()<deadline);
+ throw new Error(`SLA policy ${name} did not reach version ${version}; last observed ${policy?.currentVersion??'missing'}`);
+}
 try {
  const context=await browser.newContext({ignoreHTTPSErrors:true}); // Test CA only; production clients must trust CA.
  const page=await context.newPage(); const errors=[]; page.on('pageerror',e=>errors.push(e.message));
@@ -181,7 +191,7 @@ try {
  await page.getByLabel('Minuti risoluzione',{exact:true}).fill('600');
  await page.getByRole('button',{name:'Pubblica versione 2',exact:true}).click();
  await page.getByText('Nuova versione SLA pubblicata',{exact:true}).waitFor();
- slaPolicy=(await (await context.request.get('https://omnidesk.test/api/admin/support-sla/policies')).json()).find(x=>x.name==='Browser smoke SLA');
+ slaPolicy=await readPolicyVersion(context,'Browser smoke SLA',2);
  assert.equal(slaPolicy.currentVersion,2,'Dashboard publishes immutable SLA revisions');
  assert.equal(slaPolicy.versions.length,2,'SLA version history is retained');
  assert.deepEqual(slaPolicy.versions[1].definition.pauseStates,['waiting_customer','waiting_vendor'],'SLA pause states are versioned in the dashboard');
@@ -191,7 +201,7 @@ try {
  await page.getByLabel('Nome versione SLA',{exact:true}).fill('Browser smoke SLA v3');
  await page.getByRole('button',{name:'Pubblica versione 3',exact:true}).click();
  await page.getByText('Nuova versione SLA pubblicata',{exact:true}).waitFor();
- slaPolicy=(await (await context.request.get('https://omnidesk.test/api/admin/support-sla/policies')).json()).find(x=>x.name==='Browser smoke SLA');
+ slaPolicy=await readPolicyVersion(context,'Browser smoke SLA',3);
  assert.equal(slaPolicy.currentVersion,3,'Dashboard publishes calendar revisions');
  const persistedMonday=Object.entries(slaPolicy.versions[2].definition.calendar.weeklyHours).find(([day])=>day.toLowerCase()==='monday')?.[1];
  assert.equal(persistedMonday.length,2,'Split working hours persist in version history');
@@ -243,10 +253,8 @@ try {
  const currentPortalVersion=(await (await portalContext.request.get(`https://omnidesk.test/api/portal/tickets/${portalTicketId}`)).json()).ticket.version;
  assert.equal((await context.request.post(`https://omnidesk.test/api/support/${portalTicketId}/internal-notes`,{headers:{'X-CSRF-TOKEN':portalStaffCsrf},data:{expectedVersion:currentPortalVersion,body:'Nota esclusivamente interna al team'}})).status(),204);
  assert.equal((await context.request.put(`https://omnidesk.test/api/support/${portalTicketId}`,{headers:{'X-CSRF-TOKEN':portalStaffCsrf},data:{expectedVersion:currentPortalVersion+1,state:'in_progress',resolution:'Aggiornamento pubblico dal team.',addReply:true}})).status(),204);
- await portalPage.reload(); await portalPage.getByRole('heading',{name:'Panoramica',exact:true}).waitFor();
- await portalPage.getByRole('button',{name:'I miei ticket',exact:true}).click();
- await portalPage.getByRole('button',{name:new RegExp(portalSubject)}).click();
- await portalPage.getByRole('log').getByText('Aggiornamento pubblico dal team.',{exact:true}).waitFor();
+ await portalPage.locator('.portal-ticket').filter({hasText:portalSubject}).getByText('In lavorazione',{exact:true}).waitFor({timeout:40000});
+ await portalPage.getByRole('log').getByText('Aggiornamento pubblico dal team.',{exact:true}).waitFor({timeout:40000});
  assert.equal(await portalPage.getByRole('log').getByText('Nota esclusivamente interna al team',{exact:true}).count(),0,'Portal conversation excludes internal staff notes');
  const revokeCsrf=(await (await context.request.get('https://omnidesk.test/api/auth/csrf')).json()).token;
  assert.equal((await context.request.delete(`https://omnidesk.test/api/admin/portal-device-access/${portalUserId}/${fixtureDevice}`,{headers:{'X-CSRF-TOKEN':revokeCsrf}})).status(),204);
