@@ -22,6 +22,7 @@ namespace OmniDesk.Api.Tests;
 public sealed class ApiFactory : WebApplicationFactory<Program>
 {
     public FakeMesh Mesh { get; } = new();
+    public FakeOutboundEmailSender OutboundEmail { get; } = new();
     public string AttachmentRoot { get; } = Path.Combine(Path.GetTempPath(), "omnidesk-test-attachments-" + Guid.NewGuid().ToString("N"));
     public string EmailIntakeSigningKeyFile { get; } = Path.Combine(Path.GetTempPath(), "omnidesk-test-mail-key-" + Guid.NewGuid().ToString("N"));
     public byte[] EmailIntakeSigningKey { get; } = System.Security.Cryptography.RandomNumberGenerator.GetBytes(32);
@@ -32,11 +33,13 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     }
     protected override void ConfigureWebHost(IWebHostBuilder builder) => builder.ConfigureServices(s => {
         // Integration scenarios invoke these workers explicitly so their retries do not race the assertions.
-        var workers = new[] { typeof(AssertionCleanup), typeof(RemoteSessionGuard), typeof(RemoteProvisioningGuard), typeof(TicketNotificationWorker), typeof(AttachmentScanWorker), typeof(CoreOutboxRetentionWorker), typeof(SlaBreachWorker), typeof(SlaEscalationWorker), typeof(DevicePresenceWorker) };
+        var workers = new[] { typeof(AssertionCleanup), typeof(RemoteSessionGuard), typeof(RemoteProvisioningGuard), typeof(TicketNotificationWorker), typeof(EmailNotificationWorker), typeof(AttachmentScanWorker), typeof(CoreOutboxRetentionWorker), typeof(SlaBreachWorker), typeof(SlaEscalationWorker), typeof(DevicePresenceWorker) };
         foreach (var descriptor in s.Where(x => x.ServiceType == typeof(IHostedService) && x.ImplementationType is not null && workers.Contains(x.ImplementationType)).ToArray()) s.Remove(descriptor);
         foreach (var descriptor in s.Where(x => x.ServiceType == typeof(IAttachmentScanner)).ToArray()) s.Remove(descriptor);
+        foreach (var descriptor in s.Where(x => x.ServiceType == typeof(IOutboundEmailSender)).ToArray()) s.Remove(descriptor);
         s.AddSingleton<IMeshCentralClient>(Mesh);
         s.AddSingleton<IAttachmentScanner, FakeAttachmentScanner>();
+        s.AddSingleton<IOutboundEmailSender>(OutboundEmail);
     }).ConfigureAppConfiguration((_, c) =>
         c.AddInMemoryCollection(new Dictionary<string, string?> {
             ["Security:TotpEnabled"] = "true",
@@ -46,6 +49,18 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             ["ConnectionStrings:Database"] = Environment.GetEnvironmentVariable("TEST_DATABASE")
                 ?? throw new InvalidOperationException("TEST_DATABASE must point to an isolated PostgreSQL test database")
         }));
+}
+
+public sealed class FakeOutboundEmailSender : IOutboundEmailSender
+{
+    private readonly System.Collections.Concurrent.ConcurrentQueue<OutboundEmailMessage> sent = new();
+    public IReadOnlyCollection<OutboundEmailMessage> Sent => sent.ToArray();
+    public Task SendAsync(OutboundEmailMessage message, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        sent.Enqueue(message);
+        return Task.CompletedTask;
+    }
 }
 
 internal static class TestDatabaseMigration

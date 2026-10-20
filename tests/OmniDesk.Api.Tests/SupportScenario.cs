@@ -6,10 +6,12 @@ using System.Net.Http.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using OmniDesk.Api.Attachments;
 using OmniDesk.Api.Data;
 using OmniDesk.Api.Endpoints;
 using OmniDesk.Api.Security;
+using OmniDesk.Api.ServiceDesk;
 using OmniDesk.Contracts;
 using Xunit;
 
@@ -221,6 +223,36 @@ public static class SupportScenario
         var newTicketNotice = ticketNotices.Single(x => x.GetProperty("kind").GetString() == "ticket.new");
         var replyNotice = ticketNotices.Single(x => x.GetProperty("kind").GetString() == "ticket.reply");
         Assert.Equal(2, inbox.GetProperty("unreadCount").GetInt32());
+        Guid emailNotificationId = replyNotice.GetProperty("id").GetGuid();
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var recipient = await db.Users.SingleAsync(x => x.Id == scopedId);
+            recipient.EmailConfirmed = true;
+            recipient.EmailNotificationsEnabled = true;
+            var notification = await db.UserNotifications.SingleAsync(x => x.Id == emailNotificationId);
+            recipient.EmailNotificationsEnabledAt = notification.CreatedAt.AddSeconds(-1);
+            db.EmailNotificationDeliveries.Add(new EmailNotificationDelivery { NotificationId = emailNotificationId });
+            await db.SaveChangesAsync();
+        }
+        var emailWorker = new EmailNotificationWorker(factory.Services.GetRequiredService<IServiceScopeFactory>(),
+            NullLogger<EmailNotificationWorker>.Instance, Options.Create(new OutboundEmailOptions
+            {
+                Enabled = true, Host = "smtp.example.test", Port = 587, FromAddress = "help@example.test",
+                Username = "omni", PasswordFile = "/tmp/smtp-test-secret", DashboardUrl = "https://desk.example.test"
+            }));
+        Assert.True(await emailWorker.ProcessNext(CancellationToken.None));
+        var deliveredEmail = Assert.Single(factory.OutboundEmail.Sent);
+        Assert.Contains($"#{ticket.Number}", deliveredEmail.Subject);
+        Assert.Contains("https://desk.example.test/?ticket=", deliveredEmail.TextBody);
+        Assert.DoesNotContain(ticket.Subject, deliveredEmail.Subject + deliveredEmail.TextBody, StringComparison.Ordinal);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var delivery = await db.EmailNotificationDeliveries.SingleAsync(x => x.NotificationId == emailNotificationId);
+            Assert.Equal("sent", delivery.State);
+            Assert.NotNull(delivery.SentAt);
+        }
         Assert.Equal(HttpStatusCode.NotFound, (await admin.PostAsync($"/api/notifications/{newTicketNotice.GetProperty("id").GetGuid()}/read", null)).StatusCode);
         Assert.Equal(HttpStatusCode.NoContent, (await scoped.PostAsync($"/api/notifications/{newTicketNotice.GetProperty("id").GetGuid()}/read", null)).StatusCode);
         Assert.Equal(HttpStatusCode.NoContent, (await scoped.PostAsync($"/api/notifications/{replyNotice.GetProperty("id").GetGuid()}/read", null)).StatusCode);
