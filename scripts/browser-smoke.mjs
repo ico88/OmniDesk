@@ -368,6 +368,7 @@ try {
  for (const tab of ['Panoramica','Desktop remoto','Processi','Servizi Windows','Software installato','Aggiornamenti','Eventi e log','Ticket e interventi']) await page.getByRole('tab',{name:tab,exact:true}).waitFor();
  await page.waitForFunction(()=>document.querySelector('main.content')?.getAttribute('aria-busy')==='false');
  const deviceId=(await (await context.request.get('https://omnidesk.test/api/devices')).json()).find(d=>d.name===renamed).id;
+ await page.getByRole('tab',{name:'Panoramica',exact:true}).click();
  const rustdeskCsrf=(await (await context.request.get('https://omnidesk.test/api/auth/csrf')).json()).token;
  const rustdeskMapping=await context.request.put(`https://omnidesk.test/api/admin/devices/${deviceId}/rustdesk`,{headers:{'X-CSRF-TOKEN':rustdeskCsrf},data:{peerId:'123456789'}});
  assert.equal(rustdeskMapping.status(),204,'Administrator can persist a RustDesk peer mapping through the protected API');
@@ -380,7 +381,7 @@ try {
  await page.getByRole('button',{name:'Collegati con RustDesk',exact:true}).click();
  const rustdeskLaunch=await rustdeskLaunchResponse;
  assert.equal(rustdeskLaunch.status(),200,'Server authorizes and records the RustDesk launch request');
- assert.match((await rustdeskLaunch.json()).url,/^rustdesk:\/\/connect\/123456789@omnidesk\.test:21116\?key=/,'Server returns the configured RustDesk URI');
+ assert.match((await rustdeskLaunch.json()).url,/^rustdesk:\/\/connect\/123456789@omnidesk\.test\?key=/,'Server returns the configured RustDesk URI');
  await page.screenshot({path:'/previews/devices-admin-desktop.png',fullPage:true});
  await page.locator('summary').filter({hasText:'Configurazione dispositivo'}).click();
  assert.equal(await page.getByLabel('Gruppo dispositivo',{exact:true}).inputValue(),'','Group change persisted');

@@ -39,8 +39,8 @@ services:
       Attachments__ClamAvHost: clamav
       EmailIntake__SigningKeyFile: /run/secrets/email_intake_key
       EmailIntake__AllowedMailboxes__0: support@example.test
-      RustDesk__IdServer: omnidesk.test:21116
-      RustDesk__RelayServer: omnidesk.test:21117
+      RustDesk__IdServer: omnidesk.test
+      RustDesk__RelayServer: omnidesk.test
       RustDesk__PublicKey: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
     volumes:
       - ${SMOKE_SECRETS:?Set isolated secret directory}/downloads:/packages:ro
