@@ -2165,3 +2165,18 @@ modificato; ogni nuova estensione attende la propria CI sul push.
 - `docker run --rm -v "$PWD/src/dashboard:/workspace" -w /workspace node:22-alpine sh -lc 'npm ci && npm run build && npm test'` — build TypeScript/Vite passata, 12/12 test Vitest passati, audit dipendenze senza vulnerabilità segnalate.
 - `git diff --check` — passato. La console remota ora precede i comandi amministrativi; nome operatore e stato/tempo lease sono esposti nella barra. Configurazione sessioni e provisioning sono richiudibili.
 - Il caricamento dell’iframe MeshCentral non viene interpretato come prova del flusso desktop. Non è stato eseguito un test interattivo Windows, deploy live o riavvio dei servizi.
+
+### Correzione setup e avvio deployment pubblico — 20 ottobre 2026
+
+- `setup.sh --start` terminava con `TypeError` stampando gli oggetti `IPv4Address` con `str.join`. La diagnostica ora stampa gli indirizzi già normalizzati a stringa. `bash -n setup.sh`, `git diff --check` e una riproduzione Python con indirizzi IPv4/IPv4-mapped sono passati.
+- Sul server `omnidesk`, lo script ha avviato API, dashboard, PostgreSQL e Caddy e ha stampato `Deployment ready`. I primi handshake HTTPS hanno dato TLS alert durante la salita dei container; un controllo successivo di `/api/health/ready` e della dashboard via HTTPS è riuscito. Non è stato possibile leggere i log Docker da questa sessione perché l'utente non aveva accesso al socket.
+- Il deployment mostrato dall'utente era stato avviato dal checkout `main` (`bc2035a`) con modifiche locali presenti. Il branch `feature/windows-support-lan` (`186b4f7`) è stato poi integrato localmente con fast-forward in `main`; il lavoro prosegue sul branch locale `sviluppo` allo stesso commit.
+- Per usare Docker tramite il gruppo `docker`, il controllo preventivo di bind su TCP 80/443 ora riconosce `EACCES` da utente non root e delega al daemon il controllo effettivo durante l'avvio Caddy. L'indirizzo resta verificato dal bind; un conflitto di porta viene riportato da Compose.
+- Dopo l'aggiunta di `fdurso` al gruppo `docker`, `sg docker -c './setup.sh --start'` ha completato build API/dashboard, migrazioni e aggiornamento dei container; PostgreSQL è rimasto healthy. Il container ClamAV è stato avviato ed è diventato healthy. Il primo probe ha restituito un 502 transitorio durante lo startup, poi lo script ha completato; verifica successiva: readiness API `{"status":"ready"}` e dashboard HTTPS HTTP 200. Nessun push eseguito.
+
+### Pubblicazione Agent Windows 0.8.14 — 2026-10-20
+
+- GitHub Actions Windows [`39419828634`](https://github.com/ico88/OmniDesk/actions/runs/39419828634) — conclusione `success`: build MSI/Setup, installazione/recupero/disinstallazione MSI, test Tray e baseline upgrade 0.6.0/0.7.0 passati. Il job native-installer è stato saltato come previsto.
+- `scripts/package-lan-kit.py` ha verificato gli SHA256 dell'artifact CI e generato `OmniDesk.Windows.LAN-0.8.14.zip`; verifica ZIP (`zipfile.testzip`) passata. ZIP SHA256 `b43243522a90002f2f4332d34cc9fd947b8059344f1ee2031a40d7b47a3faedc`; MSI SHA256 `568932efaff593ceceff168e3c7db9cc86688d0e2495d4dfddbc41e6ee2ce8b6`.
+- Copiati ZIP e `windows-release.json` nella directory montata `/packages` del servizio API. SHA256 del file letto dal container API corrisponde al manifest. Probe pubblico via HTTPS, forzato all'IP locale `10.0.0.53`: endpoint `/api/admin/downloads/windows` risponde 401 senza sessione, come richiesto dall'autorizzazione; l'area **Dispositivi → Scarica Agent Windows** richiede un utente autorizzato.
+- Il kit è unsigned per laboratorio e non include MeshCentral Agent (desktop remoto assente). Nessun PC Windows reale è stato installato/enrolled in questa verifica.
