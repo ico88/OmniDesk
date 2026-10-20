@@ -8,6 +8,14 @@ Linux `39385189484` e Windows `39385189469` sono verdi e il nuovo artifact MSI
 è stato generato e collaudato su runner isolato; non è ancora stato promosso al
 download sul server LAN. Il kit disponibile sul server resta 0.8.9.
 
+Aggiornamento branch 2026-10-20: Agent/Tray/Setup/MSI passa a 0.8.11 per
+consentire il download esplicito dalla Tray degli allegati pubblici puliti. Il
+server rivalida ogni richiesta con la credenziale dispositivo e la chiave
+richiedente, e rifiuta allegati infetti o non più visibili. La suite locale
+passa 96/96 API/PostgreSQL e 6/6 Vitest con build dashboard; CI e collaudo
+interattivo Windows sono ancora da eseguire. Il pacchetto 0.8.11 non è pubblicato
+sulla LAN: il download web sul server resta 0.8.9.
+
 | Parte | Implementazione | Verifica disponibile | Gate rimanente |
 | --- | --- | --- | --- |
 | Presenza e audit Agent | Online/Offline da heartbeat firmato; baseline persistente e audit deduplicato delle transizioni, revocati esclusi, soglia/poll configurabili; campanella e inbox notificano solo dispositivi visibili; email offline opzionale con consenso e rivalidazione scope; retention opt-in configurabile per audit, metriche e inventario (default disattivata) | Test integrato PostgreSQL controlla isolamento device e consegna SMTP fake; suite 95/95, dashboard 6/6 Vitest, smoke Chromium/restore e build Docker passano localmente | Revisione non pubblicata sulla LAN; SMTP reale, altri canali esterni, policy normative prima di abilitare retention in produzione restano aperte |

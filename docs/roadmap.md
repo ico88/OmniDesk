@@ -1,5 +1,18 @@
 # Roadmap
 
+### Tray Windows — download degli allegati ticket puliti
+
+La Tray consente ora di scaricare, con scelta esplicita del percorso, gli
+allegati pubblici collegati alla conversazione dopo scansione antivirus pulita.
+Il servizio usa l’identità del dispositivo e la chiave richiedente per
+autorizzare ogni download; il server ricontrolla ticket, dispositivo, visibilità,
+messaggio non redatto, credenziale attiva e stato clean. Il trasferimento è
+limitato a 10 MiB, non viene memorizzato in cache e i messaggi IPC hanno un limite
+dedicato. Versione Agent/Tray/Setup/MSI 0.8.11. La suite API/PostgreSQL passa
+96/96; build TypeScript/Vite e Vitest 6/6 passano. CI Windows/MSI e Linux da
+verificare dopo il push. Nessun deploy LAN effettuato. Il riepilogo della scheda
+Rete già mostra tutti gli IP e i MAC degli adattatori attivi per dispositivo.
+
 ### Tray Windows — allegati nella conversazione
 
 La conversazione autenticata dispositivo include ora i soli metadati degli
