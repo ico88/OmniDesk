@@ -101,6 +101,9 @@ try {
  const kbSearchMatches=await kbSearch.json();
  assert.ok(kbSearchMatches.some(article=>article.title===knowledgeTitle),'Search matches article body text');
  assert.ok(kbSearchMatches.every(article=>!Object.hasOwn(article,'body')),'Search results omit article bodies');
+ const kbMultiTerm=await context.request.get('https://omnidesk.test/api/knowledge/search?q=controlli%20segreti');
+ assert.equal(kbMultiTerm.status(),200,'Authorized multi-term full-text search is available');
+ assert.ok((await kbMultiTerm.json()).some(article=>article.title===knowledgeTitle),'Full-text search matches all terms in the article body');
  await page.getByLabel('Cerca articoli').fill('segreti');
  await page.getByRole('button',{name:new RegExp(knowledgeTitle)}).waitFor();
  await page.getByLabel('Cerca articoli').fill('');

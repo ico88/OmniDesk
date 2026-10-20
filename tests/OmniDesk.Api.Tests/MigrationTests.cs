@@ -44,6 +44,12 @@ public sealed class MigrationTests
                 await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO \"KnowledgeArticles\" (\"Id\",\"Slug\",\"NormalizedSlug\",\"Title\",\"Summary\",\"Body\",\"IsPublished\",\"Version\",\"CreatedAt\",\"UpdatedAt\",\"PublishedAt\") VALUES ({articleId},'legacy-guide','legacy-guide','Legacy guide','Before scope rollout','Existing content',true,4,now(),now(),now())");
                 await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM \"SupportTicketDevices\" WHERE \"TicketId\" IN ({legacyPriorities.Keys.ElementAt(0)},{legacyPriorities.Keys.ElementAt(1)},{legacyPriorities.Keys.ElementAt(2)},{legacyPriorities.Keys.ElementAt(3)})");
                 await db.Database.MigrateAsync();
+                var legacyArticleSearchable = await db.KnowledgeArticles
+                    .FromSqlInterpolated($"SELECT * FROM \"KnowledgeArticles\" WHERE \"Id\" = {articleId} AND \"SearchVector\" @@ plainto_tsquery('simple', 'existing content')")
+                    .AsNoTracking().AnyAsync();
+                Assert.True(legacyArticleSearchable, "The migration backfills the generated search vector for existing articles.");
+                var ginIndexExists = await db.Database.SqlQueryRaw<bool>("SELECT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'IX_KnowledgeArticles_SearchVector' AND indexdef ILIKE '% USING gin %') AS \"Value\"").SingleAsync();
+                Assert.True(ginIndexExists, "Knowledge search has a GIN index.");
                 var legacyRevision = await db.KnowledgeArticleRevisions.AsNoTracking().SingleAsync(x => x.ArticleId == articleId && x.Version == 4);
                 Assert.Equal("Existing content", legacyRevision.Body);
                 Assert.Null(legacyRevision.SiteId);
