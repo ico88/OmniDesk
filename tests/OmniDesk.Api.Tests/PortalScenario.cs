@@ -3,7 +3,13 @@ using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Net.Http.Headers;
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
+using OmniDesk.Api.Data;
+using OmniDesk.Api.Security;
+using OmniDesk.Api.ServiceDesk;
 using Xunit;
 
 namespace OmniDesk.Api.Tests;
@@ -98,8 +104,37 @@ public static class PortalScenario
             Assert.Equal(HttpStatusCode.NotFound, (await outsider.GetAsync($"{attachmentPath}/{attachmentId}")).StatusCode);
         }
 
+        var emailOptions = Options.Create(new OutboundEmailOptions
+        {
+            Enabled = true, Host = "smtp.example.test", Port = 587, FromAddress = "help@example.test",
+            Username = "omni", PasswordFile = "/tmp/not-used-smtp-secret", DashboardUrl = "https://desk.example.test"
+        });
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var requester = await db.Users.SingleAsync(user => user.Id == userId);
+            requester.EmailConfirmed = true;
+            requester.EmailNotificationsEnabled = true;
+            requester.EmailNotificationsEnabledAt = DateTimeOffset.UtcNow.AddMinutes(-1);
+            await db.SaveChangesAsync();
+        }
         Assert.Equal(HttpStatusCode.NoContent, (await admin.PostAsJsonAsync($"/api/support/{ticketId}/internal-notes", new { expectedVersion = 2L, body = "Nota riservata al team" })).StatusCode);
         Assert.Equal(HttpStatusCode.NoContent, (await admin.PutAsJsonAsync($"/api/support/{ticketId}", new { expectedVersion = 3L, state = "in_progress", resolution = "Stiamo verificando il collegamento." , addReply = true })).StatusCode);
+        var ticketNotificationWorker = new TicketNotificationWorker(factory.Services.GetRequiredService<IServiceScopeFactory>(),
+            NullLogger<TicketNotificationWorker>.Instance, emailOptions);
+        while (await ticketNotificationWorker.ProcessNext(CancellationToken.None)) { }
+        var portalInbox = await portal.GetFromJsonAsync<JsonElement>("/api/notifications");
+        var requesterNotice = Assert.Single(portalInbox.GetProperty("notifications").EnumerateArray(), item =>
+            item.TryGetProperty("ticketId", out var target) && target.GetGuid() == ticketId && item.GetProperty("kind").GetString() == "ticket.staff.reply");
+        Assert.Equal(HttpStatusCode.NoContent, (await portal.PostAsync($"/api/notifications/{requesterNotice.GetProperty("id").GetGuid()}/read", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await outsider.PostAsync($"/api/notifications/{requesterNotice.GetProperty("id").GetGuid()}/read", null)).StatusCode);
+        var emailWorker = new EmailNotificationWorker(factory.Services.GetRequiredService<IServiceScopeFactory>(),
+            NullLogger<EmailNotificationWorker>.Instance, emailOptions);
+        while (await emailWorker.ProcessNext(CancellationToken.None)) { }
+        var requesterEmail = Assert.Single(factory.OutboundEmail.Sent, message => message.Recipient == "portal-user@example.test" && message.Subject.Contains($"#{ticket.GetProperty("number").GetInt64()}"));
+        Assert.Contains("Nuova risposta dell'assistenza al ticket", requesterEmail.Subject);
+        Assert.DoesNotContain("Stiamo verificando il collegamento", requesterEmail.TextBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("Nota riservata al team", requesterEmail.TextBody, StringComparison.Ordinal);
         var detail = await portal.GetFromJsonAsync<JsonElement>($"/api/portal/tickets/{ticketId}");
         var messages = detail.GetProperty("messages");
         Assert.DoesNotContain(messages.EnumerateArray(), message => message.GetProperty("body").GetString() == "Nota riservata al team");
@@ -112,6 +147,9 @@ public static class PortalScenario
         Assert.Equal(HttpStatusCode.NotFound, (await portal.GetAsync($"/api/portal/tickets/{ticketId}")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await portal.GetAsync($"/api/portal/tickets/{ticketId}/screenshot")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await portal.GetAsync(attachmentPath)).StatusCode);
+        portalInbox = await portal.GetFromJsonAsync<JsonElement>("/api/notifications");
+        Assert.DoesNotContain(portalInbox.GetProperty("notifications").EnumerateArray(), item => item.GetProperty("id").GetGuid() == requesterNotice.GetProperty("id").GetGuid());
+        Assert.Equal(HttpStatusCode.Forbidden, (await portal.PostAsync($"/api/notifications/{requesterNotice.GetProperty("id").GetGuid()}/read", null)).StatusCode);
         await Csrf(portal);
         Assert.Equal(HttpStatusCode.NotFound, (await portal.PostAsJsonAsync($"/api/portal/tickets/{ticketId}/messages", new { expectedVersion = 4L, body = "Non autorizzato dopo revoca" })).StatusCode);
     }

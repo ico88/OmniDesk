@@ -311,6 +311,21 @@ try {
  await portalPage.locator('.portal-ticket').filter({hasText:portalSubject}).getByText('In lavorazione',{exact:true}).waitFor({timeout:40000});
  await portalPage.getByRole('log').getByText('Aggiornamento pubblico dal team.',{exact:true}).waitFor({timeout:40000});
  assert.equal(await portalPage.getByRole('log').getByText('Nota esclusivamente interna al team',{exact:true}).count(),0,'Portal conversation excludes internal staff notes');
+ let requesterNotice;
+ for(let attempt=0;attempt<30;attempt++){
+   const inboxResponse=await portalContext.request.get('https://omnidesk.test/api/notifications');
+   assert.equal(inboxResponse.status(),200,'Portal requester notification inbox is authorized');
+   requesterNotice=(await inboxResponse.json()).notifications.find(item=>item.ticketId===portalTicketId&&item.kind==='ticket.staff.reply');
+   if(requesterNotice)break;
+   await new Promise(resolve=>setTimeout(resolve,1000));
+ }
+ assert.ok(requesterNotice,'Public staff reply creates a requester notification');
+ await portalPage.getByRole('button',{name:'Panoramica',exact:true}).click();
+ await portalPage.getByRole('heading',{name:'Panoramica',exact:true}).waitFor();
+ await portalPage.getByRole('button',{name:/Aggiornamenti non letti/}).click();
+ await portalPage.locator('.notification-item').filter({hasText:'Risposta dell’assistenza'}).filter({hasText:portalSubject}).click();
+ await portalPage.getByRole('heading',{name:'I miei ticket',exact:true}).waitFor();
+ await portalPage.getByRole('log').getByText('Aggiornamento pubblico dal team.',{exact:true}).waitFor();
  const revokeCsrf=(await (await context.request.get('https://omnidesk.test/api/auth/csrf')).json()).token;
  assert.equal((await context.request.delete(`https://omnidesk.test/api/admin/portal-device-access/${portalUserId}/${fixtureDevice}`,{headers:{'X-CSRF-TOKEN':revokeCsrf}})).status(),204);
  assert.equal((await portalContext.request.get(`https://omnidesk.test/api/portal/tickets/${portalTicketId}/screenshot`)).status(),404,'Portal screenshot access closes immediately after revocation');
