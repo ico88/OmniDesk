@@ -1,5 +1,9 @@
 # Roadmap
 
+### Privacy — retention configurabile eventi di audit
+
+Implementata una retention audit opt-in `OMNIDESK_RETENTION_AUDIT_EVENTS_DAYS` (default `0`, disattivata): oltre la soglia elimina in transazioni batch limitate solo eventi più vecchi, preserva gli eventi di purge e registra il conteggio senza dettagli o PII. Usa l'indice `AuditEvents.At` esistente, non richiede migrazioni né modifica i dati live finché non viene configurata una soglia. Test PostgreSQL dedicato e suite 94/94, build dashboard e 6/6 Vitest passati localmente. Restano da definire e verificare separatamente retention telemetria/backup, snapshot off-site e requisiti normativi prima di abilitare una policy in produzione.
+
 ### Privacy — retention del contenuto dei ticket risolti
 
 Implementata nel branch una policy separata opt-in, `OMNIDESK_RETENTION_RESOLVED_TICKET_CONTENT_DAYS` (default `0`, disattivata). Dopo la soglia, ticket `resolved`/`closed` perdono oggetto libero, descrizione, risoluzione e corpi di messaggi pubblici/interni; numero, stato, date, metadati, eventi di workflow e interventi RMM restano consultabili. Flag persistenti evitano ripetizioni, il worker opera in batch transazionali e l'audit registra solo conteggi. La migrazione è versionata. Suite PostgreSQL 93/93, build dashboard e 6/6 Vitest, build Docker e smoke runtime Chromium/restore sono passati localmente. Non pubblicato sulla LAN. Retention allegati, intake, contenuti ticket, audit, telemetria e backup restano policy indipendenti.

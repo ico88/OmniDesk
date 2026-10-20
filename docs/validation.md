@@ -1959,3 +1959,10 @@ modificato; ogni nuova estensione attende la propria CI sul push.
 - `docker compose config --quiet`, Compose test/backup-check/restore-check e `git diff --check` — passati; `docker compose build api dashboard` — passata.
 - `./scripts/smoke.sh --browser` — passato nello stack isolato dopo aggiornamento dell'asserzione UI sul titolo della coda email: Chromium, worker SLA/escalation/notifiche, ClamAV ed EICAR, restore DB/blob/Identity/CA. Lo smoke non invia SMTP reale e non testa l'allarme su istanza LAN.
 - Migrazione `20261020070000_DevicePresenceNotifications` applicata dallo smoke e dai test. Nessun servizio LAN è stato modificato; CI per questo incremento deve partire dopo il push.
+### Privacy — retention eventi audit opt-in — 2026-10-20
+
+- `./scripts/test.sh` — passato: 94/94 test API/PostgreSQL; nuovo scenario controlla default disattivato, purge solo degli eventi oltre soglia, preservazione di eventi recenti e marker di retention e audit del solo conteggio.
+- La stessa suite ha compilato l'API; build dashboard TypeScript/Vite e Vitest — passate, 6/6. Nessuna migrazione è richiesta: il modello dispone già dell'indice `AuditEvents.At`.
+- `Retention__AuditEventsDays` è esposto dal Compose base come `OMNIDESK_RETENTION_AUDIT_EVENTS_DAYS`, default `0`; Compose base e test passano `config --quiet`. `docker compose build api` è passato.
+- `./scripts/smoke.sh --browser` è passato su stack isolato, includendo Chromium, worker SLA, ClamAV/EICAR e restore completo DB/blob/Identity/CA. Non abilita la retention né rimuove dati live.
+- CI Linux `39367275318` e Windows `39367275321` sono verdi sul commit parent `d869617` (build/test/smoke Linux; MSI Windows con install/recovery/uninstall e upgrade/repair/rollback). Le pipeline per l'incremento audit corrente devono ancora essere lanciate al push. Nessun deploy LAN.
