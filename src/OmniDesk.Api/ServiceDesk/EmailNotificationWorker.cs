@@ -67,11 +67,14 @@ public sealed class EmailNotificationWorker(IServiceScopeFactory scopes, ILogger
             var delivery = await db.EmailNotificationDeliveries.SingleAsync(x => x.NotificationId == id, ct);
             var notification = await db.UserNotifications.SingleOrDefaultAsync(x => x.Id == id, ct);
             var user = notification is null ? null : await db.Users.SingleOrDefaultAsync(x => x.Id == notification.UserId, ct);
-            var ticket = notification is null ? null : await db.SupportTickets.AsNoTracking().SingleOrDefaultAsync(x => x.Id == notification.TicketId, ct);
+            var ticket = notification?.TicketId is { } ticketId ? await db.SupportTickets.AsNoTracking().SingleOrDefaultAsync(x => x.Id == ticketId, ct) : null;
+            var device = notification?.DeviceId is { } deviceId ? await db.Devices.AsNoTracking().SingleOrDefaultAsync(x => x.Id == deviceId, ct) : null;
+            var permissions = scope.ServiceProvider.GetRequiredService<PermissionService>();
             var eligible = notification is not null && user is { IsDisabled: false, EmailNotificationsEnabled: true,
-                    EmailNotificationsEnabledAt: { } consentAt, Email: not null } &&
-                notification.CreatedAt >= consentAt && ticket is not null &&
-                await scope.ServiceProvider.GetRequiredService<PermissionService>().Allows(user.Id, "tickets.view", ticket.DeviceId, siteId: ticket.SiteId);
+                    EmailNotificationsEnabledAt: { } consentAt, Email: not null } && notification.CreatedAt >= consentAt &&
+                (ticket is not null && await permissions.Allows(user.Id, "tickets.view", ticket.DeviceId, siteId: ticket.SiteId) ||
+                 device is not null && await db.DeviceCredentials.AnyAsync(x => x.DeviceId == device.Id && x.RevokedAt == null, ct) &&
+                    await permissions.Allows(user.Id, "view", device.Id, siteId: device.SiteId));
             if (eligible && notification!.Kind == "ticket.attachment")
             {
                 var evt = await db.CoreOutboxEvents.AsNoTracking().SingleOrDefaultAsync(x => x.Id == notification.EventId, ct);
@@ -90,6 +93,7 @@ public sealed class EmailNotificationWorker(IServiceScopeFactory scopes, ILogger
 
             var kind = notification!.Kind switch
             {
+                "device.offline" => "Dispositivo non raggiungibile",
                 "ticket.new" => "Nuovo ticket assegnato",
                 "ticket.reply" => "Nuova risposta al ticket",
                 "ticket.assigned" => "Ticket assegnato",
@@ -98,8 +102,11 @@ public sealed class EmailNotificationWorker(IServiceScopeFactory scopes, ILogger
                 "ticket.sla.escalated" => "Ticket escalato",
                 _ => "Aggiornamento ticket"
             };
-            var message = new OutboundEmailMessage(user!.Email!, $"OmniDesk: {kind} #{ticket!.Number}",
-                $"{kind} #{ticket.Number}.\n\nApri OmniDesk per consultare il ticket: {settings.DashboardUrl.TrimEnd('/')}/?ticket={ticket.Id}\n",
+            var subject = ticket is not null ? $"OmniDesk: {kind} #{ticket.Number}" : $"OmniDesk: {kind}";
+            var content = ticket is not null
+                ? $"{kind} #{ticket.Number}.\n\nApri OmniDesk per consultare il ticket: {settings.DashboardUrl.TrimEnd('/')}/?ticket={ticket.Id}\n"
+                : $"{kind}: {device!.Name}.\n\nApri OmniDesk e consulta i dispositivi: {settings.DashboardUrl.TrimEnd('/')}\n";
+            var message = new OutboundEmailMessage(user!.Email!, subject, content,
                 $"notification-{id:N}@omnidesk.invalid");
             await scope.ServiceProvider.GetRequiredService<IOutboundEmailSender>().SendAsync(message, ct);
             delivery.State = "sent";

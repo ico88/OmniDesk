@@ -88,6 +88,26 @@ public sealed class TicketNotificationWorker(IServiceScopeFactory scopes, ILogge
     public static async Task ProjectNotifications(AppDbContext db, PermissionService permissions, CoreOutboxEvent evt,
         DateTimeOffset now, CancellationToken ct, bool outboundEmailEnabled = false)
     {
+        if (evt.AggregateType == "device" && evt.EventType == "device.presence.offline")
+        {
+            var device = await db.Devices.AsNoTracking().SingleOrDefaultAsync(x => x.Id == evt.AggregateId, ct);
+            if (device is null || !await db.DeviceCredentials.AnyAsync(x => x.DeviceId == device.Id && x.RevokedAt == null, ct)) return;
+            var users = await db.Users.AsNoTracking().Where(x => !x.IsDisabled).Select(x => new
+                { x.Id, x.Email, x.EmailNotificationsEnabled, x.EmailNotificationsEnabledAt }).ToArrayAsync(ct);
+            foreach (var user in users)
+            {
+                if (!await permissions.Allows(user.Id, "view", device.Id, siteId: device.SiteId)) continue;
+                var notification = new UserNotification
+                {
+                    EventId = evt.Id, UserId = user.Id, DeviceId = device.Id, Kind = "device.offline", CreatedAt = now
+                };
+                db.UserNotifications.Add(notification);
+                if (outboundEmailEnabled && await db.Users.AnyAsync(candidate => candidate.Id == user.Id &&
+                        candidate.EmailNotificationsEnabled && candidate.EmailNotificationsEnabledAt != null && candidate.Email != null, ct))
+                    db.EmailNotificationDeliveries.Add(new EmailNotificationDelivery { NotificationId = notification.Id, State = "pending", NextAttemptAt = now });
+            }
+            return;
+        }
         if (evt.AggregateType != "ticket") return;
         var ticket = await db.SupportTickets.AsNoTracking().SingleOrDefaultAsync(x => x.Id == evt.AggregateId, ct);
         if (ticket is null) return;

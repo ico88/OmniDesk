@@ -1959,7 +1959,10 @@ namespace OmniDesk.Api.Migrations
                     b.Property<DateTimeOffset?>("ReadAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid>("TicketId")
+                    b.Property<Guid?>("DeviceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("TicketId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("UserId")
@@ -1970,12 +1973,17 @@ namespace OmniDesk.Api.Migrations
 
                     b.HasIndex("TicketId");
 
+                    b.HasIndex("DeviceId");
+
                     b.HasIndex("EventId", "UserId")
                         .IsUnique();
 
                     b.HasIndex("UserId", "CreatedAt");
 
-                    b.ToTable("UserNotifications");
+                    b.ToTable("UserNotifications", t =>
+                        {
+                            t.HasCheckConstraint("CK_UserNotification_Target", "(\"TicketId\" IS NOT NULL AND \"DeviceId\" IS NULL) OR (\"TicketId\" IS NULL AND \"DeviceId\" IS NOT NULL)");
+                        });
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
@@ -2495,8 +2503,12 @@ namespace OmniDesk.Api.Migrations
                     b.HasOne("OmniDesk.Api.Data.SupportTicket", null)
                         .WithMany()
                         .HasForeignKey("TicketId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("OmniDesk.Api.Data.Device", null)
+                        .WithMany()
+                        .HasForeignKey("DeviceId")
+                        .OnDelete(DeleteBehavior.Cascade);
 
                     b.HasOne("OmniDesk.Api.Data.AppUser", null)
                         .WithMany()

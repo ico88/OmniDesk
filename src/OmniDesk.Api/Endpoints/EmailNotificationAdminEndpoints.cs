@@ -16,15 +16,26 @@ public static class EmailNotificationAdminEndpoints
             if (!await permissions.Allows(context.User.UserId(), "administration")) return Results.Forbid();
             var counts = await db.EmailNotificationDeliveries.AsNoTracking()
                 .GroupBy(x => x.State).Select(group => new { state = group.Key, count = group.Count() }).ToArrayAsync();
-            var items = await (from delivery in db.EmailNotificationDeliveries.AsNoTracking()
-                               join notification in db.UserNotifications.AsNoTracking() on delivery.NotificationId equals notification.Id
-                               join ticket in db.SupportTickets.AsNoTracking() on notification.TicketId equals ticket.Id
-                               where delivery.State != "sent" && delivery.State != "skipped"
-                               orderby delivery.NextAttemptAt, notification.CreatedAt
-                               select new { notificationId = delivery.NotificationId, delivery.State, delivery.AttemptCount,
-                                   delivery.NextAttemptAt, delivery.DeadLetteredAt, delivery.LastErrorType,
-                                   ticketNumber = ticket.Number, notification.Kind, notification.CreatedAt })
+            var pending = await (from delivery in db.EmailNotificationDeliveries.AsNoTracking()
+                                 join notification in db.UserNotifications.AsNoTracking() on delivery.NotificationId equals notification.Id
+                                 where delivery.State != "sent" && delivery.State != "skipped"
+                                 orderby delivery.NextAttemptAt, notification.CreatedAt
+                                 select new { notificationId = delivery.NotificationId, delivery.State, delivery.AttemptCount,
+                                     delivery.NextAttemptAt, delivery.DeadLetteredAt, delivery.LastErrorType,
+                                     notification.TicketId, notification.DeviceId, notification.Kind, notification.CreatedAt })
                 .Take(100).ToArrayAsync();
+            var items = new List<object>();
+            foreach (var delivery in pending)
+            {
+                var ticketNumber = delivery.TicketId is { } ticketId
+                    ? await db.SupportTickets.Where(ticket => ticket.Id == ticketId).Select(ticket => (long?)ticket.Number).SingleOrDefaultAsync()
+                    : null;
+                var deviceName = delivery.DeviceId is { } deviceId
+                    ? await db.Devices.Where(device => device.Id == deviceId).Select(device => device.Name).SingleOrDefaultAsync()
+                    : null;
+                items.Add(new { delivery.notificationId, delivery.State, delivery.AttemptCount, delivery.NextAttemptAt,
+                    delivery.DeadLetteredAt, delivery.LastErrorType, ticketNumber, deviceName, delivery.Kind, delivery.CreatedAt });
+            }
             context.Response.Headers.CacheControl = "no-store";
             return Results.Ok(new { counts, items });
         });

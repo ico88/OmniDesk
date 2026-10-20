@@ -236,7 +236,8 @@ public sealed class UserNotification
     public Guid Id { get; set; } = Guid.NewGuid();
     public Guid EventId { get; set; }
     public string UserId { get; set; } = "";
-    public Guid TicketId { get; set; }
+    public Guid? TicketId { get; set; }
+    public Guid? DeviceId { get; set; }
     public string Kind { get; set; } = "";
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? ReadAt { get; set; }

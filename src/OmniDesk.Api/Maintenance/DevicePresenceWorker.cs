@@ -60,13 +60,19 @@ public sealed class DevicePresenceWorker(
                 WHERE p."DeviceId" = m."DeviceId"
                   AND p."IsOnline" IS DISTINCT FROM (m."ReceivedAt" >= {cutoff})
                 RETURNING p."DeviceId", p."IsOnline"
-            )
-            INSERT INTO "AuditEvents" ("At", "ActorId", "Action", "Target", "Outcome")
-            SELECT {now}, NULL,
+            ), audit AS (
+                INSERT INTO "AuditEvents" ("At", "ActorId", "Action", "Target", "Outcome")
+                SELECT {now}, NULL,
                    CASE WHEN "IsOnline" THEN 'device.presence.online' ELSE 'device.presence.offline' END,
                    "DeviceId"::text,
                    CASE WHEN "IsOnline" THEN 'success' ELSE 'warning' END
-            FROM changed
+                FROM changed
+                RETURNING 1
+            )
+            INSERT INTO "CoreOutboxEvents" ("Id", "EventType", "SchemaVersion", "AggregateType", "AggregateId", "OccurredAt", "CorrelationId", "Payload", "AttemptCount", "NextAttemptAt")
+            SELECT gen_random_uuid(), 'device.presence.offline', 1, 'device', "DeviceId", {now}, gen_random_uuid()::text,
+                   jsonb_build_object('deviceId', "DeviceId"), 0, {now}
+            FROM changed WHERE NOT "IsOnline"
             """, cancellationToken);
 
         await db.Database.ExecuteSqlInterpolatedAsync($"""

@@ -286,9 +286,11 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
         b.Entity<UserNotification>().Property(x => x.Kind).HasMaxLength(40);
         b.Entity<UserNotification>().HasOne<AppUser>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
         b.Entity<UserNotification>().HasOne<SupportTicket>().WithMany().HasForeignKey(x => x.TicketId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<UserNotification>().HasOne<Device>().WithMany().HasForeignKey(x => x.DeviceId).OnDelete(DeleteBehavior.Cascade);
         b.Entity<UserNotification>().HasOne<CoreOutboxEvent>().WithMany().HasForeignKey(x => x.EventId).OnDelete(DeleteBehavior.Cascade);
         b.Entity<UserNotification>().HasIndex(x => new { x.EventId, x.UserId }).IsUnique();
         b.Entity<UserNotification>().HasIndex(x => new { x.UserId, x.CreatedAt });
+        b.Entity<UserNotification>().ToTable(t => t.HasCheckConstraint("CK_UserNotification_Target", "(\"TicketId\" IS NOT NULL AND \"DeviceId\" IS NULL) OR (\"TicketId\" IS NULL AND \"DeviceId\" IS NOT NULL)"));
         b.Entity<EmailNotificationDelivery>().HasKey(x => x.NotificationId);
         b.Entity<EmailNotificationDelivery>().HasOne<UserNotification>().WithOne().HasForeignKey<EmailNotificationDelivery>(x => x.NotificationId).OnDelete(DeleteBehavior.Cascade);
         b.Entity<EmailNotificationDelivery>().Property(x => x.State).HasMaxLength(20);
