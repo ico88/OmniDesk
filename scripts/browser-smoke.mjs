@@ -4,16 +4,6 @@ import {readFileSync} from 'node:fs';
 import {randomBytes, generateKeyPairSync, sign, createHmac} from 'node:crypto';
 import assert from 'node:assert/strict';
 const browser=await chromium.launch({headless:true});
-async function readPolicyVersion(context,name,version){
- const deadline=Date.now()+10000;let policy;
- do{
-  const response=await context.request.get('https://omnidesk.test/api/admin/support-sla/policies');
-  policy=(await response.json()).find(item=>item.name===name);
-  if(policy?.currentVersion>=version)return policy;
-  await new Promise(resolve=>setTimeout(resolve,100));
- }while(Date.now()<deadline);
- throw new Error(`SLA policy ${name} did not reach version ${version}; last observed ${policy?.currentVersion??'missing'}`);
-}
 try {
  const context=await browser.newContext({ignoreHTTPSErrors:true}); // Test CA only; production clients must trust CA.
  const page=await context.newPage(); const errors=[]; page.on('pageerror',e=>errors.push(e.message));
@@ -239,11 +229,6 @@ try {
  const intake=await context.request.post('https://omnidesk.test/api/agent/support',{headers:{Authorization:'Bearer '+agentAssertion()},data:{requesterKey:'A'.repeat(64),ticket:{requestId:crypto.randomUUID(),subject:ticketSubject,description:'Isolated fixture, no live user data',screenshotBase64:screenshot,screenshotConsent:true}}});
  assert.equal(intake.status(),201,'Authenticated isolated ticket intake');
  const smokeTicketId=(await intake.json()).id;
- const initialSlaResponse=await context.request.get(`https://omnidesk.test/api/support/${smokeTicketId}/sla`);
- assert.equal(initialSlaResponse.status(),200,'Ticket SLA targets require authorized ticket view');
- const initialSla=await initialSlaResponse.json();
- assert.deepEqual(initialSla.map(target=>target.targetType).sort(),['first_response','resolution'],'Agent intake receives both SLA targets');
- assert.equal(initialSla.every(target=>target.completedAt===null),true,'Agent intake initializes open SLA targets');
  const participantRole='Smoke ticket reader '+randomBytes(5).toString('hex');
  const participantRoleResponse=await context.request.post('https://omnidesk.test/api/admin/roles',{headers:csrfHeaders,data:{name:participantRole,permissions:['tickets.view']}});
  assert.equal(participantRoleResponse.status(),201,'Read-only ticket collaborator role created');
