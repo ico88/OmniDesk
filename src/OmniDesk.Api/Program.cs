@@ -184,5 +184,6 @@ app.MapNotificationEndpoints();
 app.MapTicketWorkflowEndpoints();
 app.MapSlaPolicyEndpoints();
 app.MapEmailIntakeEndpoints();
+app.MapEmailNotificationAdminEndpoints();
 app.Run();
 public partial class Program { }
