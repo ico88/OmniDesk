@@ -29,7 +29,8 @@ public sealed record SupportInterventionCandidate(Guid Id, Guid DeviceId, string
 public sealed record SupportTicketDeviceView(Guid DeviceId, string Name, Guid SiteId, string SiteName, bool IsPrimary);
 public sealed record SupportTicketVersion(Guid TicketId, long ExpectedVersion);
 public sealed record SupportSlaTargetView(string TargetType, int PolicyVersion, int Cycle, DateTimeOffset StartedAt,
-    DateTimeOffset DueAt, DateTimeOffset? CompletedAt, DateTimeOffset? BreachedAt, bool IsPastDue);
+    DateTimeOffset DueAt, DateTimeOffset? CompletedAt, DateTimeOffset? BreachedAt, DateTimeOffset? PausedAt,
+    long AccumulatedPauseSeconds, bool IsPastDue);
 public sealed record BulkQueueAssignment(SupportTicketVersion[] Tickets, Guid? QueueId);
 public sealed record PortalTicketCreate(Guid RequestId, Guid DeviceId, string Subject, string Description, string Category,
     string? ScreenshotBase64 = null, bool ScreenshotConsent = false);
@@ -459,7 +460,8 @@ public static class SupportEndpoints
             var targets = await db.SupportTicketSlaTargets.AsNoTracking().Where(x => x.TicketId == id)
                 .OrderBy(x => x.TargetType).ThenBy(x => x.Cycle)
                 .Select(x => new SupportSlaTargetView(x.TargetType, x.PolicyVersion, x.Cycle, x.StartedAt,
-                    x.DueAt, x.CompletedAt, x.BreachedAt, x.CompletedAt == null && x.BreachedAt == null && x.DueAt < now))
+                    x.DueAt, x.CompletedAt, x.BreachedAt, x.PausedAt, x.AccumulatedPauseSeconds,
+                    x.CompletedAt == null && x.BreachedAt == null && x.PausedAt == null && x.DueAt < now))
                 .ToArrayAsync();
             c.Response.Headers.CacheControl = "no-store";
             return Results.Ok(targets);
@@ -1028,6 +1030,13 @@ public static class SupportEndpoints
                     .SetProperty(t => t.Priority, priority).SetProperty(t => t.AssigneeId, assigneeId).SetProperty(t => t.QueueId, queueId)
                     .SetProperty(t => t.UpdatedAt, now).SetProperty(t => t.Version, t => t.Version + 1));
             if (updated == 0) return Results.Conflict(new {error="Il ticket e stato aggiornato. Ricarica la conversazione prima di salvare."});
+            try
+            {
+                await TicketSlaTargetService.ApplyPauseState(db, id, r.State, c.User.UserId(), now, c.RequestAborted);
+                if ((ticket.State is "resolved" or "closed") && (r.State is "open" or "in_progress"))
+                    await TicketSlaTargetService.StartResolutionCycle(db, id, now, c.User.UserId(), c.RequestAborted);
+            }
+            catch (SlaPolicyConfigurationException) { return Results.StatusCode(503); }
             if(replyAdded) {
                 db.SupportMessages.Add(new SupportMessage {TicketId=id,ActorId=c.User.UserId(),Body=body!});
                 db.AuditEvents.Add(new AuditEvent {ActorId=c.User.UserId(),Action="ticket.reply",Target=id.ToString()});

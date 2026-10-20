@@ -10,5 +10,6 @@
 .sla-status{font-size:11px;text-align:right;color:var(--primary);font-variant-numeric:tabular-nums}
 .sla-status.complete{color:var(--success,#16a34a)}
 .sla-status.late{color:var(--danger,#dc2626)}
+.sla-status.paused{color:#d97706}
 .ticket-sla>p{color:var(--muted);font-size:12px}
 @media(max-width:760px){.ticket-sla{padding:14px}.ticket-sla>.section-heading{align-items:flex-start}.ticket-sla li{align-items:flex-start;flex-direction:column}.sla-status{text-align:left}}

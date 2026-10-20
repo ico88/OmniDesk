@@ -1618,8 +1618,14 @@ namespace OmniDesk.Api.Migrations
                     b.Property<DateTimeOffset?>("CompletedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<long>("AccumulatedPauseSeconds")
+                        .HasColumnType("bigint");
+
                     b.Property<int>("Cycle")
                         .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("PausedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTimeOffset>("DueAt")
                         .HasColumnType("timestamp with time zone");

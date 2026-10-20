@@ -86,6 +86,8 @@ public sealed class SupportTicketSlaTarget
     public DateTimeOffset DueAt { get; set; }
     public DateTimeOffset? CompletedAt { get; set; }
     public DateTimeOffset? BreachedAt { get; set; }
+    public DateTimeOffset? PausedAt { get; set; }
+    public long AccumulatedPauseSeconds { get; set; }
 }
 
 public sealed class SupportTicket

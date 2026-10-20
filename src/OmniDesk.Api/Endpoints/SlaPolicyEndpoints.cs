@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using OmniDesk.Api.Data;
@@ -113,7 +114,11 @@ public static class SlaPolicyEndpoints
         if (definition is null || definition.Calendar is null || definition.Calendar.WeeklyHours is null || definition.Calendar.Holidays is null ||
             definition.FirstResponseMinutes is < 1 or > 525600 || definition.ResolutionMinutes is < 1 or > 525600 ||
             definition.ResolutionMinutes < definition.FirstResponseMinutes || definition.Calendar.Holidays.Length > 3660 ||
-            definition.Calendar.WeeklyHours.Count == 0 || definition.Calendar.WeeklyHours.Values.Any(ranges => ranges is null || ranges.Length == 0))
+            definition.Calendar.WeeklyHours.Count == 0 || definition.Calendar.WeeklyHours.Values.Any(ranges => ranges is null || ranges.Length == 0) ||
+            definition.PauseStates is null || definition.PauseStates.Length > 20 ||
+            definition.PauseStates.Distinct(StringComparer.Ordinal).Count() != definition.PauseStates.Length ||
+            definition.PauseStates.Any(state => state is null || state is "resolved" or "closed" ||
+                !Regex.IsMatch(state, "^[a-z][a-z0-9_]{0,39}$", RegexOptions.CultureInvariant)))
         {
             error = "Definizione SLA fuori dai limiti supportati.";
             return false;

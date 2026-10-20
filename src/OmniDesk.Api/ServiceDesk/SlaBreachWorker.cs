@@ -45,7 +45,7 @@ public sealed class SlaBreachWorker(IServiceScopeFactory scopes, ILogger<SlaBrea
         var now = DateTimeOffset.UtcNow;
         var rows = await db.SupportTicketSlaTargets.FromSqlInterpolated($"""
             SELECT t.* FROM "SupportTicketSlaTargets" t
-            WHERE t."DueAt" <= {now} AND t."CompletedAt" IS NULL AND t."BreachedAt" IS NULL
+            WHERE t."DueAt" <= {now} AND t."CompletedAt" IS NULL AND t."BreachedAt" IS NULL AND t."PausedAt" IS NULL
             ORDER BY t."DueAt", t."Id"
             FOR UPDATE OF t SKIP LOCKED
             LIMIT 1
