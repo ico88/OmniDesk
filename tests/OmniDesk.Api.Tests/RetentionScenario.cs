@@ -15,6 +15,82 @@ public sealed class SerializedSharedDatabaseCollection;
 public sealed class RetentionScenario(ApiFactory factory) : IClassFixture<ApiFactory>
 {
     [Fact]
+    public async Task Device_metrics_and_inventory_retention_purges_old_snapshots_without_deleting_live_devices()
+    {
+        var startedAt = DateTimeOffset.UtcNow;
+        var now = DateTimeOffset.UtcNow;
+        var site = new Site { Name = "Device data retention " + Guid.NewGuid().ToString("N") };
+        var oldOffline = new Device { Id = Guid.NewGuid(), Name = "old offline", SiteId = site.Id };
+        var oldOnline = new Device { Id = Guid.NewGuid(), Name = "old online", SiteId = site.Id };
+        var recentOffline = new Device { Id = Guid.NewGuid(), Name = "recent offline", SiteId = site.Id };
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            await TestDatabaseMigration.ApplyAsync(db);
+            db.Sites.Add(site);
+            db.Devices.AddRange(oldOffline, oldOnline, recentOffline);
+            db.DevicePresence.AddRange(
+                new DevicePresence { DeviceId = oldOffline.Id, IsOnline = false, ChangedAt = now.AddDays(-190) },
+                new DevicePresence { DeviceId = oldOnline.Id, IsOnline = true, ChangedAt = now.AddDays(-190) },
+                new DevicePresence { DeviceId = recentOffline.Id, IsOnline = false, ChangedAt = now.AddDays(-10) });
+            db.DeviceMetrics.AddRange(
+                new DeviceMetrics { DeviceId = oldOffline.Id, ReceivedAt = now.AddDays(-200), Payload = "{}" },
+                new DeviceMetrics { DeviceId = oldOnline.Id, ReceivedAt = now.AddDays(-200), Payload = "{}" },
+                new DeviceMetrics { DeviceId = recentOffline.Id, ReceivedAt = now.AddDays(-20), Payload = "{}" });
+            db.DeviceInventories.AddRange(
+                new DeviceInventory { DeviceId = oldOffline.Id, ReceivedAt = now.AddDays(-200), Payload = "{}" },
+                new DeviceInventory { DeviceId = oldOnline.Id, ReceivedAt = now.AddDays(-200), Payload = "{}" },
+                new DeviceInventory { DeviceId = recentOffline.Id, ReceivedAt = now.AddDays(-20), Payload = "{}" });
+            await db.SaveChangesAsync();
+        }
+
+        try
+        {
+            var scopeFactory = factory.Services.GetRequiredService<IServiceScopeFactory>();
+            var disabled = new CoreOutboxRetentionWorker(scopeFactory,
+                Options.Create(new RetentionOptions()), NullLogger<CoreOutboxRetentionWorker>.Instance);
+            Assert.Equal(0, await disabled.PurgeDeviceMetricsBatchAsync());
+            Assert.Equal(0, await disabled.PurgeDeviceInventoryBatchAsync());
+
+            var worker = new CoreOutboxRetentionWorker(scopeFactory,
+                Options.Create(new RetentionOptions { DeviceMetricsDays = 180, DeviceInventoryDays = 180 }),
+                NullLogger<CoreOutboxRetentionWorker>.Instance);
+            Assert.Equal(1, await worker.PurgeDeviceMetricsBatchAsync());
+            Assert.Equal(2, await worker.PurgeDeviceInventoryBatchAsync());
+
+            using var verificationScope = factory.Services.CreateScope();
+            var verificationDb = verificationScope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.False(await verificationDb.DeviceMetrics.AnyAsync(item => item.DeviceId == oldOffline.Id));
+            Assert.True(await verificationDb.DeviceMetrics.AnyAsync(item => item.DeviceId == oldOnline.Id),
+                "A device marked online is retained even when the stored snapshot is old.");
+            Assert.True(await verificationDb.DeviceMetrics.AnyAsync(item => item.DeviceId == recentOffline.Id));
+            Assert.False(await verificationDb.DeviceInventories.AnyAsync(item => item.DeviceId == oldOffline.Id));
+            Assert.False(await verificationDb.DeviceInventories.AnyAsync(item => item.DeviceId == oldOnline.Id));
+            Assert.True(await verificationDb.DeviceInventories.AnyAsync(item => item.DeviceId == recentOffline.Id));
+            Assert.True(await verificationDb.Devices.AnyAsync(item => item.Id == oldOffline.Id));
+            Assert.Contains(await verificationDb.AuditEvents.Where(item => item.At >= startedAt).ToArrayAsync(), item =>
+                item.Action == "retention.device-metrics.purged" && item.Target == "1");
+            Assert.Contains(await verificationDb.AuditEvents.Where(item => item.At >= startedAt).ToArrayAsync(), item =>
+                item.Action == "retention.device-inventory.purged" && item.Target == "2");
+        }
+        finally
+        {
+            using var cleanupScope = factory.Services.CreateScope();
+            var cleanupDb = cleanupScope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var deviceIds = new[] { oldOffline.Id, oldOnline.Id, recentOffline.Id };
+            await cleanupDb.DeviceMetrics.Where(item => deviceIds.Contains(item.DeviceId)).ExecuteDeleteAsync();
+            await cleanupDb.DeviceInventories.Where(item => deviceIds.Contains(item.DeviceId)).ExecuteDeleteAsync();
+            await cleanupDb.DevicePresence.Where(item => deviceIds.Contains(item.DeviceId)).ExecuteDeleteAsync();
+            await cleanupDb.Devices.Where(item => deviceIds.Contains(item.Id)).ExecuteDeleteAsync();
+            await cleanupDb.Sites.Where(item => item.Id == site.Id).ExecuteDeleteAsync();
+            await cleanupDb.AuditEvents.Where(item => item.At >= startedAt &&
+                    (item.Action == "retention.device-metrics.purged" || item.Action == "retention.device-inventory.purged"))
+                .ExecuteDeleteAsync();
+        }
+    }
+
+    [Fact]
     public async Task Audit_retention_is_disabled_by_default_and_purges_old_events_in_audited_batches()
     {
         var marker = "retention-audit-" + Guid.NewGuid().ToString("N");
