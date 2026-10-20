@@ -175,6 +175,7 @@ try {
  let slaPolicy=slaPolicies.find(x=>x.name==='Browser smoke SLA');
  assert.ok(slaPolicy,'SLA policy was created from the dashboard');
  assert.equal(slaPolicy.currentVersion,1,'Dashboard published initial SLA version');
+ await page.getByLabel('Stati di pausa SLA',{exact:true}).fill('waiting_customer, waiting_vendor');
  await page.getByLabel('Nome versione SLA',{exact:true}).fill('Browser smoke SLA v2');
  await page.getByLabel('Minuti risoluzione',{exact:true}).fill('600');
  await page.getByRole('button',{name:'Pubblica versione 2',exact:true}).click();
@@ -182,6 +183,7 @@ try {
  slaPolicy=(await (await context.request.get('https://omnidesk.test/api/admin/support-sla/policies')).json()).find(x=>x.name==='Browser smoke SLA');
  assert.equal(slaPolicy.currentVersion,2,'Dashboard publishes immutable SLA revisions');
  assert.equal(slaPolicy.versions.length,2,'SLA version history is retained');
+ assert.deepEqual(slaPolicy.versions[1].definition.pauseStates,['waiting_customer','waiting_vendor'],'SLA pause states are versioned in the dashboard');
  await page.getByRole('button',{name:'Aggiungi intervallo Lunedì',exact:true}).click();
  assert.equal(await page.locator('.sla-day').first().locator('.sla-range').count(),2,'Dashboard edits split working-day intervals');
  await page.getByLabel('Nome versione SLA',{exact:true}).fill('Browser smoke SLA v3');

@@ -65,7 +65,7 @@ public sealed class SlaPolicyScenario(ApiFactory factory) : IClassFixture<ApiFac
             new SlaPolicyCreate("Cross-site", Guid.NewGuid(), Definition()))).StatusCode);
 
         var version = await manager.PostAsJsonAsync($"/api/admin/support-sla/policies/{created.Id}/versions",
-            new SlaPolicyVersionCreate(1, "Site SLA revised", Definition(120, 600)));
+            new SlaPolicyVersionCreate(1, "Site SLA revised", Definition(120, 600, ["waiting_customer"])));
         Assert.Equal(HttpStatusCode.OK, version.StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await manager.PostAsJsonAsync($"/api/admin/support-sla/policies/{created.Id}/versions",
             new SlaPolicyVersionCreate(1, "Stale", Definition()))).StatusCode);
@@ -160,6 +160,83 @@ public sealed class SlaPolicyScenario(ApiFactory factory) : IClassFixture<ApiFac
                 x.Action == "ticket.sla.target.breached" && x.Target == fallbackTicket.Id.ToString()));
             Assert.False(await SlaBreachWorker.MarkNextBreach(db));
 
+            var pauseTicket = new SupportTicket
+            {
+                Id = Guid.NewGuid(), DeviceId = deviceId, SiteId = siteId, RequestId = Guid.NewGuid(),
+                RequesterKey = new string('d', 64), Subject = "SLA pause fixture", Description = "Fixture",
+                CreatedAt = createdAt, UpdatedAt = createdAt
+            };
+            db.SupportTickets.Add(pauseTicket);
+            await TicketSlaTargetService.ApplyInitialTargets(db, pauseTicket);
+            await db.SaveChangesAsync();
+            var pauseAnchor = DateTimeOffset.UtcNow;
+            var pauseAt = pauseAnchor.AddMinutes(-5);
+            var dueBeforePause = pauseAnchor.AddMinutes(-2);
+            await db.SupportTicketSlaTargets.Where(x => x.TicketId == pauseTicket.Id)
+                .ExecuteUpdateAsync(update => update.SetProperty(x => x.DueAt, dueBeforePause));
+            Assert.Equal(2, await TicketSlaTargetService.ApplyPauseState(db, pauseTicket.Id, "waiting_customer",
+                publisher.Id, pauseAt));
+            await db.SaveChangesAsync();
+            var latePauseTicket = new SupportTicket
+            {
+                Id = Guid.NewGuid(), DeviceId = deviceId, SiteId = siteId, RequestId = Guid.NewGuid(),
+                RequesterKey = new string('f', 64), Subject = "Late SLA pause fixture", Description = "Fixture",
+                CreatedAt = createdAt, UpdatedAt = createdAt
+            };
+            db.SupportTickets.Add(latePauseTicket);
+            await TicketSlaTargetService.ApplyInitialTargets(db, latePauseTicket);
+            await db.SaveChangesAsync();
+            await db.SupportTicketSlaTargets.Where(x => x.TicketId == latePauseTicket.Id)
+                .ExecuteUpdateAsync(update => update.SetProperty(x => x.DueAt, pauseAnchor.AddMinutes(-6)));
+            Assert.Equal(0, await db.SupportTicketSlaTargets.AsNoTracking().CountAsync(x => x.TicketId == latePauseTicket.Id && x.DueAt > pauseAt));
+            Assert.Equal(0, await TicketSlaTargetService.ApplyPauseState(db, latePauseTicket.Id, "waiting_customer",
+                publisher.Id, pauseAt));
+            await db.SaveChangesAsync();
+            var lateBreaches = 0;
+            while (await SlaBreachWorker.MarkNextBreach(db)) lateBreaches++;
+            Assert.Equal(2, lateBreaches);
+            Assert.False(await SlaBreachWorker.MarkNextBreach(db));
+            var resumeAt = pauseAnchor.AddMinutes(4);
+            Assert.Equal(2, await TicketSlaTargetService.ApplyPauseState(db, pauseTicket.Id, "in_progress",
+                publisher.Id, resumeAt));
+            await db.SaveChangesAsync();
+            var resumedTargets = await db.SupportTicketSlaTargets.AsNoTracking().Where(x => x.TicketId == pauseTicket.Id).ToArrayAsync();
+            Assert.All(resumedTargets, target =>
+            {
+                Assert.Null(target.PausedAt);
+                Assert.Equal(540, target.AccumulatedPauseSeconds);
+                Assert.InRange((target.DueAt - dueBeforePause.AddMinutes(9)).Duration(), TimeSpan.Zero, TimeSpan.FromMilliseconds(1));
+            });
+            await db.SupportTicketSlaTargets.Where(x => x.TicketId == pauseTicket.Id)
+                .ExecuteUpdateAsync(update => update.SetProperty(x => x.DueAt, DateTimeOffset.UtcNow.AddMinutes(-1)));
+            var resumedBreaches = 0;
+            while (await SlaBreachWorker.MarkNextBreach(db)) resumedBreaches++;
+            Assert.Equal(2, resumedBreaches);
+
+            var reopenTicket = new SupportTicket
+            {
+                Id = Guid.NewGuid(), DeviceId = deviceId, SiteId = siteId, RequestId = Guid.NewGuid(),
+                RequesterKey = new string('e', 64), Subject = "SLA reopen fixture", Description = "Fixture",
+                CreatedAt = createdAt, UpdatedAt = createdAt
+            };
+            db.SupportTickets.Add(reopenTicket);
+            await TicketSlaTargetService.ApplyInitialTargets(db, reopenTicket);
+            await db.SaveChangesAsync();
+            var closeAt = DateTimeOffset.UtcNow;
+            Assert.Equal(1, await TicketSlaTargetService.CompleteTarget(db, reopenTicket.Id, "first_response", closeAt));
+            Assert.Equal(1, await TicketSlaTargetService.CompleteTarget(db, reopenTicket.Id, "resolution", closeAt));
+            Assert.True(await TicketSlaTargetService.StartResolutionCycle(db, reopenTicket.Id, closeAt.AddMinutes(1), publisher.Id));
+            await db.SaveChangesAsync();
+            var cycles = await db.SupportTicketSlaTargets.AsNoTracking().Where(x => x.TicketId == reopenTicket.Id && x.TargetType == "resolution")
+                .OrderBy(x => x.Cycle).ToArrayAsync();
+            Assert.Equal([1, 2], cycles.Select(x => x.Cycle).ToArray());
+            Assert.NotNull(cycles[0].CompletedAt);
+            Assert.InRange((cycles[0].CompletedAt!.Value - closeAt).Duration(), TimeSpan.Zero, TimeSpan.FromMilliseconds(1));
+            Assert.Null(cycles[1].CompletedAt);
+            Assert.Equal(cycles[0].PolicyVersion, cycles[1].PolicyVersion);
+            Assert.Equal(1, await TicketSlaTargetService.CompleteTarget(db, reopenTicket.Id, "resolution", closeAt.AddMinutes(2)));
+            Assert.Equal(0, await TicketSlaTargetService.CompleteTarget(db, reopenTicket.Id, "resolution", closeAt.AddMinutes(3)));
+
             var alertTicket = new SupportTicket
             {
                 Id = Guid.NewGuid(), DeviceId = deviceId, SiteId = siteId, RequestId = Guid.NewGuid(),
@@ -183,13 +260,13 @@ public sealed class SlaPolicyScenario(ApiFactory factory) : IClassFixture<ApiFac
         }
     }
 
-    private static SlaPolicyDefinition Definition(int firstResponse = 60, int resolution = 480) => new(
+    private static SlaPolicyDefinition Definition(int firstResponse = 60, int resolution = 480, string[]? pauseStates = null) => new(
         firstResponse,
         resolution,
         new SlaCalendarInput("UTC", new Dictionary<DayOfWeek, BusinessTimeRange[]>
         {
             [DayOfWeek.Monday] = [new BusinessTimeRange(new TimeOnly(9, 0), new TimeOnly(17, 0))]
-        }, []));
+        }, [])) { PauseStates = pauseStates ?? [] };
 
     private static WebApplicationFactoryClientOptions ClientOptions() => new() { BaseAddress = new Uri("https://localhost"), AllowAutoRedirect = false };
 
