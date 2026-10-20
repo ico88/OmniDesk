@@ -277,7 +277,7 @@ try {
  await participantsRegion.getByRole('button',{name:`Rimuovi ${participantEmail}`,exact:true}).click();
  await participantsRegion.getByText('Nessun partecipante aggiuntivo.',{exact:true}).waitFor();
  await page.locator('#ticket-state').waitFor();
- assert.deepEqual(await page.getByLabel('Stato',{exact:true}).locator('option').evaluateAll(options=>options.map(option=>option.value)),['open','in_progress','resolved'],'Ticket UI lists only server-approved transitions');
+ assert.deepEqual(await page.locator('#ticket-state').locator('option').evaluateAll(options=>options.map(option=>option.value)),['open','in_progress','resolved'],'Ticket UI lists only server-approved transitions');
  const interventionPicker=page.locator('.ticket-intervention-link select');
  await interventionPicker.waitFor();
  await interventionPicker.selectOption(`update_job:${diagnosticJobId}`);
