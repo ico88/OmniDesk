@@ -89,11 +89,14 @@ public static class AgentScenario
         agent.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Assertion(key));
         var adapters = new[] { new NetworkAdapterItem("Wi-Fi", "Wireless80211", "AABBCCDDEEFF", ["192.168.1.50", "fe80::1"]), new NetworkAdapterItem("Ethernet", "Ethernet", "001122334455", ["10.0.0.20"]) };
         agent.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Assertion(key));
-        Assert.Equal(HttpStatusCode.NoContent, (await agent.PostAsJsonAsync("/api/agent/metrics", metrics with { NetworkAdapters = adapters })).StatusCode);
+        var smartDisks = new[] { new SmartDiskItem("Fixture NVMe", "no_failure_predicted") };
+        Assert.Equal(HttpStatusCode.NoContent, (await agent.PostAsJsonAsync("/api/agent/metrics", metrics with { NetworkAdapters = adapters, SmartDisks = smartDisks })).StatusCode);
+        agent.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Assertion(key));
+        Assert.Equal(HttpStatusCode.BadRequest, (await agent.PostAsJsonAsync("/api/agent/metrics", metrics with { SmartDisks = [new("Fixture NVMe", "healthy")] })).StatusCode);
         agent.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Assertion(key));
         Assert.Equal(HttpStatusCode.BadRequest, (await agent.PostAsJsonAsync("/api/agent/metrics", metrics with { NetworkAdapters = [new("Wi-Fi", "Wireless80211", "invalid", ["not-an-ip"])] })).StatusCode);
         agent.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Assertion(key));
-        var inventory = new InventoryRequest("Windows fixture", "X64", "Fixture", "Test", null, "Test CPU", 8, [new("Test app", "1.0", "Test")], []);
+        var inventory = new InventoryRequest("Windows fixture", "X64", "Fixture", "Test", "SN-TEST-123", "Test CPU", 8, [new("Test app", "1.0", "Test")], []);
         Assert.Equal(HttpStatusCode.NoContent, (await agent.PutAsJsonAsync("/api/agent/inventory", inventory)).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await scoped.GetAsync($"/api/devices/{id}/status")).StatusCode);
         Assert.Equal(HttpStatusCode.Created, (await admin.PostAsJsonAsync("/api/admin/grants", new { userId = scopedId, role = "Viewer", groupId = group, deviceId = (Guid?)null })).StatusCode);
@@ -202,6 +205,8 @@ public static class AgentScenario
         listed = (await scoped.GetFromJsonAsync<JsonElement[]>("/api/devices"))!.Single(x => x.GetProperty("id").GetGuid() == id);
         Assert.True(listed.GetProperty("online").GetBoolean());
         Assert.Equal(42.5, status.GetProperty("metrics").GetProperty("cpuPercent").GetDouble());
+        Assert.Equal("no_failure_predicted", status.GetProperty("metrics").GetProperty("smartDisks")[0].GetProperty("status").GetString());
+        Assert.Equal("SN-TEST-123", status.GetProperty("inventory").GetProperty("serialNumber").GetString());
         Assert.Equal("Test app", status.GetProperty("inventory").GetProperty("software")[0].GetProperty("name").GetString());
         await RemoteProvisioningScenario.Run(factory, admin, scoped, agent, () => Assertion(key), id);
         await SupportScenario.Run(factory, admin, scoped, agent, scopedId, () => Assertion(key), id, group);

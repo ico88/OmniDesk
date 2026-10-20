@@ -302,5 +302,6 @@ public sealed class SecurityTests : IClassFixture<ApiFactory>, IAsyncLifetime
             var user = await users.FindByEmailAsync("scoped@example.test");
             Assert.True(await users.IsLockedOutAsync(user!));
         }
+        await EmailTwoFactorScenario.Run(factory);
     }
 }
