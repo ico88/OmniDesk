@@ -23,6 +23,7 @@ jobs:
   agent-msi:
     if: ${{ inputs.native_installer_only != true }}
     runs-on: windows-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v6
