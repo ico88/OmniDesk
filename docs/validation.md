@@ -1980,3 +1980,10 @@ modificato; ogni nuova estensione attende la propria CI sul push.
 - `./scripts/smoke.sh --browser` — passato nello stack isolato: Chromium, probe ClamAV/EICAR, worker SLA/escalation e ripristino completo DB/blob/Identity/CA. Nessun servizio LAN è stato modificato.
 - Le opzioni `OMNIDESK_RETENTION_DEVICE_METRICS_DAYS` e `OMNIDESK_RETENTION_DEVICE_INVENTORY_DAYS` hanno default `0`; nessuna migrazione è richiesta. Non è stata effettuata alcuna cancellazione o verifica su dati live e la retention backup/off-site resta aperta.
 - CI Linux `39369087867` è passata includendo suite, Compose, build API/dashboard e smoke. Windows `39369087920` ha build MSI e console passate; il job Agent è ancora nella verifica install/recovery/uninstall e poi deve completare upgrade/repair/rollback. Nessun rilascio o deploy LAN.
+
+### Backup — validazione prima del marker READY — 2026-10-20
+
+- `bash -n scripts/backup.sh scripts/verify-backup.sh scripts/smoke.sh tests/backup-verification-tests.sh` e `bash tests/backup-verification-tests.sh` — passati. Il test usa una fixture temporanea e un comando Docker simulato; verifica che il modo normale rifiuti uno staging senza `READY` e che staging/archivio marcato attraversino la verifica DB.
+- Compose base, test, backup-check e restore-check con fixture di percorso — `config --quiet` passato; `git diff --check` passato.
+- `./scripts/smoke.sh --browser` — passato nello stack isolato: il fixture è stato verificato in staging, inclusi riferimenti DB/blob e restore runtime completo DB/Identity/CA via HTTPS; API readiness, antiforgery e deny anonimo passati. Nessun servizio LAN modificato.
+- `backup.sh` lascia senza marker `READY` un archivio se checksum, riferimenti blob o restore falliscono. Backup off-site, cifratura, retention e DR su host separato restano aperti.

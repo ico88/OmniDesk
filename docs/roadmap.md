@@ -1,5 +1,16 @@
 # Roadmap
 
+### Backup — convalida automatica prima del marker READY
+
+`scripts/backup.sh` esegue ora `verify-backup.sh --staging`: checksum, riferimenti
+DB/blob e restore applicativo isolato devono riuscire prima che l'archivio riceva
+`READY`. Gli archivi staged vengono rifiutati dal verificatore in modalità
+normale; il test shell controlla entrambe le condizioni. Smoke Chromium completo
+passato con restore fixture attraverso la modalità staging.
+Questo riduce il rischio di archivi incoerenti quando la retention elimina
+allegati durante la raccolta, ma non sostituisce backup off-site, cifratura,
+retention dei backup o prova di disaster recovery su host separato.
+
 ### Privacy — retention metriche e inventario Agent
 
 Implementate due policy indipendenti, `OMNIDESK_RETENTION_DEVICE_METRICS_DAYS`
