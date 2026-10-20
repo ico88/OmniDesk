@@ -97,11 +97,7 @@ public static class AgentEndpoints
                 new[] { r.Manufacturer, r.Model, r.SerialNumber, r.Processor }.Any(x => x?.Length > 500) ||
                 r.LogicalProcessors is < 1 or > 65536 || r.Software is null || r.Software.Length > 2000 ||
                 r.Software.Any(x => x is null || string.IsNullOrWhiteSpace(x.Name) || x.Name.Length > 500 || x.Version?.Length > 200 || x.Publisher?.Length > 500) ||
-                r.Warnings is null || r.Warnings.Length > 50 || r.Warnings.Any(x => x is null || x.Length > 500) ||
-                r.NetworkAdapters is { Length: > 32 } || r.NetworkAdapters?.Any(x => x is null || string.IsNullOrWhiteSpace(x.Name) || x.Name.Length > 256 ||
-                    string.IsNullOrWhiteSpace(x.Type) || x.Type.Length > 64 || x.MacAddress is null || x.MacAddress.Length > 32 ||
-                    x.MacAddress.Any(ch => !Uri.IsHexDigit(ch)) || x.IpAddresses is null || x.IpAddresses.Length > 32 ||
-                    x.IpAddresses.Any(ip => ip is null || ip.Length > 64 || !IPAddress.TryParse(ip, out _))) == true) return Results.BadRequest();
+                r.Warnings is null || r.Warnings.Length > 50 || r.Warnings.Any(x => x is null || x.Length > 500)) return Results.BadRequest();
             var id = Guid.Parse(c.User.UserId()); var now = DateTimeOffset.UtcNow; var payload = JsonSerializer.Serialize(r);
             var updated = await db.DeviceInventories.Where(x => x.DeviceId == id).ExecuteUpdateAsync(s => s.SetProperty(x => x.ReceivedAt, now).SetProperty(x => x.Payload, payload));
             if (updated == 0) { db.DeviceInventories.Add(new DeviceInventory { DeviceId = id, ReceivedAt = now, Payload = payload }); await db.SaveChangesAsync(); }
@@ -126,7 +122,13 @@ public static class AgentEndpoints
     private static AuditEvent Audit(string? actor, string action, Guid id) => new() { ActorId = actor, Action = action, Target = id.ToString() };
     private static bool Valid(MetricsRequest r) => (r.CpuPercent is null || (double.IsFinite(r.CpuPercent.Value) && r.CpuPercent is >= 0 and <= 100)) &&
         r.TotalMemoryBytes > 0 && r.AvailableMemoryBytes >= 0 && r.AvailableMemoryBytes <= r.TotalMemoryBytes &&
-        r.NetworkReceivedBytes >= 0 && r.NetworkSentBytes >= 0 && r.UptimeSeconds >= 0 && r.Disks is not null && r.Disks.Length <= 64 &&
+                r.NetworkReceivedBytes >= 0 && r.NetworkSentBytes >= 0 && r.UptimeSeconds >= 0 && r.Disks is not null && r.Disks.Length <= 64 &&
         (r.AgentVersion is null || (r.AgentVersion.Length <= 64 && System.Text.RegularExpressions.Regex.IsMatch(r.AgentVersion, @"\A[0-9]+\.[0-9]+\.[0-9]+\z"))) &&
-        r.Disks.All(x => x is not null && !string.IsNullOrWhiteSpace(x.Name) && x.Name.Length <= 200 && x.TotalBytes > 0 && x.FreeBytes >= 0 && x.FreeBytes <= x.TotalBytes);
+                r.Disks.All(x => x is not null && !string.IsNullOrWhiteSpace(x.Name) && x.Name.Length <= 200 && x.TotalBytes > 0 && x.FreeBytes >= 0 && x.FreeBytes <= x.TotalBytes) &&
+                ValidNetworkAdapters(r.NetworkAdapters);
+    private static bool ValidNetworkAdapters(OmniDesk.Contracts.NetworkAdapterItem[]? adapters) => adapters is null ||
+        (adapters.Length <= 32 && adapters.All(x => x is not null && !string.IsNullOrWhiteSpace(x.Name) && x.Name.Length <= 256 &&
+            !string.IsNullOrWhiteSpace(x.Type) && x.Type.Length <= 64 && x.MacAddress is not null && x.MacAddress.Length <= 32 &&
+            x.MacAddress.All(Uri.IsHexDigit) && x.IpAddresses is not null && x.IpAddresses.Length <= 32 &&
+            x.IpAddresses.All(ip => ip is not null && ip.Length <= 64 && IPAddress.TryParse(ip, out _))));
 }

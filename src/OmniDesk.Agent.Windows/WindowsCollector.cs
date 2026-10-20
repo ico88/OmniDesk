@@ -24,9 +24,23 @@ public sealed class WindowsCollector
         var memory = new MemoryStatus { Length = (uint)Marshal.SizeOf<MemoryStatus>() };
         if (!GlobalMemoryStatusEx(ref memory)) throw new InvalidOperationException("Cannot read physical memory metrics.");
         long received = 0, sent = 0;
-        foreach (var adapter in NetworkInterface.GetAllNetworkInterfaces().Where(x => x.OperationalStatus == OperationalStatus.Up && x.NetworkInterfaceType != NetworkInterfaceType.Loopback))
+        var networkAdapters = new List<NetworkAdapterItem>();
+        foreach (var adapter in NetworkInterface.GetAllNetworkInterfaces()
+                     .Where(x => x.OperationalStatus == OperationalStatus.Up && x.NetworkInterfaceType != NetworkInterfaceType.Loopback)
+                     .Take(32))
         {
-            try { var stats = adapter.GetIPStatistics(); received += stats.BytesReceived; sent += stats.BytesSent; }
+            try
+            {
+                var stats = adapter.GetIPStatistics(); received += stats.BytesReceived; sent += stats.BytesSent;
+                var addresses = adapter.GetIPProperties().UnicastAddresses
+                    .Select(x => x.Address)
+                    .Where(x => !System.Net.IPAddress.IsLoopback(x) && !x.Equals(System.Net.IPAddress.Any) && !x.Equals(System.Net.IPAddress.IPv6Any))
+                    .Select(x => x.ToString())
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Take(32)
+                    .ToArray();
+                networkAdapters.Add(new(Limit(adapter.Name, 256)!, adapter.NetworkInterfaceType.ToString(), adapter.GetPhysicalAddress().ToString(), addresses));
+            }
             catch (NetworkInformationException) { /* Adapter removed during snapshot. */ }
         }
         var disks = new List<DiskMetric>();
@@ -36,7 +50,7 @@ public sealed class WindowsCollector
             catch (IOException) { /* Offline drive is omitted, not represented as zero. */ }
         }
         return new(cpu, checked((long)memory.TotalPhysical), checked((long)memory.AvailablePhysical), received, sent,
-            checked((long)(GetTickCount64() / 1000)), disks.ToArray(), typeof(WindowsCollector).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion?.Split('+')[0]);
+            checked((long)(GetTickCount64() / 1000)), disks.ToArray(), typeof(WindowsCollector).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion?.Split('+')[0], networkAdapters.ToArray());
     }
     public InventoryRequest Inventory()
     {
@@ -78,27 +92,8 @@ public sealed class WindowsCollector
         }
         var distinct = software.Distinct().OrderBy(x => x.Name).ToArray();
         if (distinct.Length > 2000) warnings.Add("Software inventory truncated to 2000 entries");
-        var networkAdapters = new List<NetworkAdapterItem>();
-        foreach (var adapter in NetworkInterface.GetAllNetworkInterfaces()
-                     .Where(x => x.OperationalStatus == OperationalStatus.Up && x.NetworkInterfaceType != NetworkInterfaceType.Loopback)
-                     .Take(32))
-        {
-            try
-            {
-                var mac = adapter.GetPhysicalAddress().ToString();
-                var addresses = adapter.GetIPProperties().UnicastAddresses
-                    .Select(x => x.Address)
-                    .Where(x => !System.Net.IPAddress.IsLoopback(x) && !x.Equals(System.Net.IPAddress.Any) && !x.Equals(System.Net.IPAddress.IPv6Any))
-                    .Select(x => x.ToString())
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .Take(32)
-                    .ToArray();
-                networkAdapters.Add(new(Limit(adapter.Name, 256)!, adapter.NetworkInterfaceType.ToString(), mac, addresses));
-            }
-            catch (NetworkInformationException) { /* Adapter changed during collection; omit the incomplete interface. */ }
-        }
         return new(RuntimeInformation.OSDescription, RuntimeInformation.OSArchitecture.ToString(), hardware["Manufacturer"], hardware["Model"],
-            bios["SerialNumber"], processor["Name"], Environment.ProcessorCount, distinct.Take(2000).ToArray(), warnings.ToArray(), networkAdapters.ToArray());
+            bios["SerialNumber"], processor["Name"], Environment.ProcessorCount, distinct.Take(2000).ToArray(), warnings.ToArray());
     }
     private static string? Limit(string? s, int length) => s is null ? null : s[..Math.Min(s.Length, length)];
     [StructLayout(LayoutKind.Sequential)] private struct MemoryStatus
