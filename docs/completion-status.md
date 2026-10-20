@@ -12,21 +12,23 @@ Aggiornamento branch 2026-10-20: Agent/Tray/Setup/MSI passa a 0.8.11 per
 consentire il download esplicito dalla Tray degli allegati pubblici puliti. Il
 server rivalida ogni richiesta con la credenziale dispositivo e la chiave
 richiedente, e rifiuta allegati infetti o non più visibili. La suite locale
-passa 96/96 API/PostgreSQL e 6/6 Vitest con build dashboard; CI e collaudo
-interattivo Windows sono ancora da eseguire. Il pacchetto 0.8.11 non è pubblicato
-sulla LAN: il download web sul server resta 0.8.9.
+passa 96/96 API/PostgreSQL e 6/6 Vitest con build dashboard. CI Linux
+`39390505418` e Windows `39390505409` sono verdi; il pacchetto unsigned 0.8.11 è
+stato generato ma non pubblicato sulla LAN: il download web sul server resta
+0.8.9. Il collaudo interattivo sul client Windows pilota resta aperto.
 
-Verifica CI aggiornata: Linux `39386842860` è passato su 0.8.11, includendo test,
-build API/dashboard, Compose e smoke Chromium/restore. Windows `39386842846` ha
-compilato Agent/Tray/MSI e superato install/recovery/uninstall; la matrice
-upgrade/repair/rollback è ancora in corso. Download Tray e flusso end-to-end
-restano da provare interattivamente sul PC Windows pilota.
+Verifica CI aggiornata: Linux `39390505418` è passato su 0.8.11, includendo test,
+build API/dashboard, Compose e smoke Chromium/restore. Windows `39390505409` ha
+superato build MSI, install/recovery/uninstall e upgrade/repair/rollback sulle
+baseline 0.6.0 e 0.7.0, eseguite in job separati. Download Tray e flusso
+end-to-end restano da provare interattivamente sul PC Windows pilota.
 
-Il workflow Windows è stato poi aggiornato nel commit `1bf8ee7`: pubblica il
+Il workflow Windows è stato aggiornato nel commit `1bf8ee7`: pubblica il
 candidate MSI dopo il lifecycle test e divide le verifiche sulle baseline 0.6.0
-e 0.7.0 in due job isolati. Il run in corso non è stato interrotto; la nuova
-struttura sarà validata da un run successivo. La disponibilità di un artifact
-non equivale alla promozione del pacchetto LAN.
+e 0.7.0 in due job isolati. La nuova struttura è stata verificata dalla CI
+`39390505409`; il precedente run `39386842846` resta attivo e non è stato
+interrotto. La disponibilità dell’artifact non equivale alla promozione del
+pacchetto LAN.
 
 | Parte | Implementazione | Verifica disponibile | Gate rimanente |
 | --- | --- | --- | --- |

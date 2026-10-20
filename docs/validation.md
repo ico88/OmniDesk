@@ -2,15 +2,16 @@
 
 ### Windows MSI — isolamento baseline upgrade — 2026-10-20
 
-- Run `39386842846` continua a risultare `in_progress` sullo step combinato di upgrade/repair/rollback, avviato alle 07:33 UTC e oltre 20 minuti; il run non è stato annullato. La build MSI e la verifica install/recovery/uninstall risultano già passate.
-- Il workflow è stato aggiornato nel commit `1bf8ee7`: il candidato MSI viene caricato prima delle prove di upgrade; le baseline 0.6.0 e 0.7.0 vengono compilate e testate in job Windows separati e paralleli, con timeout di job individuale. `git diff --check` e parsing strutturale YAML locale passano; la nuova matrice Windows resta da verificare su GitHub Actions.
-- Il run Linux `39386842860` per il codice 0.8.11 è verde. Nessun MSI è stato promosso al download LAN.
+- Il run iniziale `39386842846` è rimasto `in_progress` per oltre 20 minuti nella matrice combinata; non è stato interrotto. Build MSI e install/recovery/uninstall erano passati.
+- Il workflow separato nel commit `1bf8ee7` ha superato la nuova CI Windows [run 39390505409](https://github.com/ico88/OmniDesk/actions/runs/39390505409): il candidato è stato caricato prima delle prove e due job paralleli hanno compilato/testato le baseline 0.6.0 e 0.7.0. Entrambe hanno verificato upgrade, repair e rollback; la run completa è terminata in circa sei minuti.
+- La CI Linux [run 39390505418](https://github.com/ico88/OmniDesk/actions/runs/39390505418) è passata con suite, build container, Compose e smoke Chromium/restore isolato. L’artifact unsigned 0.8.11 è presente nel run Windows; non è stato promosso al download LAN. La prova Tray sul PC pilota resta aperta.
+- Artifact scaricato in una directory temporanea per controllo: MSI 70,619,136 byte e Setup 116,231,680 byte; `sha256sum -c SHA256SUMS.txt` — entrambi `OK`. Nessuna installazione sul PC pilota o pubblicazione LAN eseguita.
 
 ### Tray Windows — download allegati ticket puliti — 2026-10-20
 
 - Versione Agent/Tray/Setup/MSI 0.8.11. `./scripts/test.sh` passa: 96/96 test API/PostgreSQL, build TypeScript/Vite e 6/6 Vitest. `docker compose config --quiet` e `git diff --check` passano.
-- CI Linux [run 39386842860](https://github.com/ico88/OmniDesk/actions/runs/39386842860) è verde, incluse build API/dashboard Docker e smoke Chromium con restore isolato. CI Windows [run 39386842846](https://github.com/ico88/OmniDesk/actions/runs/39386842846) è ancora attiva sulla matrice MSI da baseline; build MSI e install/recovery/uninstall sono passati.
-- Il test interattivo della Tray su PC Windows resta da fare. Nessun artefatto è stato promosso al download LAN e nessun servizio live è stato modificato.
+- CI Linux [run 39390505418](https://github.com/ico88/OmniDesk/actions/runs/39390505418) e Windows [run 39390505409](https://github.com/ico88/OmniDesk/actions/runs/39390505409) sono verdi; la pipeline Windows ha compilato l’MSI e completato lifecycle e test upgrade/repair/rollback su entrambe le baseline.
+- L’artifact unsigned 0.8.11 è stato generato da CI. Il test interattivo Tray/download sul PC Windows resta da fare; nessun artefatto è stato promosso al download LAN e nessun servizio live è stato modificato.
 
 ### Tray Windows — allegati contestuali ticket — 2026-10-20
 
