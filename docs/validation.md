@@ -1,5 +1,11 @@
 # Stato e verifiche — 18 ottobre 2026
 
+### Windows MSI — isolamento baseline upgrade — 2026-10-20
+
+- Run `39386842846` continua a risultare `in_progress` sullo step combinato di upgrade/repair/rollback, avviato alle 07:33 UTC e oltre 20 minuti; il run non è stato annullato. La build MSI e la verifica install/recovery/uninstall risultano già passate.
+- Il workflow è stato aggiornato nel commit `1bf8ee7`: il candidato MSI viene caricato prima delle prove di upgrade; le baseline 0.6.0 e 0.7.0 vengono compilate e testate in job Windows separati e paralleli, con timeout di job individuale. `git diff --check` e parsing strutturale YAML locale passano; la nuova matrice Windows resta da verificare su GitHub Actions.
+- Il run Linux `39386842860` per il codice 0.8.11 è verde. Nessun MSI è stato promosso al download LAN.
+
 ### Tray Windows — download allegati ticket puliti — 2026-10-20
 
 - Versione Agent/Tray/Setup/MSI 0.8.11. `./scripts/test.sh` passa: 96/96 test API/PostgreSQL, build TypeScript/Vite e 6/6 Vitest. `docker compose config --quiet` e `git diff --check` passano.

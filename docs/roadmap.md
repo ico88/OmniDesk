@@ -12,7 +12,11 @@ dedicato. Versione Agent/Tray/Setup/MSI 0.8.11. La suite API/PostgreSQL passa
 96/96; build TypeScript/Vite e Vitest 6/6 passano. CI Linux `39386842860` è
 verde con build container e smoke Chromium/restore isolato; Windows/MSI
 `39386842846` è ancora nella matrice upgrade/repair/rollback dopo build MSI e
-install/recovery/uninstall riusciti. Nessun deploy LAN effettuato. Il riepilogo della scheda
+install/recovery/uninstall riusciti. Quel run ha superato 20 minuti nello step
+che costruiva e provava entrambe le baseline. Il commit `1bf8ee7` carica l’MSI
+candidato prima dei test e separa le baseline 0.6.0/0.7.0 in job Windows
+paralleli e indipendenti, ciascuno con timeout di 45 minuti; la nuova pipeline
+deve ancora validare questo assetto. Nessun deploy LAN effettuato. Il riepilogo della scheda
 Rete già mostra tutti gli IP e i MAC degli adattatori attivi per dispositivo.
 
 ### Tray Windows — allegati nella conversazione
