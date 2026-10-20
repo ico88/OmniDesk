@@ -135,6 +135,7 @@ public sealed class TicketNotificationWorker(IServiceScopeFactory scopes, ILogge
             kind = assignmentChanged ? "ticket.assigned" : TryBoolean(root, "replyAdded") ? "ticket.reply" : "ticket.updated";
             if (assignmentChanged) recipients.Add(assignee);
             else if (kind == "ticket.reply") await AddAssigneeOrQueue(db, root, recipients, ct);
+            if (kind == "ticket.reply" && ticket.RequesterUserId is { } requesterId) recipients.Add(requesterId);
             await AddTicketParticipants(db, ticket.Id, evt.OccurredAt, recipients, ct);
         }
         else if (evt.EventType == "ticket.participant.added" && TryString(root, "participantUserId", out var participant))
@@ -160,12 +161,15 @@ public sealed class TicketNotificationWorker(IServiceScopeFactory scopes, ILogge
         foreach (var userId in recipients)
         {
             if (userId == actorId || !await db.Users.AnyAsync(x => x.Id == userId && !x.IsDisabled, ct) ||
-                !await permissions.Allows(userId, "tickets.view", ticket.DeviceId, siteId: ticket.SiteId)) continue;
+                !await TicketAccessPolicy.CanViewAsync(db, permissions, userId, ticket.Id, ticket.RequesterUserId,
+                    ticket.DeviceId, ticket.SiteId, ct)) continue;
             if (evt.EventType == "ticket.attachment.ready" && TryString(root, "visibility", out var attachmentVisibility) &&
                 attachmentVisibility == "internal" && !await permissions.Allows(userId, "tickets.note.internal", ticket.DeviceId, siteId: ticket.SiteId)) continue;
             var notification = new UserNotification
             {
-                EventId = evt.Id, UserId = userId, TicketId = ticket.Id, Kind = kind, CreatedAt = now
+                EventId = evt.Id, UserId = userId, TicketId = ticket.Id,
+                Kind = kind == "ticket.reply" && userId == ticket.RequesterUserId ? "ticket.staff.reply" : kind,
+                CreatedAt = now
             };
             db.UserNotifications.Add(notification);
             if (outboundEmailEnabled && await db.Users.AnyAsync(x => x.Id == userId && x.EmailNotificationsEnabled &&

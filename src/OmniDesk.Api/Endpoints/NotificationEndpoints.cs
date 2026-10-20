@@ -25,7 +25,7 @@ public static class NotificationEndpoints
             c.Response.Headers.CacheControl = "no-store";
             return Results.Ok(new { offlineDevices = candidates });
         });
-        api.MapGet("", async (HttpContext c, AppDbContext db, PermissionService permissions) =>
+        api.MapGet("", async (HttpContext c, AppDbContext db, PermissionService permissions, CancellationToken ct) =>
         {
             var userId = c.User.UserId();
             var rows = await db.UserNotifications.AsNoTracking().Where(notification => notification.UserId == userId)
@@ -36,9 +36,9 @@ public static class NotificationEndpoints
             {
                 if (item.TicketId is { } ticketId)
                 {
-                    var ticket = await db.SupportTickets.AsNoTracking().Where(x => x.Id == ticketId)
-                        .Select(x => new { x.Id, x.Number, x.Subject, x.DeviceId, x.SiteId }).SingleOrDefaultAsync();
-                    if (ticket is null || !await permissions.Allows(userId, "tickets.view", ticket.DeviceId, siteId: ticket.SiteId)) continue;
+                    var ticket = await db.SupportTickets.AsNoTracking().SingleOrDefaultAsync(x => x.Id == ticketId, ct);
+                    if (ticket is null || !await TicketAccessPolicy.CanViewAsync(db, permissions, userId,
+                            ticket.Id, ticket.RequesterUserId, ticket.DeviceId, ticket.SiteId, ct)) continue;
                     if (item.ReadAt is null) unread++;
                     visible.Add(new { item.Id, item.Kind, item.CreatedAt, item.ReadAt, ticketId = ticket.Id,
                         ticket.Number, ticket.Subject, deviceId = (Guid?)null, deviceName = (string?)null });
@@ -59,16 +59,17 @@ public static class NotificationEndpoints
             return Results.Ok(new { unreadCount = unread, notifications = visible });
         });
 
-        api.MapPost("/{id:guid}/read", async (Guid id, HttpContext c, AppDbContext db, PermissionService permissions) =>
+        api.MapPost("/{id:guid}/read", async (Guid id, HttpContext c, AppDbContext db, PermissionService permissions, CancellationToken ct) =>
         {
             var userId = c.User.UserId();
             var notification = await db.UserNotifications.SingleOrDefaultAsync(x => x.Id == id && x.UserId == userId);
             if (notification is null) return Results.NotFound();
             if (notification.TicketId is { } ticketId)
             {
-                var ticket = await db.SupportTickets.AsNoTracking().SingleOrDefaultAsync(x => x.Id == ticketId);
+                var ticket = await db.SupportTickets.AsNoTracking().SingleOrDefaultAsync(x => x.Id == ticketId, ct);
                 if (ticket is null) return Results.NotFound();
-                if (!await permissions.Allows(userId, "tickets.view", ticket.DeviceId, siteId: ticket.SiteId)) return Results.Forbid();
+                if (!await TicketAccessPolicy.CanViewAsync(db, permissions, userId,
+                        ticket.Id, ticket.RequesterUserId, ticket.DeviceId, ticket.SiteId, ct)) return Results.Forbid();
             }
             else if (notification.DeviceId is { } deviceId)
             {

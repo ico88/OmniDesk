@@ -72,7 +72,8 @@ public sealed class EmailNotificationWorker(IServiceScopeFactory scopes, ILogger
             var permissions = scope.ServiceProvider.GetRequiredService<PermissionService>();
             var eligible = notification is not null && user is { IsDisabled: false, EmailNotificationsEnabled: true,
                     EmailNotificationsEnabledAt: { } consentAt, Email: not null } && notification.CreatedAt >= consentAt &&
-                (ticket is not null && await permissions.Allows(user.Id, "tickets.view", ticket.DeviceId, siteId: ticket.SiteId) ||
+                (ticket is not null && await TicketAccessPolicy.CanViewAsync(db, permissions, user.Id, ticket.Id,
+                     ticket.RequesterUserId, ticket.DeviceId, ticket.SiteId, ct) ||
                  device is not null && await db.DeviceCredentials.AnyAsync(x => x.DeviceId == device.Id && x.RevokedAt == null, ct) &&
                     await permissions.Allows(user.Id, "view", device.Id, siteId: device.SiteId));
             if (eligible && notification!.Kind == "ticket.attachment")
@@ -96,6 +97,7 @@ public sealed class EmailNotificationWorker(IServiceScopeFactory scopes, ILogger
                 "device.offline" => "Dispositivo non raggiungibile",
                 "ticket.new" => "Nuovo ticket assegnato",
                 "ticket.reply" => "Nuova risposta al ticket",
+                "ticket.staff.reply" => "Nuova risposta dell'assistenza al ticket",
                 "ticket.assigned" => "Ticket assegnato",
                 "ticket.attachment" => "Nuovo allegato al ticket",
                 "ticket.sla.breached" => "SLA del ticket superato",

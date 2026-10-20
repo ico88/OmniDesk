@@ -12,7 +12,7 @@ const states:Record<string,string>={open:'Aperto',in_progress:'In lavorazione',r
 const categories=[['general','Generale'],['hardware','Hardware'],['software','Software'],['network','Rete'],['account','Account'],['other','Altro']];
 const date=(value:string)=>new Date(value).toLocaleString('it-IT');
 
-export function CustomerPortal({onMessage}:{onMessage:(message:string)=>void}) {
+export function CustomerPortal({onMessage,focusTicketId,onTicketFocused}:{onMessage:(message:string)=>void;focusTicketId:string|null;onTicketFocused:()=>void}) {
   const [devices,setDevices]=useState<PortalDevice[]>([]);
   const [tickets,setTickets]=useState<Ticket[]>([]);
   const [selectedId,setSelectedId]=useState('');
@@ -41,6 +41,7 @@ export function CustomerPortal({onMessage}:{onMessage:(message:string)=>void}) {
     catch{/* Keep the last successful view on transient connectivity errors. */}
     finally{refreshing=false;}
   };const timer=window.setInterval(()=>void refresh(),30000);return()=>{active=false;window.clearInterval(timer);};},[]);
+  useEffect(()=>{if(focusTicketId&&tickets.some(ticket=>ticket.id===focusTicketId)){setSelectedId(focusTicketId);onTicketFocused();}},[focusTicketId,tickets,onTicketFocused]);
   useEffect(()=>{if(!selectedId){setDetail(null);return;}let active=true;setDetail(null);
     void api<Detail>(`/portal/tickets/${selectedId}`).then(value=>{if(active)setDetail(value);}).catch(e=>{if(active){setError(e instanceof Error?e.message:'Conversazione non disponibile');setSelectedId('');}});
     return()=>{active=false;};},[selectedId]);
