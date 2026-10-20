@@ -149,9 +149,18 @@ internal sealed class SupportForm : Form
         conversationCanReply = thread.State is "open" or "in_progress";
         conversation.Text = string.Join(Environment.NewLine + Environment.NewLine, thread.Messages.Select(m =>
             $"{(m.Kind == "request" ? "Richiesta" : m.Kind == "requester_reply" ? "Tu" : m.Kind == "state_change" ? "Stato" : "Team IT")} · {m.CreatedAt.ToLocalTime():g}\r\n" +
-            (m.Kind == "state_change" ? $"{m.FromState} → {m.ToState}" : m.Body)));
+            (m.Kind == "state_change" ? $"{m.FromState} → {m.ToState}" : m.Body) +
+            (m.Attachments is { Length: > 0 } ? "\r\n" + string.Join("\r\n", m.Attachments.Select(AttachmentLabel)) : "")));
         if (thread.State is "resolved" or "closed") result.Text = "Ticket chiuso: apri una nuova richiesta per continuare.";
     }
+    private static string AttachmentLabel(SupportRequesterAttachmentView attachment) => attachment.ScanState switch
+    {
+        "clean" => $"📎 {attachment.FileName} · {FormatSize(attachment.SizeBytes)} · pronto nel portale OmniDesk",
+        "infected" => "📎 Allegato bloccato dalla scansione antivirus",
+        "scan_failed" => "📎 Scansione allegato non riuscita; contatta l’assistenza IT",
+        _ => "📎 Allegato in quarantena o scansione in corso"
+    };
+    private static string FormatSize(long bytes) => bytes < 1024 ? $"{bytes} B" : bytes < 1024 * 1024 ? $"{bytes / 1024.0:0} KB" : $"{bytes / (1024.0 * 1024):0.0} MB";
     private Task Reply() => Work(async () => {
         if (selectedTicket is null || string.IsNullOrWhiteSpace(replyText.Text)) { result.Text = "Seleziona un ticket aperto e scrivi una risposta."; return; }
         var response = await Call(new(TrayProtocol.Version,Guid.NewGuid(),TrayProtocol.ReplyToTicketMethod,

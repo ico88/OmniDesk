@@ -3,7 +3,9 @@ namespace OmniDesk.Contracts;
 public sealed record SupportCreate(Guid RequestId, string Subject, string Description, string? ScreenshotBase64, bool ScreenshotConsent, string Category = "general");
 public sealed record SupportIntake(string RequesterKey, SupportCreate Ticket);
 public sealed record SupportRequesterReply(string RequesterKey, long ExpectedVersion, string Body);
-public sealed record SupportRequesterMessageView(long Id, string Kind, string Body, string? FromState, string? ToState, DateTimeOffset CreatedAt, bool ContentPurged = false);
+public sealed record SupportRequesterAttachmentView(Guid Id, string FileName, long SizeBytes, string ScanState);
+public sealed record SupportRequesterMessageView(long Id, string Kind, string Body, string? FromState, string? ToState,
+    DateTimeOffset CreatedAt, bool ContentPurged = false, SupportRequesterAttachmentView[]? Attachments = null);
 public sealed record SupportRequesterConversation(Guid TicketId, long Version, string State, SupportRequesterMessageView[] Messages);
 public sealed record SupportTicketView(Guid Id, long Number, Guid DeviceId, string Subject, string Description, string State,
     string? Resolution, long Version, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt, bool HasScreenshot, string Category = "general", string Origin = "device", bool ContentPurged = false);

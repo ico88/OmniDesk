@@ -108,9 +108,19 @@ public static class SupportEndpoints
             if (ticket is null) return Results.NotFound();
             if (!await db.DeviceCredentials.AnyAsync(x => x.DeviceId == deviceId && x.RevokedAt == null)) return Results.Unauthorized();
             var replies = await db.SupportMessages.AsNoTracking().Where(m => m.TicketId == ticketId && m.Visibility == "public")
-                .OrderBy(m => m.Id).Select(m => new SupportRequesterMessageView(m.Id, m.Kind, m.Body, m.FromState, m.ToState, m.CreatedAt, m.ContentPurged)).ToArrayAsync();
+                .OrderBy(m => m.Id).Select(m => new { m.Id, m.Kind, m.Body, m.FromState, m.ToState, m.CreatedAt, m.ContentPurged }).ToArrayAsync();
+            var replyIds = replies.Select(message => message.Id).ToArray();
+            var attachments = replyIds.Length == 0 ? [] : await db.SupportAttachments.AsNoTracking()
+                .Where(item => item.TicketId == ticketId && item.MessageId != null && replyIds.Contains(item.MessageId.Value) &&
+                    item.Visibility == "public" && item.ScanState != "retention_pending" &&
+                    db.SupportMessages.Any(message => message.Id == item.MessageId && !message.ContentPurged))
+                .Select(item => new { MessageId = item.MessageId!.Value,
+                    Attachment = new SupportRequesterAttachmentView(item.Id, item.OriginalFileName, item.SizeBytes, item.ScanState) }).ToArrayAsync();
             var messages = new[] { new SupportRequesterMessageView(0, "request", ticket.Description, null, null, ticket.CreatedAt, ticket.ContentPurged) }
-                .Concat(replies).ToArray();
+                .Concat(replies.Select(message => new SupportRequesterMessageView(message.Id, message.Kind, message.Body,
+                    message.FromState, message.ToState, message.CreatedAt, message.ContentPurged,
+                    attachments.Where(item => item.MessageId == message.Id).Select(item => item.Attachment).ToArray())))
+                .ToArray();
             c.Response.Headers.CacheControl = "no-store";
             return Results.Ok(new SupportRequesterConversation(ticket.Id, ticket.Version, ticket.State, messages));
         });
