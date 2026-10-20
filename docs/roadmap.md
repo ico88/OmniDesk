@@ -1,5 +1,80 @@
 # Roadmap
 
+**Snapshot corrente: 2026-10-20.** Le prime sezioni descrivono lo stato corrente; il resto del documento conserva decisioni e milestone storiche. Per stato distribuito e gate aperti fare riferimento a [completion-status.md](completion-status.md) e alle registrazioni più recenti in [validation.md](validation.md). Le note storiche con versioni precedenti o “non pubblicato” non sovrascrivono lo snapshot.
+
+### Client RustDesk Windows e console Desktop
+
+L'area Dispositivi consente agli amministratori di scaricare un installer
+RustDesk x64 fissato a una release upstream e verificato con SHA-256. I
+parametri server OmniDesk copiabili compaiono una sola volta nella scheda di
+connessione; il riquadro download mostra release, installer e checksum. La
+configurazione iniziale del client resta manuale; l'installer non imposta
+password né accesso non presidiato.
+Il pulsante **Aggiungi dispositivo** apre un modale con i passaggi 1) scarica
+Agent e 2) registra il computer. La dashboard aggiornata rimuove dalla console
+OmniDesk le schede Terminale/PowerShell e Trasferimento file. Le operazioni
+remote passano dal client RustDesk: la console avvia il client installato
+localmente, mentre la sessione resta esterna alla dashboard. L'operatore ha
+confermato il funzionamento del
+collegamento e delle schermate attuali nel browser. OmniDesk non riceve lo stato
+della sessione dopo l'handoff e non ne gestisce consenso, disconnessione o revoca.
+Dettagli in [validation](validation.md).
+
+La console mantiene l'apertura e la gestione manuale dei ticket; l'invio da
+OmniDesk Tray resta il percorso per l'utente del PC. Policy SLA, gestione dei
+ticket arrivati via email e configurazione workflow non sono esposte nella
+navigazione operativa.
+
+I moduli **Account e sicurezza**, **Assistenza**, **Utenti** e **Workflow ticket**
+usano campi raggruppati in griglie responsive: credenziali e preferenze,
+parametri del ticket, concessioni e impostazioni dei workflow sono allineati per
+funzione e si dispongono su una colonna su schermi piccoli.
+Nel pannello Assistenza, ricerca, filtri e azioni sono disposti in righe
+distinte: su desktop la ricerca ha più spazio, i filtri sono allineati e i
+pulsanti restano raggruppati; su mobile i campi vanno in colonna.
+
+### Panoramica operativa del parco dispositivi
+
+La panoramica mostra il numero di dispositivi visibili, online, offline e
+revocati, più gli ultimi heartbeat ricevuti. La lista **Da controllare** mette
+in evidenza dispositivi offline o revocati; **Ultimi contatti** ordina quelli
+con un heartbeat registrato. Ogni riga apre il dettaglio del dispositivo.
+La vista aggiorna i dati all'ingresso, manualmente e ogni 30 secondi. Lo stato
+online segue la soglia heartbeat configurata dal server. Patch, salute Agent e
+avvisi non disponibili nell'API non sono rappresentati. La distribuzione e le
+verifiche sono registrate in [validation](validation.md).
+
+### Inventario hardware — seriale e SMART
+
+L'Agent raccoglie già il seriale BIOS tramite `Win32_BIOS`; la scheda Sistema
+ora lo mostra e nasconde i valori OEM generici. L'Agent 0.8.16 aggiunge per ogni
+disco che espone il provider Windows `MSStorageDriver_FailurePredictStatus` la
+previsione SMART (guasto predetto / nessun guasto predetto), inviata nei
+heartbeat e mostrata in Archiviazione. Se driver, controller o disco non
+espongono il dato, lo stato resta non disponibile. Nessuna migrazione database:
+la telemetria esistente è JSON. Il codice 0.8.16 è aggiornato nel workspace e la versione WiX dell’MSI ora è
+allineata ai tre progetti. Publish self-contained win-x64 di Agent, Tray e Setup
+e test API per payload seriale/SMART passano; il workflow Windows deve ancora
+produrre e collaudare MSI/upgrade prima della pubblicazione del kit. Vedere
+[validation](validation.md).
+
+### RustDesk OSS pilot — standard native transport
+
+The 443/WSS experiment established that Caddy accepts the WebSocket upgrade,
+but the tested RustDesk 1.5.0 desktop client still requests `ws://` and receives
+the expected HTTP-to-HTTPS redirect. WSS client mode is documented for Server
+Pro, so the OSS pilot now targets RustDesk's standard TCP/UDP ports instead.
+The Compose overlay publishes TCP 21115-21117 and UDP 21116. The operator
+opened UDP 21116 on the upstream router and confirmed the RustDesk clients are
+ready. OmniDesk now has an administrator-managed peer-ID mapping, displays the
+OSS client settings (ID server, relay, blank API, public key), checks
+`remote.control`, audits launch requests, and hands off connections through the
+RustDesk URI scheme. The operator confirmed that launching from OmniDesk
+connects successfully. The session itself remains in the locally installed
+RustDesk client; OmniDesk does not observe or manage its lifecycle. Automated
+client provisioning and session lifecycle integration remain open. See
+[RustDesk pilot](rustdesk-pilot.md) and [validation](validation.md).
+
 ### Windows Agent — scelta identità esistente — 0.8.15 pubblicato
 
 Setup 0.8.15 rileva l'identità protetta locale e chiede se conservarla per
@@ -10,7 +85,7 @@ conserva l'identità. Windows CI 39429881906 ha passato build, prove MSI e
 upgrade dai baseline 0.6.0/0.7.0; il kit è pubblicato nella console. La
 sostituzione su un PC reale resta da verificare.
 
-### Dashboard — console Desktop remoto e gestione server — 2026-10-20
+### Storico — console Desktop remoto MeshCentral — 2026-10-20
 
 - Nella scheda dispositivo la console remota è ora il primo contenuto; stato
   motore, provisioning, policy e storico sono raccolti in un pannello secondario
@@ -40,12 +115,11 @@ nessuna modifica runtime in questa fase. Analisi completa:
 La specifica confronta anche il lifecycle MSI: firma Authenticode quando
 disponibile, verifica hash/firma, diagnostica Defender in dashboard, interventi
 solo amministrativi sugli strumenti Windows, health check dopo MSI e rollback
-bounded. Il kit 0.8.12 è ancora pubblicato; 0.8.13 è in test Windows, non ancora
-promosso né installato sul PC. La versione 0.8.13 è ora promossa al download
-autenticato del server; resta unsigned da laboratorio e non è stata installata
-sul client Windows. La firma manca e i blocchi Defender non sono ancora
-classificati nella dashboard. Il cambiamento diagnostico non rimuove la
-quarantena del motore MeshCentral.
+bounded. Stato corrente del pacchetto: Agent 0.8.15 pubblicato per il download
+autenticato; CI Windows passata, prova di sostituzione identità sul PC reale
+ancora aperta. Il pacchetto resta unsigned da laboratorio. La firma manca e
+l'integrazione runtime Defender non è implementata; la quarantena segnalata per
+MeshCentral non è stata rimossa né risolta da OmniDesk.
 
 ### Backup — retention locale opt-in
 
@@ -201,7 +275,7 @@ Implementata nel branch una policy opt-in `OMNIDESK_RETENTION_RESOLVED_TICKET_AT
 
 La dashboard consente a un operatore con `tickets.manage` di selezionare il dispositivo, rivedere/modificare oggetto e descrizione, impostare categoria/priorità e confermare esplicitamente che il mittente non è verificato. L’API crea un ticket `email` associato al dispositivo selezionato, senza collegare l’email a un account; la promozione è idempotente e transazionale, con routing, workflow, SLA, outbox e audit. Verifiche API/PostgreSQL 90/90, dashboard 6/6, build dei container e smoke Chromium isolato registrati in `validation.md`. Provider reale, binding verificato dei thread e invio/ricezione reply restano aperti; nessuna pubblicazione LAN in questo incremento.
 
-Stato corrente sintetico: [consegna Windows/LAN](completion-status.md). Le sezioni successive conservano lo storico; gli stati iniziali progettato/non compilato sono superati solo dalle verifiche successive esplicitamente registrate.
+Stato sintetico corrente: [consegna Windows/LAN](completion-status.md). Da qui in avanti le sezioni datate descrivono lo storico delle milestone; per lo stato attuale prevalgono lo snapshot e la validazione più recente. Le indicazioni storiche “non pubblicato” o versioni precedenti non descrivono il deploy corrente, salvo che una voce successiva le confermi.
 
 ### Incremento SD1 — Allegati ticket con quarantena (implementato nel branch, non pubblicato)
 
@@ -292,7 +366,7 @@ Le fasi non hanno date promesse. KB di base e storico non dipendono dall'AI. Pro
 
 ## Percorso futuro Windows Agent e Tray
 
-**Implementazione nel branch: Agent e Tray distinti, pacchetto unico 0.8.9; collaudo client e gate di rilascio ancora aperti.** CI Windows verifica build, MSI, installazione, recovery, uninstall e upgrade/repair/rollback; le prove interattive su PC pilota, firma Authenticode e revisione Microsoft Defender non sono chiuse. Agent gira come servizio per-machine con ACL/DPAPI e recovery; Tray non elevata per-sessione usa named pipe ACL e protocollo tipizzato. Nessuna promessa di protezione assoluta contro amministratori locali o accesso fisico privilegiato. La Tray resta distinta dalla console IT WebView2. Stato corrente e gate in [completion-status.md](completion-status.md); le note storiche seguenti non sostituiscono tale stato.
+**Riepilogo storico del percorso Agent/Tray.** I componenti restano distinti: Agent per-machine con ACL/DPAPI e recovery; Tray non elevata per-sessione con named pipe ACL e protocollo tipizzato. Il pacchetto corrente è 0.8.15, pubblicato per il download autenticato; CI Windows è passata, mentre prova su PC reale, firma Authenticode e revisione Defender sono ancora aperte. Nessuna promessa di protezione assoluta contro amministratori locali o accesso fisico privilegiato. La Tray resta distinta dalla console IT WebView2. Stato corrente e gate in [completion-status.md](completion-status.md); le note storiche seguenti non sostituiscono tale stato.
 
 | Fase | Consegna proposta | Dipendenze e criteri di accettazione |
 | --- | --- | --- |
@@ -747,10 +821,11 @@ heartbeat IP/MAC e caricamento remoto incorporato. La dashboard ora confronta la
 versione Agent del heartbeat con la soglia 0.8.12: nasconde le metriche rete
 storiche non filtrate, segnala l’aggiornamento necessario e mostra la versione
 rilevata nell’intestazione del dispositivo. Build e test unitari della soglia
-passano; il codice UI non è ancora pubblicato sulla LAN né verificato sul browser
-live. Vedi [validation.md](validation.md).
+passavano; a quella data il codice UI non era ancora pubblicato sulla LAN né
+verificato sul browser live. Questo è uno stato storico, superato dai deploy
+successivi registrati in [validation.md](validation.md).
 
-### Aggiornamento remoto Agent e priorità Desktop remoto — 2026-10-20
+### Storico — aggiornamento remoto Agent e priorità Desktop remoto — 2026-10-20
 
 La scheda dispositivo si apre ora su Desktop remoto e mette questa sezione prima
 della configurazione amministrativa. La scheda Aggiornamenti rilegge i lavori
@@ -774,3 +849,17 @@ HTTPS, limite sessione API configurato a 30 minuti e nessuna sessione attiva o
 pendente di revoca al controllo. Le prove applicative e CI sono in
 [validation.md](validation.md); il test interattivo successivo dal PC Windows
 pilota resta aperto.
+
+
+### Accesso con codice temporaneo email — implementato, non attivato
+
+La password è il primo passaggio; se l’opzione server viene abilitata, l’utente
+prosegue in una schermata separata e inserisce il codice a sei cifre inviato
+all’indirizzo dell’account. La sessione non viene creata prima della verifica.
+I codici scadono in 10 minuti, sono conservati solo come hash Identity, hanno
+limite di tentativi, nuova emissione con attesa e massimo invii; challenge e
+codice usati sono rifiutati. Richiede SMTP outbound TLS configurato e non può
+essere combinata con TOTP. È disattivata per default e resta disattivata sul
+server fino a una decisione successiva. Migrazione e interfaccia incluse; prove
+API con SMTP finto, build, deploy e readiness sono registrati in
+[validation.md](validation.md).

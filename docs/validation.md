@@ -2189,3 +2189,133 @@ modificato; ogni nuova estensione attende la propria CI sul push.
 - Il pacchetto e il manifest sono stati installati nell'area `/packages` montata nel servizio API; il checksum letto dal container corrisponde al manifest. Il download amministrativo resta protetto da autenticazione e permesso `administration`.
 - CI Linux [`39429881874`](https://github.com/ico88/OmniDesk/actions/runs/39429881874) — gli altri step build/test sono passati, ma lo smoke browser è fallito su un'asserzione preesistente della console remota: attendeva visibile `.remote-status .count` con testo `1`, ma il locator risolveva uno `span.count` nascosto (`browser-smoke.mjs:518`). Questa modifica Windows non tocca quel flusso.
 - Nessun PC Windows reale è stato collaudato. La revoca/sostituzione reale richiede che il server associato all'identità locale sia raggiungibile; se non lo è, Setup conserva l'identità e interrompe la sostituzione.
+
+### Prototipo RustDesk OSS — relay WebSocket su HTTPS (2026-10-20)
+
+- Aggiunto un overlay isolato `compose.rustdesk-pilot.yaml` con immagine ufficiale RustDesk Server OSS 1.1.16 fissata al digest multi-arch `sha256:5974cd791a5aca6fbf01a167b37e7427db1d136e95b2710c33a34fdc9fea724c`. Nessuna porta host è pubblicata; il container è solo sulla rete proxy Docker e `ALWAYS_USE_RELAY=Y` forza il relay.
+- Caddy inoltra `/ws/id` a `hbbs:21118` e `/ws/relay` a `hbbr:21119` sull'HTTPS già disponibile. Le chiavi server persistono nel volume dedicato; il file privato è stato portato a modalità `0600`.
+- `docker compose -p omnidesk-production -f compose.yaml -f compose.direct.yaml -f compose.rustdesk-pilot.yaml config -q` — passato. `caddy validate` — valido; reload Caddy — passato. Probe `/api/health/ready` — HTTP 200; handshake WebSocket ID e relay — HTTP 101. Il client Windows RustDesk e una sessione interattiva non sono ancora stati provati.
+- L'issue upstream [rustdesk-server #704](https://github.com/rustdesk/rustdesk-server/issues/704) riporta chiusure WebSocket dopo inattività sulla 1.1.16. Questo rimane da verificare col client reale prima di considerare il trasporto adatto. Il pilot non integra ancora identità OmniDesk, permessi, consenso, scadenza, revoca o audit; usarlo solo con dispositivo di prova e sessione presidiata.
+
+### RustDesk OSS — passaggio al trasporto standard (2026-10-20)
+
+- I log del client RustDesk 1.5.0 mostrano `ws://omnidesk.cricatania.it/ws/id`, `tls_type Plain` e risposta Caddy `308` verso HTTPS. Le impostazioni `:443` e “Use WebSocket” non hanno prodotto WSS. La documentazione RustDesk riserva `allow-websocket` ai client >=1.4.0 con Server Pro >=1.5.7; non si abilita fallback non cifrato né si accetta il redirect.
+- Il pilot è stato riconfigurato per il trasporto OSS standard con pubblicazione Docker TCP 21115, 21116, 21117 e UDP 21116; le route WSS non usate sono state rimosse da Caddy. `ALWAYS_USE_RELAY=Y` resta attivo.
+- `docker compose -p omnidesk-production -f compose.yaml -f compose.direct.yaml -f compose.rustdesk-pilot.yaml config -q` — passato; la configurazione risolve le quattro pubblicazioni previste (TCP 21115/21116/21117 e UDP 21116). `git diff --check` — passato.
+- `docker compose -p omnidesk-production -f compose.yaml -f compose.direct.yaml -f compose.rustdesk-pilot.yaml up -d --no-deps rustdesk` — passato; container ricreato e poi healthy. Caddy validato e ricaricato senza le route WSS. `ss` conferma listener host su TCP 21115/21116/21117 e UDP 21116; l'endpoint API `/api/health/ready` via IP LAN `10.0.0.53` risponde `{"status":"ready"}`.
+- Il tentativo TCP verso il dominio pubblico eseguito dal server stesso non raggiunge le porte; non verifica il port forwarding WAN perché può essere influenzato dall'assenza di NAT loopback. Nessuna regola router/firewall/security group è stata modificata; l'esito successivo dal PC esterno è riportato sotto.
+- Da PC Windows esterno (sorgente `192.168.1.160`), `Test-NetConnection omnidesk.cricatania.it -Port 21115/21116/21117` — `TcpTestSucceeded: True` per tutte e tre. Questo verifica solo TCP; UDP 21116 e una sessione remota RustDesk non sono ancora collaudati.
+
+### Integrazione OmniDesk → RustDesk OSS — 2026-10-20
+
+- Aggiunta migrazione versionata `20261020180000_RustDeskDeviceMappings`, mapping peer ID univoco per device, configurazione client esposta dalla API e verifica server-side di `remote.control` prima dell'handoff `rustdesk://`. La richiesta viene auditata; nessuna password viene archiviata o inclusa nell'URI.
+- La vista Desktop remoto mostra ID server, relay, campo API vuoto e chiave pubblica con copia rapida; gli amministratori possono associare o rimuovere l'ID RustDesk del dispositivo.
+- `docker compose ... config -q` — passato. Build immagini `api` e `dashboard` — passata (publish ASP.NET e `tsc --noEmit && vite build`). Test automatici non eseguiti in questo incremento.
+- Il browser apre il client RustDesk installato: il flusso non è incorporato nella pagina. Il consenso e la disconnessione effettivi sono gestiti dal client e non sono attestati da OmniDesk.
+- Deploy sul server `omnidesk`: Compose validato; build delle immagini API/dashboard riuscita; migrazione `20261020180000_RustDeskDeviceMappings` applicata; API e dashboard ricreate con l'overlay RustDesk. Il probe HTTPS pubblico eseguito dal server non ha funzionato per il limite di NAT loopback; il probe locale con `curl --resolve omnidesk.cricatania.it:443:10.0.0.53` ha restituito `{"status":"ready"}`. API, dashboard e RustDesk risultano in esecuzione e RustDesk è healthy.
+- Test automatici e avvio interattivo del collegamento dal browser non eseguiti. Verificare dal proprio browser il mapping amministrativo, la copia della configurazione e l'apertura del client installato.
+
+### Installer RustDesk e onboarding dispositivi — 2026-10-20
+
+- Fissato RustDesk Windows x64 alla release ufficiale 1.5.0. Asset upstream: `rustdesk-1.5.0-x86_64.exe`; digest SHA-256 pubblicato dall'API GitHub Releases `8555777215510d83d2d61c9dc984e4fcc838bd7e79f9d18a42585431f5e8bb47`. Il file, 25,887,600 byte, è stato scaricato sul server in `~/omnidesk-rustdesk-packages`; hash locale e container coincidono. Manifest runtime montato in sola lettura nell'API, senza includere il binario nel repository.
+- Aggiunti `/api/admin/downloads/rustdesk` e `/installer`, protetti da autenticazione e permesso globale `administration`. L'API verifica manifest, nome, versione, dimensione e SHA-256 prima del download e scrive l'audit `package.download`. Il manifest contiene solo versione, nome, dimensione e hash; i parametri ID server, relay e chiave pubblica arrivano dalla configurazione esistente.
+- La scheda Admin espone installer e copia dei quattro campi di configurazione. Il client resta da configurare manualmente: il pacchetto non imposta password, non abilita accesso non presidiato e non è incluso nell'Agent.
+- Il flusso Agent/enrollment è stato spostato nel modale **Aggiungi dispositivo** in due passaggi numerati. Rimossa dalla scheda Desktop la sezione **Gestione sessioni MeshCentral**. I tab Agent **Terminale/PowerShell** e **Trasferimento file** restano nel servizio legacy; la sessione Desktop RustDesk resta gestita dal client esterno.
+- I campi di Account e sicurezza, Assistenza, Utenti e Workflow ticket sono stati raggruppati per funzione con layout a griglia e adattamento mobile; ricerca, filtri e azioni del pannello Assistenza hanno righe dedicate. La logica e i payload dei form restano invariati.
+- Build Docker API (`dotnet publish`) e dashboard (`tsc --noEmit && vite build`) — passate; configurazione Compose overlay — valida; `git diff --check` — passato. La build API host non era disponibile perché `dotnet` non è installato sull'host; build eseguita nell'immagine SDK del server. Suite automatiche non eseguite.
+- Deploy API/dashboard completato via Compose. `/api/health/ready` via IP LAN `10.0.0.53` restituisce `{"status":"ready"}`; manifest e asset sono leggibili nel container e checksum verificato. Entrambi gli endpoint RustDesk rispondono HTTP 401 senza sessione, confermando il requisito di autenticazione. Non è stata eseguita una prova con account Admin del download o con il client RustDesk; il test visuale del modale è da fare nel browser.
+- Dopo il riordino dei campi, `npm run build` nel container Node 22 (`tsc --noEmit && vite build`) — passato e dashboard ridistribuita. Health readiness nuovamente `ready`; il bundle servito contiene il modale e i tab Agent Terminale/PowerShell e Trasferimento file, e non contiene più il pannello Gestione sessioni MeshCentral. Verifica statica del bundle, non prova visuale interattiva.
+- Correzione successiva del pannello Assistenza: ricerca e filtri in griglia a quattro colonne su desktop, azioni raccolte in una riga dedicata e campi in colonna su mobile. Build dashboard passata, asset CSS/JS controllati sul server e readiness `ready`; resta da verificare la resa visiva nel browser.
+
+### Console RustDesk — configurazione senza duplicati — 2026-10-20
+
+- Rimossi dalla scheda download i parametri ID/relay/API e la chiave pubblica, già disponibili nella configurazione della scheda Desktop RustDesk. Il riquadro download mostra release, dimensione, installer e checksum e rimanda alla configurazione unica.
+- `docker compose ... build dashboard` — passato (`tsc --noEmit && vite build`). Pubblicazione sul server con progetto `omnidesk-production` e overlay `compose.rustdesk-pilot.yaml`, ricreato solo il container dashboard.
+- Verifica live: `/api/health/ready` ha restituito `{"status":"ready"}`; l'HTML serve il bundle `index-ktjDORq9.js` e il bundle non contiene più il testo della configurazione duplicata. Verifica statica, resa visuale da controllare nel browser.
+
+### Supporto essenziale e Tray — 2026-10-20
+
+- Rimossi dalla navigazione dashboard Policy SLA, Email da valutare e Workflow ticket; rimossa la scheda SLA dal dettaglio ticket. Restano la gestione manuale dal pannello Assistenza, **I miei ticket** e le richieste inviate dalla Tray. Gli endpoint server e le configurazioni non sono stati eliminati.
+- Riorganizzata la Tray in due schede, **Nuova richiesta** e **I miei ticket**. L'elenco mostra ID leggibile, stato e oggetto; l'invio porta al ticket creato. `dotnet build src/OmniDesk.Tray.Windows/OmniDesk.Tray.Windows.csproj -c Release -p:EnableWindowsTargeting=true` nel container SDK — passato, zero warning/errori. Non prodotto il pacchetto MSI: la pipeline di packaging usa Windows.
+- Build dashboard `tsc --noEmit && vite build` — passata. Distribuita solo la dashboard con overlay Compose RustDesk; readiness API `ready`. Il bundle live non contiene le voci Policy SLA, Email da valutare, Workflow ticket o Obiettivi di servizio. Verifica statica, resta il controllo visuale nel browser e l'installazione del prossimo MSI Tray sul PC pilota.
+
+### Snapshot documentale precedente — superato dalla verifica successiva
+
+- Allineati [roadmap.md](roadmap.md) e [completion-status.md](completion-status.md) alle evidenze più recenti: branch locale `sviluppo`, Agent 0.8.15 disponibile per il download autenticato, pilot RustDesk OSS con trasporto TCP/UDP standard e console Desktop esterna.
+- Al momento di questo snapshot non erano ancora state confermate la sessione RustDesk dal pulsante OmniDesk e la verifica visiva del pannello Assistenza. Entrambe sono state confermate dall'operatore dopo questo aggiornamento; vedere la sezione seguente.
+- Le sezioni con versioni Agent precedenti, branch `feature/windows-support-lan` o deploy non ancora eseguiti descrivono verifiche storiche. Non sono state rilanciate suite applicative per questo aggiornamento solo documentale.
+
+### Console dispositivi — rimozione dei tab Terminale e file — 2026-10-20
+
+- Rimossi dalla navigazione dispositivo i tab **Terminale e PowerShell** e **Trasferimento file**, insieme al pannello remoto legacy e al polling di disponibilità MeshCentral non più usato dalla console. Le capability e le API server-side non sono state rimosse in questo passaggio.
+- Il percorso Desktop remoto continua a usare l'handoff al client RustDesk locale, il cui collegamento reale è stato confermato dall'operatore. La sessione e le funzioni offerte dal client restano esterne alla UI OmniDesk.
+- La prima verifica locale non ha potuto usare `node`/`npm` né Docker senza autenticazione interattiva. L'operatore ha poi eseguito build e deploy della dashboard.
+- Verifica successiva dal server: `/api/health/ready` via IP LAN `10.0.0.53` ha restituito `{"status":"ready"}`; il documento HTML serve `/assets/index-ByBzkk4L.js` e `/assets/index-0rphuIYx.css`. La ricerca nel bundle live non trova le etichette `Terminale e PowerShell`, `Trasferimento file` o `Gestione sessioni MeshCentral`.
+- Non sono stati eseguiti test automatici. La verifica del bundle conferma la rimozione delle voci UI, non rimuove né testa le API/capability Agent legacy.
+
+### Panoramica operativa dispositivi — 2026-10-20
+
+- La pagina Panoramica usa `/api/devices` già autorizzato per mostrare conteggi dispositivi visibili, online, offline e revocati, lista di attenzione e ultimi heartbeat. Le righe aprono il dettaglio dispositivo. I dati vengono ricaricati all'ingresso, su richiesta e ogni 30 secondi; online/offline segue la soglia heartbeat server.
+- `docker compose -p omnidesk-production -f compose.yaml -f compose.direct.yaml -f compose.rustdesk-pilot.yaml build dashboard` — passato: `tsc --noEmit && vite build`, asset `index-992vizvv.js` e `index-DIhVAyuS.css`.
+- Configurazione Compose `config -q` e `git diff --check` — passati. Container dashboard ricreato con `up -d --no-deps dashboard`; API readiness via IP LAN `10.0.0.53` — `{"status":"ready"}`.
+- Il server serve i nuovi bundle e la ricerca del contenuto JS/CSS conferma le sezioni Panoramica, Ultimi contatti e classi layout. Non eseguiti test automatici né verifica visuale interattiva. Non sono mostrati dati patch, allarmi o salute agent che l'endpoint non fornisce.
+
+### Inventario hardware — numero di serie e previsione SMART — 2026-10-20
+
+- Il seriale BIOS era già raccolto dall'Agent tramite `Win32_BIOS` e salvato nel JSON inventario; la scheda Sistema ora lo mostra e filtra le stringhe OEM generiche. Nessuna migrazione DB.
+- L'Agent raccoglie gli oggetti `MSStorageDriver_FailurePredictStatus` da `root\\wmi` e li abbina, quando possibile, al modello `Win32_DiskDrive` usando PNPDeviceID. Invia stato `predicted_failure`, `no_failure_predicted` o `unavailable` nel payload metriche heartbeat. Il server valida nome, numero e valori dello stato prima del salvataggio. Il supporto varia con controller, disco e driver; l'assenza del provider resta non disponibile, non viene interpretata come disco sano.
+- Versione sorgente Agent/Tray/Setup portata a 0.8.16. Build Agent Windows-targeted via SDK .NET 10 — passata, 0 warning/0 errori. Build Compose API (`dotnet publish`) e dashboard (`tsc --noEmit && vite build`) — passate. `docker compose ... config -q` e `git diff --check` — passati.
+- Deploy API/dashboard via Compose — completato, entrambi i container avviati. Probe `/api/health/ready` via IP LAN `10.0.0.53` — `{"status":"ready"}`. Bundle live `index-C6ysT2cn.js` e `index-DWzny170.css`.
+- Il kit Windows 0.8.15 resta quello installabile finché la pipeline Windows non produce e pubblica il pacchetto 0.8.16. Nessun test automatico o WMI interattivo su PC Windows eseguito; il test reale deve confermare che i dischi espongano provider e stato SMART.
+
+## 2026-10-20 — accesso email a due passaggi (disattivato in produzione)
+
+Implementato il login password → codice email OTP → cookie di sessione. I codici
+sono numerici a sei cifre, validi dieci minuti (la scadenza si rinnova al nuovo
+invio), conservati con `IPasswordHasher` di ASP.NET Identity e collegati a un
+token casuale di challenge il cui hash è nel DB. Challenge monouso, security
+stamp, cinque tentativi massimi, lockout Identity, attesa di 60 secondi e massimo
+tre invii; SMTP fallito invalida la challenge. Audit registra gli esiti senza
+codice, token o indirizzo. La dashboard presenta schermata OTP, reinvio e ritorno
+al login. Migrazione `20261020175719_EmailLoginChallenges` applicata al DB
+production.
+
+`sg docker -c './scripts/test.sh'`: API/PostgreSQL 106/106 e dashboard/Vitest
+12/12 passati; `npm ci` segnala 0 vulnerabilità. La compilazione segnala cinque
+warning nullable già presenti in `UpdateScenario.cs` e `SupportScenario.cs`;
+nessun warning residuo introdotto dallo scenario OTP. `docker compose ... config
+-q`, build delle immagini API/dashboard e `git diff --check` passati. La ricerca
+mirata non ha trovato `EnsureCreated`, `IgnoreAntiforgery`, `dangerouslySetInnerHTML`
+o `eval(` nei sorgenti API/dashboard.
+
+Deploy completato sulla LAN ricostruendo e riavviando solo API/dashboard. Al primo
+probe, immediatamente dopo il riavvio, Caddy ha restituito 502 mentre aggiornava
+la risoluzione DNS Docker; il probe successivo è `{"status":"ready"}`. Il
+container API espone `Security__EmailTwoFactorEnabled=false`; `.env` non è stato
+modificato e il login live continua a non richiedere il codice. Configurazione
+Compose e `.env.example` hanno default esplicito false. Per abilitare in futuro,
+configurare e verificare prima SMTP TLS outbound, impostare
+`OMNIDESK_EMAIL_2FA_ENABLED=true` nel `.env` e ricreare API; l’avvio rifiuta SMTP
+disabilitato/non valido e la combinazione con TOTP attivo. L’abilitazione non è
+stata eseguita né provata con un provider email reale.
+
+
+### Windows Agent 0.8.16 — preparazione MSI e test telemetria — 2026-10-20
+
+- Revisione del gate di rilascio: Agent, Tray e Setup dichiaravano 0.8.16, ma
+  `installer/OmniDesk.Agent/Package.wxs` era rimasto a 0.8.15. Allineato il
+  Package WiX a 0.8.16; verifica XML di parità Agent/Tray/Setup/MSI passata.
+- Publish self-contained `win-x64` di Agent, Tray e Setup con .NET SDK 10 in
+  container Linux — passati senza warning/errori. Test `AgentScenario` esteso:
+  seriale BIOS di fixture e stato SMART valido accettati e restituiti dal server;
+  stato SMART fuori enum rifiutato. `scripts/test.sh`: API/PostgreSQL 106/106,
+  dashboard/Vitest 12/12; `git diff --check` passato.
+- Il self-test Agent ora valida forma/limiti del seriale raccolto e dei record
+  SMART senza stampare il seriale nei log; il sorgente compila nel publish Agent.
+  WMI reale, MSI, Service Control Manager, upgrade/rollback e installazione non
+  sono eseguibili su questo host Linux.
+- La pipeline Windows più recente disponibile (`39429881906`) è per il pacchetto
+  precedente; non è stata eseguita sul sorgente locale 0.8.16. Nessun nuovo MSI/ZIP
+  generato o caricato sul server: il kit installabile resta 0.8.15. Per produrre
+  il pacchetto occorre eseguire il workflow Windows sul commit 0.8.16; le regole
+  del repository vietano il push senza autorizzazione esplicita.

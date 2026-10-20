@@ -3,7 +3,7 @@
 Console Windows WinForms/WebView2: stessa dashboard HTTPS e autorizzazioni server, origine obbligatoria `--server`, opzionale origine Mesh `--mesh` per link remoti nel browser esterno. Navigazioni interne limitate all'origine server; nessun bypass certificato, permessi browser negati, download dalla console principale disabilitati. Profilo WebView2 in LocalAppData, nessun segreto embedded. Richiede Evergreen WebView2 Runtime e fiducia CA LAN anche nel client Windows. Pubblicazione win-x64 riuscita anche sul runner Windows; esecuzione UI interattiva e firma ancora da collaudare.
 
 ```powershell
-.\OmniDesk.Console.Windows.exe --server https://192.168.1.233:8085
+.\OmniDesk.Console.Windows.exe --server https://omnidesk.cricatania.it
 ```
 
 Dashboard: layout personale (ordine/visibilità dei tre riquadri iniziali) persistente per utente, indipendente dal branding globale. API GET/PUT /api/dashboard/layout con {widgets:[devices,permissions,authentication]}, sottoinsieme ordinato senza duplicati. Nessuna metrica fittizia nei widget.

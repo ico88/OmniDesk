@@ -12,13 +12,13 @@ Adapter MeshCentral con sessioni limitate e audit, motore Docker opzionale: non 
 
 ## Installazione Ubuntu Server
 
-La configurazione predefinita usa **https://192.168.1.233:8085**, lasciando libere le porte host 80/443 per Nginx. Servono quell'indirizzo configurato sul server, Docker Compose e Python 3. Per fidarsi del certificato LAN importare la CA locale Caddy; istruzioni e vhost Nginx in [LAN e Nginx](docs/lan-nginx.md). Non usare HTTP: i cookie restano Secure.
+Il deployment pubblico usa **https://omnidesk.cricatania.it**, con Caddy e certificati Let's Encrypt su TCP 80/443. Il DNS deve puntare all'IP pubblico del server e le porte devono già essere raggiungibili; l'installer non cambia firewall, router, SSH o servizi di sistema. L'indirizzo interno previsto per il nuovo host è `10.0.0.53`. Requisiti: Ubuntu, Docker Engine/Compose, Python 3 e curl. L'installazione Docker richiede opt-in esplicito con `--install-docker`.
 
-La subnet Docker proxy è `172.29.84.0/24`: modificarla tramite `OMNIDESK_PROXY_SUBNET` in `.env` se confligge con reti esistenti. Non collegarvi container estranei.
+La subnet Docker proxy è `172.29.84.0/24`: modificarla tramite `OMNIDESK_PROXY_SUBNET` in `.env` se confligge con reti esistenti. Non collegarvi container estranei. L'installazione usa il progetto Compose `omnidesk-production`, tag immagine `:production`, volumi distinti e segreti nuovi. In questo modo i container e i build di sviluppo, che usano il progetto `omnidesk` e tag `:local`, restano separati. Non importa database, volumi o credenziali da altri host.
 
 ```bash
 ./setup.sh                     # prepara .env e secret, senza avviare container
-./setup.sh --start             # build, DB, migrazioni, bootstrap e avvio
+./setup.sh --start             # DNS, build, DB vuoto, migrazioni, bootstrap, avvio e HTTPS readiness
 ```
 
 Solo su un server destinato a OmniDesk, con autorizzazione a installare pacchetti e attivare Docker:
@@ -30,17 +30,19 @@ sudo ./setup.sh --start
 
 L'opzione `--install-docker` configura il repository apt ufficiale e abilita il servizio Docker; il normale setup non modifica servizi o firewall. Il daemon Docker può gestire autonomamente regole di rete all'avvio dei container. Non viene aggiunto alcun utente al gruppo docker.
 
-L'amministratore iniziale viene creato solo con DB vuoto. La password casuale è nel file `.secrets/bootstrap_password`: trasferirla tramite un canale riservato, poi rimuovere il file. Nessun segreto viene stampato o salvato in Git. `.secrets` è 0700, file montati 0444 per permettere lettura al processo container non root; proteggere anche i backup. Conservare `.secrets/db_password`: cambiarlo senza ruotare la password PostgreSQL interrompe il servizio.
+L'amministratore iniziale viene creato solo con DB vuoto. La password casuale è nel file `.secrets/bootstrap_password`: trasferirla tramite un canale riservato, poi rimuovere il file. Nessun segreto viene stampato o salvato in Git. `.secrets` è 0700, file montati 0444 per permettere lettura ai processi container; proteggere anche i backup. Conservare `.secrets/db_password` e `.secrets/db_runtime_password`: il primo è riservato a migrazioni/provisioning, il secondo all'API. Cambiarli senza ruotare le rispettive password PostgreSQL interrompe il servizio.
 
-Aprire `https://192.168.1.233:8085` dopo aver importato la CA, oppure `https://<dominio>` dopo la configurazione autorizzata di Nginx. Controllare:
+Aprire `https://omnidesk.cricatania.it`. Il setup aspetta l'endpoint HTTPS e PostgreSQL pronto. Controllare anche dall'esterno della rete del server:
 
 ```bash
-docker compose ps
-docker compose logs --tail=100 api caddy
-curl --cacert omnidesk-local-ca.crt --fail https://192.168.1.233:8085/api/health/ready
+docker compose -p omnidesk-production -f compose.yaml -f compose.direct.yaml ps
+docker compose -p omnidesk-production -f compose.yaml -f compose.direct.yaml logs --tail=100 api caddy
+curl --fail https://omnidesk.cricatania.it/api/health/live
+curl --fail https://omnidesk.cricatania.it/api/health/ready
+./scripts/diagnose.sh
 ```
 
-Il successo di setup non certifica DNS/TLS: verificare l'endpoint HTTPS. Le credenziali non sono recuperabili dal repository. Cambio password disponibile in Account e sicurezza. Reset assistito, disabilitazione account e gestione completa del ciclo di vita restano da completare.
+Il successo di setup include un health check HTTPS con validazione del certificato dal server. Verificare inoltre il dominio da una rete esterna per escludere problemi di NAT o instradamento. `./scripts/diagnose.sh` esegue questi controlli pubblici senza ignorare la verifica del certificato. La password iniziale è in `.secrets/bootstrap_password`: trasferirla tramite canale riservato, accedere e rimuovere il file. Le credenziali non sono recuperabili dal repository. Cambio password disponibile in Account e sicurezza. Reset assistito, disabilitazione account e gestione completa del ciclo di vita restano da completare.
 
 ## Test e sviluppo
 
@@ -66,7 +68,7 @@ umask 077
 docker compose exec -T db pg_dump -U omnidesk -d omnidesk -Fc > omnidesk-backup.dump
 ```
 
-Confermata la compatibilità e salvati i backup: fermare API durante la migrazione, costruire le immagini, eseguire `docker compose run --rm migrate`, avviare API/dashboard/Caddy. Non cancellare volumi per aggiornare. Rollback schema non automatizzato. PostgreSQL M1 usa l'utente iniziale del container: separare utente migrazioni e runtime a privilegi minimi prima di produzione. Le chiavi DataProtection sono protette dai permessi del volume, non cifrate a riposo: usare storage cifrato e proteggere backup.
+Confermata la compatibilità e salvati i backup: fermare API durante la migrazione, costruire le immagini, eseguire `docker compose -p omnidesk-production -f compose.yaml -f compose.direct.yaml run --rm migrate`, avviare API/dashboard/Caddy. Non cancellare volumi per aggiornare. Rollback schema non automatizzato. Il deployment pubblico usa `omnidesk` per migrazioni e `omnidesk_runtime` per l'API. Le chiavi DataProtection sono protette dai permessi del volume, non cifrate a riposo: usare storage cifrato e proteggere backup.
 
 Dettagli milestone: [M2 agente](docs/milestone-2.md), [M3 remoto](docs/milestone-3.md), [M4 aggiornamenti](docs/milestone-4.md), [M5 console/2FA](docs/milestone-5.md).
 

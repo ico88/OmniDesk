@@ -16,7 +16,11 @@ Autorizzazione: grant globale tramite Identity UserRoles, grant locale tramite S
 
 Future migrazioni: EnrollmentTokens (hash, expires, used, revoked), DeviceCredentials (chiave pubblica, revoca, rotazione), Metrics (device/time, retention), HardwareInventory, SoftwareInventory, UpdateJobs, RemoteSessions, DashboardLayouts per utente. Telemetria ad alto volume separabile dal DB transazionale. TOTP secret da proteggere con cifratura applicativa e chiavi esterne prima di attivazione.
 
-Eseguire migrazioni con `docker compose run --rm migrate` prima di avviare API. L'API non modifica automaticamente lo schema. Backup coerente di PostgreSQL + volume DataProtection e Caddy; testare restore prima di aggiornare.
+Eseguire migrazioni con `docker compose run --rm migrate` prima di avviare API. L'API non modifica automaticamente lo schema. Il deployment crea `omnidesk_runtime` con permessi DML su schema pubblico; l'utente `omnidesk` resta riservato a inizializzazione e migrazioni. Backup coerente di PostgreSQL + volume DataProtection e Caddy; testare restore prima di aggiornare.
+
+## Ruoli PostgreSQL del deployment pubblico
+
+Nel database nuovo lo script `deploy/postgres-init/20-runtime-role.sh` crea il ruolo runtime e concede permessi su tabelle/sequenze esistenti e future create da `omnidesk`. La password runtime è un secret separato. La modifica è verificata staticamente nel Compose; la prova dei permessi effettivi va completata durante smoke test/runtime sul nuovo host.
 
 ## Migrazioni M2–M5
 
