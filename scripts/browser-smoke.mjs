@@ -125,6 +125,7 @@ try {
  await page.getByRole('button',{name:'Revoca sessioni web',exact:true}).click();
  await page.getByText('Sessioni web revocate',{exact:true}).waitFor();
  await page.getByRole('button',{name:'Dispositivi',exact:true}).click();
+ await page.getByRole('button',{name:'Aggiungi dispositivo',exact:true}).click();
  await page.getByLabel('Gruppo',{exact:true}).selectOption({label:group});
  const downloadWait=page.waitForEvent('download');
  await page.getByRole('link',{name:'Scarica Agent Windows',exact:true}).click();
