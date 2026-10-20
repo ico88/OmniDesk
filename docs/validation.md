@@ -1935,4 +1935,5 @@ modificato; ogni nuova estensione attende la propria CI sul push.
 - `./scripts/test.sh` — passato: 92/92 test API/PostgreSQL; build dashboard TypeScript/Vite e 6/6 Vitest. Il test dedicato verifica opt-in disattivato per default, purge dei contenuti vecchi solo su ticket risolti/chiusi, preservazione dei record conversazione/ticket e audit per conteggio.
 - Test mirato `Ticket_attachment_retention...` — passato su PostgreSQL usa-e-getta, inclusa applicazione della nuova migrazione `20261020043000_TicketAttachmentRetention`.
 - `docker build -t omnidesk-api:local -f src/OmniDesk.Api/Dockerfile .`, `docker compose config --quiet`, `docker compose -f compose.test.yaml config --quiet` e `git diff --check` — passati.
-- Non eseguiti smoke runtime completo, deploy LAN o CI per questa revisione; non risultano superati da questi test.
+- `./scripts/smoke.sh --browser` — passato su stack isolato: migrazioni/bootstrap, HTTPS, login, favicon, flussi browser, scansione ClamAV, worker SLA/escalation e restore completo DB/blob/Identity/CA. Non esercita direttamente il purge retention, coperto dal test mirato. Nessun servizio LAN è stato modificato.
+- CI per il push `4f87b82` avviata: Linux `39362057583` e Windows `39362057611` risultano ancora in esecuzione al controllo. Nessun deploy LAN.
