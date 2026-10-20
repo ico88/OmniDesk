@@ -368,50 +368,20 @@ try {
  for (const tab of ['Panoramica','Desktop remoto','Processi','Servizi Windows','Software installato','Aggiornamenti','Eventi e log','Ticket e interventi']) await page.getByRole('tab',{name:tab,exact:true}).waitFor();
  await page.waitForFunction(()=>document.querySelector('main.content')?.getAttribute('aria-busy')==='false');
  const deviceId=(await (await context.request.get('https://omnidesk.test/api/devices')).json()).find(d=>d.name===renamed).id;
- const remoteSessionId=randomBytes(16).toString('hex'); let remoteShareState='active';
- await page.route(`**/api/devices/${deviceId}/remote-sessions/availability`,route=>route.fulfill({json:{configured:true,mapped:true,revoked:false,enabled:true,nodeId:null,unattendedAllowed:false}}));
- await page.route(`**/api/devices/${deviceId}/remote-sessions`,async route=>{
-  if(route.request().method()==='GET') return route.fulfill({json:remoteShareState==='revoked'?[]:[{id:remoteSessionId,operatorName:'Operatore di prova',capability:'remote.control',state:remoteShareState,createdAt:new Date().toISOString(),expiresAt:new Date(Date.now()+10*60_000).toISOString(),consentRequired:true}]});
-  if(route.request().method()==='POST') return route.fulfill({status:201,json:{id:remoteSessionId,url:'https://mesh.example.test/sharing?c=fixture',expiresAt:new Date(Date.now()+10*60_000).toISOString()}});
+ let rustdeskConnectRequests=0;
+ await page.route(`**/api/devices/${deviceId}/rustdesk`,route=>route.fulfill({json:{configured:true,mapped:true,peerId:'123456789',idServer:'omnidesk.cricatania.it:21116',relayServer:'omnidesk.cricatania.it:21117',apiServer:null,publicKey:'test-public-key'}}));
+ await page.route(`**/api/devices/${deviceId}/rustdesk/connect`,async route=>{
+  if(route.request().method()==='POST'){rustdeskConnectRequests++;return route.fulfill({json:{url:'rustdesk://connection/new?peer=123456789'}});}
   return route.continue();
- });
- await page.route(`**/api/devices/${deviceId}/remote-sessions/${remoteSessionId}/disconnect`,async route=>{
-  if(route.request().method()==='POST') return route.fulfill({status:202,json:{id:remoteSessionId,state:'disconnect_requested'}});
-  return route.continue();
- });
- await page.route(`**/api/devices/${deviceId}/remote-sessions/${remoteSessionId}`,async route=>{
-  if(route.request().method()==='DELETE'){remoteShareState='revoked';return route.fulfill({status:204});}
-  return route.continue();
- });
- let delayMeshFrame=false; let delayedMeshFrameRoute=null;
- await page.route('https://mesh.example.test/sharing**',async route=>{
-  if(delayMeshFrame){delayedMeshFrameRoute=route;return;}
-  return route.fulfill({status:200,contentType:'text/html',body:'<!doctype html><title>Remote fixture</title><p>Isolated Mesh fixture</p>'});
  });
  await page.getByRole('tab',{name:'Desktop remoto',exact:true}).click();
- await page.locator('.remote-status .count').filter({hasText:'1'}).waitFor();
- await page.locator('.remote-live-session strong').getByText('Desktop remoto attivo · Operatore di prova',{exact:true}).waitFor();
- await page.getByRole('button',{name:'Disconnetti temporaneamente',exact:true}).waitFor();
+ await page.getByText('ID RustDesk associato:').waitFor();
+ await page.getByText('test-public-key',{exact:true}).waitFor();
  page.once('dialog',dialog=>dialog.accept());
- await page.getByRole('button',{name:'Disconnetti temporaneamente',exact:true}).click();
- await page.getByText('Sessione interrotta. Operatore di prova può riconnettersi fino alla scadenza del lease.',{exact:true}).waitFor();
- await page.getByRole('button',{name:'Avvia sessione',exact:true}).waitFor();
- await page.evaluate(()=>{const original=window.setTimeout;Object.defineProperty(window,'__omniOriginalSetTimeout',{value:original,configurable:true});window.setTimeout=function(callback,delay,...args){return original.call(window,callback,delay===20000?25:delay,...args);};});
- delayMeshFrame=true;
- await page.getByRole('button',{name:'Avvia sessione',exact:true}).click();
- await page.locator(`iframe[title="Desktop remoto: ${renamed}"]`).waitFor();
- const slowEmbedNotice=page.getByRole('status').getByText('La sessione è autorizzata, ma il browser non ha confermato il caricamento dell’anteprima. Puoi attendere ancora o aprirla in una nuova scheda.',{exact:true});
- await slowEmbedNotice.waitFor();
- assert.equal(await page.getByRole('alert').filter({hasText:'Verifica il motore remoto'}).count(),0,'A slow iframe must not be reported as a remote engine failure');
- assert.ok(delayedMeshFrameRoute,'The delayed remote frame request remains pending for this check');
- delayMeshFrame=false;
- await delayedMeshFrameRoute.fulfill({status:200,contentType:'text/html',body:'<!doctype html><title>Remote fixture</title><p>Delayed Mesh fixture</p>'});
- await slowEmbedNotice.waitFor({state:'detached'});
- await page.evaluate(()=>{window.setTimeout=window.__omniOriginalSetTimeout;delete window.__omniOriginalSetTimeout;});
- page.once('dialog',dialog=>dialog.accept());
- await page.getByRole('button',{name:'Disconnetti e revoca',exact:true}).click();
- await page.getByRole('button',{name:'Avvia sessione',exact:true}).waitFor();
- await page.getByText('Link revocato e comando di chiusura inviato. Per riconnettersi servirà una nuova sessione autorizzata.',{exact:true}).waitFor();
+ const rustdeskLaunchResponse=page.waitForResponse(response=>response.url().endsWith(`/api/devices/${deviceId}/rustdesk/connect`)&&response.request().method()==='POST');
+ await page.getByRole('button',{name:'Collegati con RustDesk',exact:true}).click();
+ await rustdeskLaunchResponse;
+ assert.equal(rustdeskConnectRequests,1,'The dashboard requests a server-authorized RustDesk launch');
  await page.screenshot({path:'/previews/devices-admin-desktop.png',fullPage:true});
  await page.locator('summary').filter({hasText:'Configurazione dispositivo'}).click();
  assert.equal(await page.getByLabel('Gruppo dispositivo',{exact:true}).inputValue(),'','Group change persisted');
@@ -420,7 +390,7 @@ try {
  await page.getByText('Identità dispositivo revocata',{exact:true}).waitFor();
  assert.equal(await page.getByRole('button',{name:'Identità già revocata',exact:true}).isDisabled(),true);
  await page.getByRole('tab',{name:'Desktop remoto',exact:true}).click();
- assert.equal(await page.getByRole('button',{name:'Avvia sessione',exact:true}).isDisabled(),true);
+ assert.equal(await page.getByRole('button',{name:'Collegati con RustDesk',exact:true}).isDisabled(),true);
  await page.getByRole('tab',{name:'Aggiornamenti',exact:true}).click();
  assert.equal(await page.getByRole('button',{name:'Avvia scansione',exact:true}).isDisabled(),true);
  await page.getByRole('button',{name:'Esci',exact:true}).click();
