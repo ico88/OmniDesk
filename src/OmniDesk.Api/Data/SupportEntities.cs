@@ -239,3 +239,15 @@ public sealed class UserNotification
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? ReadAt { get; set; }
 }
+
+public sealed class EmailNotificationDelivery
+{
+    public Guid NotificationId { get; set; }
+    public string State { get; set; } = "pending";
+    public int AttemptCount { get; set; }
+    public DateTimeOffset NextAttemptAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset? LeaseUntil { get; set; }
+    public DateTimeOffset? SentAt { get; set; }
+    public DateTimeOffset? DeadLetteredAt { get; set; }
+    public string? LastErrorType { get; set; }
+}

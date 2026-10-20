@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace OmniDesk.Api.Data;
 
-public sealed class AppUser : IdentityUser { public bool IsDisabled { get; set; } public string? DisplayName { get; set; } }
+public sealed class AppUser : IdentityUser { public bool IsDisabled { get; set; } public string? DisplayName { get; set; } public bool EmailNotificationsEnabled { get; set; } public DateTimeOffset? EmailNotificationsEnabledAt { get; set; } }
 public sealed class DeviceGroup { public Guid Id { get; set; } public string Name { get; set; } = ""; }
 public sealed class Site { public Guid Id { get; set; } = Guid.NewGuid(); public string Name { get; set; } = ""; public bool IsArchived { get; set; } public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow; }
 public sealed class Device { public Guid Id { get; set; } public string Name { get; set; } = ""; public Guid? GroupId { get; set; } public Guid SiteId { get; set; } }
@@ -76,6 +76,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
     public DbSet<CoreOutboxEvent> CoreOutboxEvents => Set<CoreOutboxEvent>();
     public DbSet<CoreOutboxDelivery> CoreOutboxDeliveries => Set<CoreOutboxDelivery>();
     public DbSet<UserNotification> UserNotifications => Set<UserNotification>();
+    public DbSet<EmailNotificationDelivery> EmailNotificationDeliveries => Set<EmailNotificationDelivery>();
     public DbSet<KnowledgeArticle> KnowledgeArticles => Set<KnowledgeArticle>();
     public DbSet<KnowledgeArticleRevision> KnowledgeArticleRevisions => Set<KnowledgeArticleRevision>();
     protected override void OnModelCreating(ModelBuilder b)
@@ -288,6 +289,11 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
         b.Entity<UserNotification>().HasOne<CoreOutboxEvent>().WithMany().HasForeignKey(x => x.EventId).OnDelete(DeleteBehavior.Cascade);
         b.Entity<UserNotification>().HasIndex(x => new { x.EventId, x.UserId }).IsUnique();
         b.Entity<UserNotification>().HasIndex(x => new { x.UserId, x.CreatedAt });
+        b.Entity<EmailNotificationDelivery>().HasKey(x => x.NotificationId);
+        b.Entity<EmailNotificationDelivery>().HasOne<UserNotification>().WithOne().HasForeignKey<EmailNotificationDelivery>(x => x.NotificationId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<EmailNotificationDelivery>().Property(x => x.State).HasMaxLength(20);
+        b.Entity<EmailNotificationDelivery>().Property(x => x.LastErrorType).HasMaxLength(64);
+        b.Entity<EmailNotificationDelivery>().HasIndex(x => new { x.State, x.NextAttemptAt, x.LeaseUntil });
         b.Entity<KnowledgeArticle>().Property(x => x.Slug).HasMaxLength(120);
         b.Entity<KnowledgeArticle>().Property(x => x.NormalizedSlug).HasMaxLength(120);
         b.Entity<KnowledgeArticle>().Property(x => x.Title).HasMaxLength(160);

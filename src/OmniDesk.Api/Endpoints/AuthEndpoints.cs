@@ -1,11 +1,14 @@
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.Options;
 using OmniDesk.Api.Data;
 using OmniDesk.Api.Security;
+using OmniDesk.Api.ServiceDesk;
 
 namespace OmniDesk.Api.Endpoints;
 public sealed record LoginRequest(string Email, string Password, string? Code = null, string? RecoveryCode = null);
 public sealed record ProfileRequest(string? DisplayName);
+public sealed record EmailNotificationsRequest(bool Enabled);
 public static class AuthEndpoints
 {
     public static void MapAuthEndpoints(this WebApplication app)
@@ -44,7 +47,22 @@ public static class AuthEndpoints
         }).RequireAuthorization();
         app.MapGet("/api/auth/me", async (HttpContext c, UserManager<AppUser> users, PermissionService permissions) => {
             var user = await users.GetUserAsync(c.User);
-            return user is null ? Results.Unauthorized() : Results.Ok(new { user.Id, user.Email, user.DisplayName, globalPermissions = await permissions.Global(user.Id), twoFactorAvailable = app.Configuration.GetValue<bool>("Security:TotpEnabled"), twoFactorEnabled = user.TwoFactorEnabled });
+            var outbound = app.Configuration.GetSection(OutboundEmailOptions.SectionName).Get<OutboundEmailOptions>() ?? new OutboundEmailOptions();
+            return user is null ? Results.Unauthorized() : Results.Ok(new { user.Id, user.Email, user.DisplayName, user.EmailNotificationsEnabled, emailNotificationsAvailable = outbound.Enabled && outbound.IsValid() && !string.IsNullOrWhiteSpace(user.Email), globalPermissions = await permissions.Global(user.Id), twoFactorAvailable = app.Configuration.GetValue<bool>("Security:TotpEnabled"), twoFactorEnabled = user.TwoFactorEnabled });
+        }).RequireAuthorization();
+        app.MapPut("/api/auth/email-notifications", async (EmailNotificationsRequest request, HttpContext c,
+            UserManager<AppUser> users, AppDbContext db, IOptions<OutboundEmailOptions> email) => {
+            var user = await users.GetUserAsync(c.User);
+            if (user is null) return Results.Unauthorized();
+            if (request.Enabled && (!email.Value.Enabled || string.IsNullOrWhiteSpace(user.Email)))
+                return Results.BadRequest(new { error = "Email notifications require an account email address and server email configuration." });
+            user.EmailNotificationsEnabled = request.Enabled;
+            user.EmailNotificationsEnabledAt = request.Enabled ? DateTimeOffset.UtcNow : null;
+            var result = await users.UpdateAsync(user);
+            if (!result.Succeeded) return Results.Problem("Email notification preference update failed", statusCode: 500);
+            db.AuditEvents.Add(new AuditEvent { ActorId = user.Id, Action = request.Enabled ? "user.email_notifications.enabled" : "user.email_notifications.disabled", Target = user.Id });
+            await db.SaveChangesAsync();
+            return Results.Ok(new { user.EmailNotificationsEnabled });
         }).RequireAuthorization();
         app.MapPut("/api/auth/profile", async (ProfileRequest request, HttpContext c, UserManager<AppUser> users) => {
             var value = request.DisplayName?.Trim();

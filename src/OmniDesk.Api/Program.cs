@@ -58,6 +58,10 @@ var keysPath = builder.Configuration["DataProtection:Path"];
 if (!string.IsNullOrEmpty(keysPath))
     builder.Services.AddDataProtection().SetApplicationName("OmniDesk").PersistKeysToFileSystem(new DirectoryInfo(keysPath));
 builder.Services.AddScoped<PermissionService>();
+builder.Services.Configure<OutboundEmailOptions>(builder.Configuration.GetSection(OutboundEmailOptions.SectionName));
+var outboundEmail = builder.Configuration.GetSection(OutboundEmailOptions.SectionName).Get<OutboundEmailOptions>() ?? new OutboundEmailOptions();
+if (!outboundEmail.IsValid()) throw new InvalidOperationException("Outbound email configuration is invalid; SMTP with TLS on port 465 or 587 is required.");
+builder.Services.AddSingleton<IOutboundEmailSender, SmtpOutboundEmailSender>();
 builder.Services.AddSingleton<AttachmentStorage>();
 builder.Services.AddSingleton<IAttachmentScanner, ClamAvAttachmentScanner>();
 builder.Services.AddHostedService<AttachmentScanWorker>();
@@ -68,6 +72,7 @@ builder.Services.AddHostedService<AssertionCleanup>();
 builder.Services.AddHostedService<RemoteSessionGuard>();
 builder.Services.AddHostedService<RemoteProvisioningGuard>();
 builder.Services.AddHostedService<TicketNotificationWorker>();
+builder.Services.AddHostedService<EmailNotificationWorker>();
 builder.Services.AddHostedService<SlaBreachWorker>();
 builder.Services.AddHostedService<SlaEscalationWorker>();
 builder.Services.Configure<DevicePresenceOptions>(builder.Configuration.GetSection(DevicePresenceOptions.SectionName));

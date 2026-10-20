@@ -1,10 +1,13 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using OmniDesk.Api.Data;
+using OmniDesk.Api.ServiceDesk;
 
 namespace OmniDesk.Api.Security;
 
-public sealed class TicketNotificationWorker(IServiceScopeFactory scopes, ILogger<TicketNotificationWorker> logger) : BackgroundService
+public sealed class TicketNotificationWorker(IServiceScopeFactory scopes, ILogger<TicketNotificationWorker> logger,
+    IOptions<OutboundEmailOptions>? emailOptions = null) : BackgroundService
 {
     private const string Consumer = "ticket-notifications.v1";
 
@@ -56,7 +59,8 @@ public sealed class TicketNotificationWorker(IServiceScopeFactory scopes, ILogge
             eventId = evt.Id;
             try
             {
-                await ProjectNotifications(db, scope.ServiceProvider.GetRequiredService<PermissionService>(), evt, now, ct);
+                await ProjectNotifications(db, scope.ServiceProvider.GetRequiredService<PermissionService>(), evt, now, ct,
+                    emailOptions?.Value.Enabled ?? false);
                 var delivery = await db.CoreOutboxDeliveries.FindAsync([evt.Id, Consumer], ct);
                 if (delivery is null)
                 {
@@ -82,7 +86,7 @@ public sealed class TicketNotificationWorker(IServiceScopeFactory scopes, ILogge
     }
 
     public static async Task ProjectNotifications(AppDbContext db, PermissionService permissions, CoreOutboxEvent evt,
-        DateTimeOffset now, CancellationToken ct)
+        DateTimeOffset now, CancellationToken ct, bool outboundEmailEnabled = false)
     {
         if (evt.AggregateType != "ticket") return;
         var ticket = await db.SupportTickets.AsNoTracking().SingleOrDefaultAsync(x => x.Id == evt.AggregateId, ct);
@@ -139,10 +143,14 @@ public sealed class TicketNotificationWorker(IServiceScopeFactory scopes, ILogge
                 !await permissions.Allows(userId, "tickets.view", ticket.DeviceId, siteId: ticket.SiteId)) continue;
             if (evt.EventType == "ticket.attachment.ready" && TryString(root, "visibility", out var attachmentVisibility) &&
                 attachmentVisibility == "internal" && !await permissions.Allows(userId, "tickets.note.internal", ticket.DeviceId, siteId: ticket.SiteId)) continue;
-            db.UserNotifications.Add(new UserNotification
+            var notification = new UserNotification
             {
                 EventId = evt.Id, UserId = userId, TicketId = ticket.Id, Kind = kind, CreatedAt = now
-            });
+            };
+            db.UserNotifications.Add(notification);
+            if (outboundEmailEnabled && await db.Users.AnyAsync(x => x.Id == userId && x.EmailNotificationsEnabled &&
+                    x.EmailNotificationsEnabledAt != null && x.Email != null, ct))
+                db.EmailNotificationDeliveries.Add(new EmailNotificationDelivery { NotificationId = notification.Id, State = "pending", NextAttemptAt = now });
         }
     }
 

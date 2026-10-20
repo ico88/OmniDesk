@@ -200,6 +200,12 @@ namespace OmniDesk.Api.Migrations
                     b.Property<bool>("EmailConfirmed")
                         .HasColumnType("boolean");
 
+                    b.Property<bool>("EmailNotificationsEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTimeOffset?>("EmailNotificationsEnabledAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<bool>("IsDisabled")
                         .HasColumnType("boolean");
 
@@ -548,6 +554,42 @@ namespace OmniDesk.Api.Migrations
                     b.HasKey("DeviceId");
 
                     b.ToTable("DevicePresence");
+                });
+
+            modelBuilder.Entity("OmniDesk.Api.Data.EmailNotificationDelivery", b =>
+                {
+                    b.Property<Guid>("NotificationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("AttemptCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("DeadLetteredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("LastErrorType")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTimeOffset?>("LeaseUntil")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("NextAttemptAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("SentAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.HasKey("NotificationId");
+
+                    b.HasIndex("State", "NextAttemptAt", "LeaseUntil");
+
+                    b.ToTable("EmailNotificationDeliveries");
                 });
 
             modelBuilder.Entity("OmniDesk.Api.Data.EnrollmentToken", b =>
@@ -2045,6 +2087,15 @@ namespace OmniDesk.Api.Migrations
                     b.HasOne("OmniDesk.Api.Data.Device", null)
                         .WithOne()
                         .HasForeignKey("OmniDesk.Api.Data.DevicePresence", "DeviceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("OmniDesk.Api.Data.EmailNotificationDelivery", b =>
+                {
+                    b.HasOne("OmniDesk.Api.Data.UserNotification", null)
+                        .WithOne()
+                        .HasForeignKey("OmniDesk.Api.Data.EmailNotificationDelivery", "NotificationId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

@@ -1,0 +1,19 @@
+# Optional outbound email overlay. Keep SMTP disabled in compose.yaml by default.
+services:
+  api:
+    environment:
+      OutboundEmail__Enabled: ${OMNIDESK_EMAIL_ENABLED:?set OMNIDESK_EMAIL_ENABLED=true only after configuring SMTP}
+      OutboundEmail__Host: ${OMNIDESK_SMTP_HOST:?set OMNIDESK_SMTP_HOST}
+      OutboundEmail__Port: ${OMNIDESK_SMTP_PORT:-587}
+      OutboundEmail__FromAddress: ${OMNIDESK_SMTP_FROM_ADDRESS:?set OMNIDESK_SMTP_FROM_ADDRESS}
+      OutboundEmail__FromName: ${OMNIDESK_SMTP_FROM_NAME:-OmniDesk}
+      OutboundEmail__DashboardUrl: ${OMNIDESK_DASHBOARD_URL:?set public HTTPS dashboard URL}
+      OutboundEmail__Username: ${OMNIDESK_SMTP_USERNAME:?set OMNIDESK_SMTP_USERNAME}
+      OutboundEmail__PasswordFile: /run/secrets/email_smtp_password
+    secrets:
+      - db_password
+      - email_smtp_password
+
+secrets:
+  email_smtp_password:
+    file: ${OMNIDESK_SMTP_PASSWORD_FILE:?set OMNIDESK_SMTP_PASSWORD_FILE to a protected secret file}
