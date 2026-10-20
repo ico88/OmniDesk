@@ -8,10 +8,10 @@ il nuovo backup e scritto `READY`, elimina soltanto directory dirette in
 `.backups` con nome generato dal backup e marker regolare, più vecchie della
 soglia; staging e symlink sono preservati. Soglia e directory sono validate
 prima di avviare Compose; una root symlink viene rifiutata. Test shell e
-controlli `bash -n` passano. CI Linux `39392940229` e Windows `39392940145`
-passano sulla prima versione della retention; le nuove verifiche preflight e
-root sicura attendono la CI del commit successivo. Cifratura e copia off-site
-restano aperte; la policy non è stata attivata né applicata ai backup presenti.
+controlli `bash -n` passano. CI Linux `39394376992` passa con suite e smoke
+restore; CI Windows `39394376714` passa la matrice MSI. Le pipeline includono
+preflight e rifiuto delle root symlink. Cifratura e copia off-site restano
+aperte; la policy non è stata attivata né applicata ai backup presenti.
 
 ### Tray Windows — download degli allegati ticket puliti
 

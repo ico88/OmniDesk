@@ -38,10 +38,10 @@ suite applicativa, smoke/restore e CI Linux `39392940229` passano; CI Windows
 `39392940145` completa la matrice MSI. Nessuna retention è stata attivata sui
 backup live; cifratura e copia off-site restano aperte.
 
-Hardening successivo in lavorazione: la validazione della soglia ora precede
+Hardening aggiunto: la validazione della soglia ora precede
 qualsiasi comando Docker e la directory `.backups` viene rifiutata se file o
 symlink. Test mirati e configurazione Compose passano localmente; la CI di
-queste modifiche è ancora pendente.
+queste modifiche è passata: Linux `39394376992`, Windows `39394376714`.
 
 | Parte | Implementazione | Verifica disponibile | Gate rimanente |
 | --- | --- | --- | --- |
