@@ -1,9 +1,15 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.."
-if [[ $# != 1 ]]; then echo 'Usage: bash scripts/verify-backup.sh .backups/<backup-directory>' >&2; exit 1; fi
+staging=false
+if [[ "${1:-}" == --staging ]]; then staging=true; shift; fi
+if [[ $# != 1 ]]; then echo 'Usage: bash scripts/verify-backup.sh [--staging] .backups/<backup-directory>' >&2; exit 1; fi
 backup_path=$(realpath -- "$1")
-[[ -f "$backup_path/READY" && -f "$backup_path/database.dump" ]] || { echo 'Incomplete backup' >&2; exit 1; }
+[[ -f "$backup_path/database.dump" ]] || { echo 'Incomplete backup: database dump missing' >&2; exit 1; }
+if [[ "$staging" != true && ! -f "$backup_path/READY" ]]; then
+  echo 'Incomplete backup: READY marker missing; staged archives require full verification first.' >&2
+  exit 1
+fi
 if [[ -f "$backup_path/files.sha256" ]]; then
   (cd "$backup_path" && sha256sum --check --quiet files.sha256)
   echo 'Full-file checksum manifest verified.'

@@ -45,5 +45,7 @@ fi
   cd "$backup_path"
   find . -type f ! -name files.sha256 ! -name READY -print0 | sort -z | xargs -0 -r sha256sum > files.sha256
 )
+# READY means DB/blob checks and the isolated application restore have passed.
+bash scripts/verify-backup.sh --staging "$backup_path"
 touch "$backup_path/READY"
-printf 'Backup completed: %s\n' "$backup_path"
+printf 'Backup verified and completed: %s\n' "$backup_path"
