@@ -57,7 +57,7 @@ sono allineati. CI Linux [39499614555](https://github.com/ico88/OmniDesk/actions
 e Windows [39499614562](https://github.com/ico88/OmniDesk/actions/runs/39499614562)
 sono passate; la Windows CI ha prodotto MSI e superato installazione, recovery,
 disinstallazione e prove upgrade/repair/rollback da baseline 0.6.0 e 0.7.0. Il
-kit 0.8.16 è pronto per la pubblicazione LAN. Restano il collaudo su un PC
+kit 0.8.16 è pubblicato nel download LAN. Restano il collaudo su un PC
 Windows reale e la verifica del provider SMART specifico per disco/controller.
 Vedere [validation](validation.md).
 
