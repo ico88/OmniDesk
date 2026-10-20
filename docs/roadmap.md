@@ -12,6 +12,14 @@ step MSI; ora anche la lettura di ciascuno stream ha un limite di 5 secondi.
 La run live non viene interrotta e non include quest'ultima correzione. Vedi
 [validation.md](validation.md) per gli ID e il limite delle prove.
 
+Stato verificato il 2026-10-20 alle 05:40 UTC: la CI Linux `39375025444` è
+verde. Restano due runner Windows attivi: `39372277004` è fermo nella prova
+installazione/recovery/uninstall; `39375025464` è fermo nella matrice
+upgrade/repair/rollback. Il secondo ha già superato parse, contratti Tray,
+build MSI e install/recovery/uninstall. I runner non sono stati interrotti.
+La matrice Windows non è quindi ancora dichiarata superata; i log saranno
+disponibili al termine dei job. Dettagli in [validation.md](validation.md).
+
 ### Backup — convalida automatica prima del marker READY
 
 `scripts/backup.sh` esegue ora `verify-backup.sh --staging`: checksum, riferimenti
