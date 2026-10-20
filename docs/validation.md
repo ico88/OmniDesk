@@ -2159,3 +2159,9 @@ modificato; ogni nuova estensione attende la propria CI sul push.
 - Configurazione live API `OMNIDESK_REMOTE_SESSION_MINUTES=30`. Query PostgreSQL: 46 sessioni remote `revoked`, nessuna sessione attiva o in revoca pendente. Nessun test di sessione interattiva è stato eseguito dopo il deploy.
 - Verifica CI dei commit applicativi: Linux [`39404130812`](https://github.com/ico88/OmniDesk/actions/runs/39404130812) e Windows [`39404130611`](https://github.com/ico88/OmniDesk/actions/runs/39404130611), entrambe verdi. Test locali `./scripts/test.sh` (103 API/PostgreSQL, build TypeScript/Vite, 12 Vitest) e `./scripts/smoke.sh --browser` con Chromium e restore isolato: passati prima del deploy.
 - Rimane da provare con il client Windows reale l’aggiornamento MSI remoto e il recupero/avvio di una nuova sessione. Readiness 200 dimostra disponibilità API, non il completamento di questi collaudi end-to-end.
+
+### Dashboard — console Desktop remoto e gestione server — 2026-10-20
+
+- `docker run --rm -v "$PWD/src/dashboard:/workspace" -w /workspace node:22-alpine sh -lc 'npm ci && npm run build && npm test'` — build TypeScript/Vite passata, 12/12 test Vitest passati, audit dipendenze senza vulnerabilità segnalate.
+- `git diff --check` — passato. La console remota ora precede i comandi amministrativi; nome operatore e stato/tempo lease sono esposti nella barra. Configurazione sessioni e provisioning sono richiudibili.
+- Il caricamento dell’iframe MeshCentral non viene interpretato come prova del flusso desktop. Non è stato eseguito un test interattivo Windows, deploy live o riavvio dei servizi.

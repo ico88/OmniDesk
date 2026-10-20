@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Expand, ExternalLink, LoaderCircle, MonitorPlay, RotateCcw, ShieldCheck, UserRoundX, Wifi, X } from 'lucide-react';
 import { api } from './api';
 
-type RemoteSession = { id: string; url: string; expiresAt: string };
+type RemoteSession = { id: string; url: string; expiresAt: string; operatorName?: string | null; createdAt?: string };
 type ViewState = 'idle' | 'creating' | 'renewing' | 'revoking' | 'revocation-pending' | 'loading' | 'slow-loading' | 'page-loaded' | 'error' | 'expired';
 
 function remaining(expiresAt: string, now: number) {
@@ -87,6 +87,16 @@ export function RemoteConsole({ deviceId, deviceName, capability, allowed, ready
         try { await api(`/devices/${deviceId}/remote-sessions/${created.id}`, 'DELETE'); } catch { /* expires server-side */ }
         throw new Error('Il server ha restituito un collegamento remoto non valido.');
       }
+      let operatorName: string | null = null;
+      let createdAt: string | undefined;
+      try {
+        const rows = await api<{ id: string; operatorName: string | null; createdAt: string }[]>(`/devices/${deviceId}/remote-sessions`);
+        const current = rows.find(row => row.id === created.id);
+        operatorName = current?.operatorName ?? null;
+        createdAt = current?.createdAt;
+      } catch { /* Session grant remains valid; identity will use the neutral fallback. */ }
+      created.operatorName = operatorName;
+      created.createdAt = createdAt;
       // Keep the operator in this console. The API rechecks the same capability,
       // device policy and attended consent before issuing the replacement grant.
       // Revoke the old grant before switching the iframe; if revocation is pending,
@@ -150,6 +160,7 @@ export function RemoteConsole({ deviceId, deviceName, capability, allowed, ready
         <div><strong>{deviceName}</strong><small>{title} · {viewState === 'page-loaded' ? 'Interfaccia remota caricata' : active ? 'Sessione autorizzata' : 'Non connesso'}</small></div>
       </div>
       <div className="remote-console-actions">
+        {active && <span className="remote-operator" title="Identità operatore inviata a MeshCentral"><ShieldCheck size={14}/><span>{session.operatorName || 'Operatore autorizzato'}</span></span>}
         {active && <span className="session-countdown"><Wifi size={15}/><span>Scade tra {timeLeft}</span></span>}
         {active && session && secondsRemaining(session.expiresAt, now) <= 300 && <button type="button" className="secondary compact" disabled={viewState === 'renewing'} onClick={() => void start()} title="Rinnova il collegamento mantenendo aperta questa console">
           {viewState === 'renewing' ? <LoaderCircle className="spin" size={15}/> : <RotateCcw size={15}/>}Rinnova sessione

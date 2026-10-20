@@ -195,8 +195,11 @@ export function DeviceWorkspace({ device, admin, groups, sites, onDeviceChanged,
 
     {activeTab === 'desktop' && <DevicePanel id="desktop"><div className="remote-workspace">
       <div className="remote-workspace-main">
-        <RemoteSessions key={device.id} deviceId={device.id} admin={admin} onAvailability={setRemoteReady}/>
         <RemoteConsole {...remoteProps} capability="remote.control" allowed={count('remote.control')}/>
+        <details className="remote-management-details">
+          <summary><Wrench size={15}/>Stato motore e gestione sessioni</summary>
+          <RemoteSessions key={device.id} deviceId={device.id} admin={admin} onAvailability={setRemoteReady}/>
+        </details>
       </div>
       <aside className="remote-device-sidebar"><div className="device-sidebar-heading"><span className="eyebrow">DETTAGLI E DIAGNOSTICA</span><ShieldCheck size={18}/></div>
         <div className="sidebar-status"><span className={`connection-indicator ${device.online ? 'ready' : ''}`}/><strong>{device.online ? 'Agent online' : 'Agent offline'}</strong><small>{device.lastSeen ? `Ultimo heartbeat ${new Date(device.lastSeen).toLocaleTimeString('it-IT')}` : 'Nessun heartbeat ricevuto'}</small></div>

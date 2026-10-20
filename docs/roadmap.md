@@ -1,5 +1,20 @@
 # Roadmap
 
+### Dashboard — console Desktop remoto e gestione server — 2026-10-20
+
+- Nella scheda dispositivo la console remota è ora il primo contenuto; stato
+  motore, provisioning, policy e storico sono raccolti in un pannello secondario
+  richiudibile. La barra mostra il nome operatore restituito dallo storico
+  autorizzato, insieme allo stato e alla scadenza del collegamento.
+- La UI continua a incorporare il link MeshCentral temporaneo esistente e offre
+  apertura in nuova scheda, rinnovo e revoca. Se l’iframe carica la pagina ma
+  non il flusso video, lo stato non viene presentato come connessione riuscita.
+  Selezione monitor, scaling, qualità, tastiera e clipboard restano delegati ai
+  controlli effettivamente esposti da MeshCentral.
+- Verificati build TypeScript/Vite e 12/12 test Vitest tramite Node 22 in
+  container; `git diff --check` passato. Modifiche UI sorgente, non ancora
+  distribuite né verificate in una sessione desktop interattiva.
+
 ### Endpoint Security — Microsoft Defender (progettazione)
 
 Nuovo modulo proposto per stato Defender, protezione real-time, firme/ultimo
