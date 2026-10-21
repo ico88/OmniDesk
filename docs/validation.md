@@ -1,5 +1,25 @@
 # Stato e verifiche — 18 ottobre 2026
 
+### Windows Agent 0.8.17 — raccolta Defender read-only (sorgenti, non validata)
+
+- Aggiunto collector Agent basato su comandi PowerShell fissi, timeout e output JSON limitato; raccoglie stato antivirus, protezione realtime, Tamper Protection, versioni/data firme, scansioni e fino a 256 esclusioni. Errori e provider assenti sono classificati senza inventare stato; la provenienza delle policy è `unknown`.
+- L'inventario giornaliero trasporta lo snapshot; API applica enum, limiti e timestamp, mantiene lo snapshot più recente e ne protegge il dettaglio con `endpointsecurity.defender.view`. La dashboard aggiunge la vista per dispositivo senza controlli di modifica.
+- Versioni Agent/Tray/Setup/MSI allineate a 0.8.17. Non compilato né testato in questa sessione: host privo di `dotnet`, non è stata eseguita CI Windows. Nessuna migrazione dati dello snapshot (usa JSON inventario); la migration versionata aggiunge il permesso al ruolo Administrator.
+- In un primo momento la verifica era bloccata da gruppi supplementari Docker non aggiornati nel processo. Dopo aver eseguito i comandi nel gruppo `docker`, `./scripts/test.sh` è passato: 106 test API/PostgreSQL, build dashboard e 12/12 Vitest; build cross-target Agent/Tray/Setup Windows con .NET SDK 10 riuscite, ciascuna senza warning o errori.
+- I test API ora coprono accesso amministratore al report Defender, diniego per Viewer con grant `view`, redazione dal payload status e conservazione del report dopo inventario inviato da Agent precedente. `git diff --check` passato.
+- API e dashboard distribuite con `./setup.sh --start`; migrazione Defender applicata. Probe HTTPS readiness `{"status":"ready"}`, bundle dashboard live `index-Cycb2mPF.js`/`index-BIpQyedN`, query DB conferma permesso Defender per Administrator. Il pacchetto LAN resta 0.8.16. Restano build WiX/MSI nativa e verifiche Windows/PowerShell/WMI/PC pilota; Authenticode richiede un certificato esterno.
+
+### Configurazione backup server su NAS Samba — 2026-10-21
+
+- Aggiunti impostazioni amministrative in dashboard/API per SMB, account, recipient age, orario/fuso e numero copie. Password protetta con Data Protection; GET e audit non espongono il segreto. Migrazione `BackupNasSettings` versionata.
+- Il job host legge la configurazione protetta via comando interno API, controlla la pianificazione ogni cinque minuti, verifica il backup, cifra con age, trasferisce via SMB3 e ruota solo dopo upload riuscito.
+- `./scripts/test.sh` — passati 106 test API/PostgreSQL, build dashboard e 12/12 Vitest. `bash -n` e `tests/backup-nas-tests.sh` passati; il test copre trasferimento/rotazione e fallimento SMB senza cancellare le copie esistenti.
+- `docker compose config --quiet`, `docker compose -f compose.test.yaml config --quiet`, `git diff --check` e `systemd-analyze verify` — passati.
+- Backup live pre-deploy `/home/fdurso/projects/OmniDesk/.backups/20261021T092543Z.eeEWIa` verificato con restore isolato completo: 55 migrazioni precedenti, Identity, allegati, API/antiforgery HTTPS e Caddy. La migrazione `20261021091411_BackupNasSettings` è stata applicata sul server.
+- Build e deploy API/dashboard completati con `./setup.sh --start`; readiness HTTPS e pagina dashboard verificate via bind locale `10.0.0.53`. La chiamata dalla rete pubblica durante il controllo è andata in timeout, ma il probe locale usato dal deploy ha restituito `ready`.
+- Sul server sono installati e verificati `age 1.2.1` e `smbclient 4.23.6`. La schermata amministrativa **Backup server** è attiva. Il timer host non è installato né attivo; share reale e recipient age vanno configurati prima del primo upload. Nessun servizio di sistema o firewall è stato modificato.
+- Correzione successiva: gli script fissano ora progetto e overlay Compose production e il backup locale include `/data` RustDesk quando il servizio è attivo. Il backup pre-deploy `/home/fdurso/projects/OmniDesk/.backups/20261021T125104Z.itg1KA` è stato creato con la procedura aggiornata; checksum e restore isolato completo sono passati (DB, Identity, allegati, chiavi Caddy e RustDesk). Il socket Docker era già accessibile al gruppo `docker`; la sessione Codex non aveva caricato il gruppo e i comandi sono stati eseguiti con `sg docker`. Il timer resta inattivo e le impostazioni NAS reali non sono inserite.
+
 ### Windows Agent 0.8.16 — CI completata e kit pubblicato — 2026-10-20
 
 - Linux Actions [39499614555](https://github.com/ico88/OmniDesk/actions/runs/39499614555) completata con successo: test API/PostgreSQL e dashboard, Compose, build API/dashboard, smoke browser, verifica backup e restore isolato.
@@ -2326,3 +2346,38 @@ stata eseguita né provata con un provider email reale.
   generato o caricato sul server: il kit installabile resta 0.8.15. Per produrre
   il pacchetto occorre eseguire il workflow Windows sul commit 0.8.16; le regole
   del repository vietano il push senza autorizzazione esplicita.
+
+### Windows Agent 0.8.17 — Microsoft Defender read-only — 2026-10-21
+
+- Implementati nei sorgenti: snapshot strutturato Defender raccolto con comandi
+  PowerShell read-only e limiti su durata/dimensioni; invio nel payload inventario;
+  conservazione dell'ultimo snapshot se un Agent precedente non lo invia;
+  permesso dedicato `endpointsecurity.defender.view`; endpoint browser protetto da
+  `view` più permesso Defender; redazione dal payload status per chi ne è privo;
+  scheda dispositivo per stato, firme, scansioni ed esclusioni.
+- Versione dichiarata Agent/Tray/Setup/MSI allineata a 0.8.17. Roadmap e stato
+  completamento distinguono il codice Agent sorgente dalla release MSI.
+- `./scripts/test.sh` — passato: 106 test API/PostgreSQL, build TypeScript/Vite
+  e 12/12 Vitest. Build cross-target Agent, Tray e Setup Windows con .NET SDK 10
+  — passate, zero warning/errori. `git diff --check` — passato. Windows
+  PowerShell/WMI e il pacchetto WiX/MSI nativo restano da verificare. API e
+  dashboard sono distribuite; readiness HTTPS `ready`, bundle live verificato e
+  migrazione permesso applicata. Il kit Windows resta 0.8.16 e la prova su PC
+  pilota è ancora da fare. Non è stato eseguito alcun comando che
+  modifichi Defender, policy o esclusioni.
+- La scheda legge il report già memorizzato; il comando “Ricarica report” rilegge
+  l'API e non forza una raccolta Agent immediata. Raccolta al prossimo ciclo
+  inventario.
+
+### Recupero password amministratore CLI — 2026-10-21
+
+- Aggiunta modalità `--reset-admin-password <email> -` che riceve la password su
+  standard input e richiede
+  account Administrator attivo, applica il reset con ASP.NET Identity e registra
+  l'audit senza password. Il wrapper chiede e conferma la password senza eco,
+  senza file temporanei o password nei parametri di processo.
+- Fonte aggiornata in roadmap e `docs/admin-password-recovery.md`. Suite test
+  completa passata; API distribuita e readiness verificata. Il reset di una
+  password non è stato eseguito. Prova runtime non mutante con email inesistente:
+  il comando ha letto stdin e ha rifiutato correttamente l'account mancante.
+  Nessun secret reale è stato passato a Codex.

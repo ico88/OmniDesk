@@ -1,9 +1,10 @@
 # Endpoint Security — Microsoft Defender
 
-Stato: **progettazione proposta**, non implementata. Non esistono ancora API,
-migrazioni, schermate o operazioni Agent per gestire Defender. La modifica
-effettiva delle esclusioni appartiene a una milestone successiva, con test su
-Windows 10/11 e Windows Server dove supportato.
+Stato: **prima milestone read-only implementata nei sorgenti 0.8.17; non ancora
+compilata, verificata o distribuita**. L'Agent raccoglie snapshot di stato e
+esclusioni quando esposte dal provider; API, permesso dedicato e scheda
+dispositivo sono stati aggiunti. La modifica effettiva delle esclusioni e delle
+policy resta fuori ambito.
 
 ## Obiettivi e limiti
 
@@ -30,16 +31,17 @@ locale solo perché compare nelle preferenze. [Tamper Protection](https://learn.
 
 ## Raccolta e operazioni Agent
 
-Il servizio Windows raccoglie periodicamente un report limitato e validato:
+Il servizio Windows raccoglie un report limitato e validato insieme
+all'inventario (primo invio al primo inventario dopo l'avvio):
 
 - disponibilità e stato del provider Defender, modalità/servizio e protezione in
   tempo reale;
 - versione delle firme, data dell'ultimo aggiornamento e ultimo quick/full scan
   disponibile;
-- stato Tamper Protection, gestione esterna e limiti noti, con valori
-  `unknown`/`unsupported` quando Windows non fornisce un'evidenza attendibile;
-- esclusioni per path/file, processo ed estensione, con valore normalizzato,
-  origine/evidenza e data di osservazione.
+- stato Tamper Protection; la provenienza della gestione è `unknown` perché
+  questa milestone non la determina;
+- esclusioni per percorso, processo ed estensione, con limite di 256 voci e
+  512 caratteri per valore; origine ed evidenza non sono dedotte.
 
 Il servizio mappa richieste API a operazioni chiuse (`read_status`,
 `read_exclusions`, `add_exclusion`, `remove_exclusion`, `evaluate_policy`). Non
@@ -50,10 +52,14 @@ esplicito e idempotency key. Non sostituiscono intere liste e non rimuovono voci
 che OmniDesk non ha creato. Gli errori di Tamper Protection/GPO/Intune diventano
 esiti auditabili, mai motivo per scrivere nel registro o cambiare policy.
 
-La sincronizzazione invia solo risultati strutturati; il server conserva lo
-snapshot e confronta lo stato desiderato con quello osservato. Gli heartbeat
-possono portare indicatori sintetici di stato, ma il dettaglio Defender ha un
-contratto e una retention separati dalle metriche di rete.
+La sincronizzazione invia solo risultati strutturati; il server conserva
+l'ultimo snapshot nel payload inventario esistente. I client meno recenti che
+non inviano il campo Defender non sovrascrivono l'ultimo snapshot. Il dettaglio
+è rimosso dallo status ordinario se manca il permesso. `endpointsecurity.defender.view`
+è un permesso distinto da `view` e viene assegnato per default solo al ruolo
+Administrator. Il dettaglio è rimosso dalle risposte ordinarie dell'inventario
+quando l'utente non ha quel permesso. Questa milestone non conserva cronologia,
+non confronta policy desiderate e osservate e non include retention separata.
 
 ## Modello dati proposto
 
@@ -161,7 +167,7 @@ l'installer in uno strumento di esclusione. Stato al 20 ottobre 2026:
 
 | Requisito | Stato osservato | Lavoro necessario |
 | --- | --- | --- |
-| MSI elevato e servizio Windows con ACL/recovery | Implementato nel pacchetto attuale; CI ha test lifecycle su runner Windows | Conservare test install/upgrade/repair/rollback e aggiungere prova Windows 10 reale |
+| MSI elevato e servizio Windows con ACL/recovery | Implementato nel pacchetto 0.8.16; CI ha test lifecycle su runner Windows | Conservare test install/upgrade/repair/rollback e aggiungere prova Windows 10 reale |
 | Integrità durante download/aggiornamento | Hash SHA-256 e dimensione sono nel manifest; API ricontrolla ZIP/MSI e Agent verifica il MSI staged | Mantenere controlli prima di ogni esecuzione e testare corruzione/troncamento/downgrade |
 | Firma digitale Agent, Tray, Setup e MSI | Non disponibile; kit attuale unsigned da laboratorio | Aggiungere firma Authenticode in pipeline quando il certificato verrà fornito fuori dal repository; verificare catena, publisher e timestamp; rifiutare firme non valide. Hash non sostituisce identità del publisher |
 | Diagnostica Defender | Migliorati i log Agent per accesso negato e file/servizio mancanti | Correlare, quando leggibile, gli eventi di sicurezza con il job MSI, il percorso e la finestra temporale. Classificare `defender_blocked` solo con evidenza corrispondente; altrimenti `installer_failed`/`unknown` |
@@ -233,11 +239,12 @@ esito corretto il blocco rispettato e comunicato.
 
 ## Milestone e criteri di accettazione
 
-1. **Design/API** (questa fase): schema, modello, permessi, validazione e UI
-   registrati; nessuna modifica runtime.
-2. **Read-only**: migrazioni, collector tipizzato, snapshot, UI device/gruppo,
-   provenienza esplicita e test di dati assenti/obsoleti/unsupported. Nessuna
-   modifica Defender.
+1. **Design/API**: specifica architetturale e limiti registrati.
+2. **Read-only** (sorgenti 0.8.17, da compilare e verificare): collector
+   tipizzato, snapshot nell'inventario, permesso dedicato e scheda dispositivo.
+   Copre stato e esclusioni osservati; non include vista gruppo, cronologia,
+   origine della policy o modifiche Defender. Nessuna policy o esclusione viene
+   cambiata.
 3. **Mutazioni controllate**: agent operation allowlist, RBAC e antiforgery,
    motivo/conferma, scadenza/ripristino, conflitti GPO/Intune/Tamper, audit e
    test unitari/integration Windows; prova manuale su Windows 10/11 e policy
@@ -249,5 +256,6 @@ esito corretto il blocco rispettato e comunicato.
    disponibile, verifica firma/hash, classificazione eventi, status dashboard,
    health check post MSI e rollback bounded, con gate Windows CI e pilota.
 
-La richiesta attuale chiude solo la progettazione. Non sono state eseguite
-modifiche a Defender o ai device.
+La milestone read-only è implementata nei sorgenti, ma resta da compilare,
+verificare e distribuire. Non sono state eseguite modifiche a Defender o ai
+device.

@@ -1,6 +1,28 @@
 # Roadmap
 
-**Snapshot corrente: 2026-10-20.** Le prime sezioni descrivono lo stato corrente; il resto del documento conserva decisioni e milestone storiche. Per stato distribuito e gate aperti fare riferimento a [completion-status.md](completion-status.md) e alle registrazioni più recenti in [validation.md](validation.md). Le note storiche con versioni precedenti o “non pubblicato” non sovrascrivono lo snapshot.
+**Snapshot corrente: 2026-10-21.** Le prime sezioni descrivono lo stato corrente; il resto del documento conserva decisioni e milestone storiche. Per stato distribuito e gate aperti fare riferimento a [completion-status.md](completion-status.md) e alle registrazioni più recenti in [validation.md](validation.md). Le note storiche con versioni precedenti o “non pubblicato” non sovrascrivono lo snapshot.
+
+Per recupero credenziali amministratore è disponibile [la procedura CLI con ASP.NET Identity](admin-password-recovery.md); il file bootstrap contiene soltanto la password iniziale e non permette di leggere password cambiate.
+
+### Backup server notturno su NAS Samba
+
+Predisposta la schermata **Backup server** per indirizzo/share Samba,
+credenziali, recipient pubblico age, orario e fuso, e numero di copie. La
+password è cifrata con Data Protection. `scripts/backup-nas.sh` legge le
+impostazioni a runtime, verifica il backup locale, cifra il pacchetto e lo
+trasferisce via SMB3; ruota gli archivi solo dopo upload riuscito. Gli script
+usano il progetto Compose production con gli overlay direct e RustDesk; quando
+il servizio RustDesk è attivo, il backup locale conserva anche `/data` e la sua
+identità. Il timer host controlla le impostazioni ogni cinque minuti. Procedura in
+[backup-nas.md](backup-nas.md).
+
+**Schermata e API deployate sul server.** Da **Backup server** l'amministratore
+può impostare NAS/share, credenziali, recipient age, orario/fuso e mantenere
+sette copie; la password viene protetta e non è rileggibile dalla UI. `age`
+1.2.1 e `smbclient` 4.23.6 sono installati sul server. Mancano installazione e
+attivazione del timer, configurazione reale dalla dashboard e verifica iniziale
+di upload/restore. La chiave privata age va custodita offline, separata da
+server e NAS. Nessuna credenziale è nel repository.
 
 ### Client RustDesk Windows e console Desktop
 
@@ -61,6 +83,26 @@ kit 0.8.16 è pubblicato nel download LAN. Restano il collaudo su un PC
 Windows reale e la verifica del provider SMART specifico per disco/controller.
 Vedere [validation](validation.md).
 
+### Agent Windows 0.8.17 — Microsoft Defender in sola lettura
+
+In sviluppo sul branch `sviluppo`: il collector Windows interroga i cmdlet
+Microsoft Defender con uno script fisso, raccoglie stato antivirus/protezione
+realtime, Tamper Protection, versioni/date firme e scansioni, più esclusioni
+quando il provider le espone. L'origine della policy resta esplicitamente
+`unknown`; il codice non modifica Defender, registry, esclusioni o policy.
+L'Agent invia il report con l'inventario giornaliero; API lo valida e lo conserva
+come ultimo snapshot nel payload inventario esistente. La dashboard ha una
+scheda Defender in sola lettura, protetta dal nuovo permesso
+`endpointsecurity.defender.view`, assegnato per default solo al ruolo
+Administrator. La cronologia e le policy di gruppo non fanno parte di questa
+prima fase.
+
+Agent/Tray/Setup/MSI sono stati portati a 0.8.17. Codice ancora da compilare e
+verificare in CI; il kit pubblicato resta 0.8.16 e l'istanza live non è stata
+aggiornata. Firma Authenticode e collaudo su PC Windows reale richiedono
+certificato e hardware/accesso esterni. Dettagli in
+[validation](validation.md) e [specifica Defender](endpoint-security-defender.md).
+
 ### RustDesk OSS pilot — standard native transport
 
 The 443/WSS experiment established that Caddy accepts the WebSocket upgrade,
@@ -103,26 +145,30 @@ sostituzione su un PC reale resta da verificare.
   container; `git diff --check` passato. Modifiche UI sorgente, non ancora
   distribuite né verificate in una sessione desktop interattiva.
 
-### Endpoint Security — Microsoft Defender (progettazione)
+### Endpoint Security — Microsoft Defender
 
-Nuovo modulo proposto per stato Defender, protezione real-time, firme/ultimo
-controllo ed esclusioni visibili per device e gruppo; policy di gruppo e
-conformità periodica; operazioni future tipizzate, RBAC indipendente,
+Il primo incremento read-only raccoglie stato Defender, protezione real-time,
+firme/ultime scansioni ed esclusioni per dispositivo. La scheda dispositivo,
+il permesso dedicato e l'invio nel report inventario sono presenti nei sorgenti
+Agent 0.8.17. API e dashboard sono deployate; Agent/Tray/Setup cross-compilati e
+suite API/dashboard passata. Restano futuri la vista gruppo,
+la cronologia, la provenienza policy e le policy di gruppo; le operazioni future
+saranno tipizzate, con RBAC indipendente,
 motivazione/conferma, audit e scadenze. La specifica definisce modello dati,
 schema API, interfaccia e limiti per path/processi/estensioni. Le esclusioni
 gestite da Group Policy, Intune o Tamper Protection devono apparire come
 bloccate e non saranno forzate. Nessuna esclusione automatica per OmniDesk e
-nessuna modifica runtime in questa fase. Analisi completa:
+nessuna modifica runtime Defender in questa milestone. Analisi completa:
 [Endpoint Security — Microsoft Defender](endpoint-security-defender.md).
 
 La specifica confronta anche il lifecycle MSI: firma Authenticode quando
 disponibile, verifica hash/firma, diagnostica Defender in dashboard, interventi
 solo amministrativi sugli strumenti Windows, health check dopo MSI e rollback
-bounded. Stato corrente del pacchetto: Agent 0.8.15 pubblicato per il download
+bounded. Stato corrente del pacchetto: Agent 0.8.16 pubblicato per il download
 autenticato; CI Windows passata, prova di sostituzione identità sul PC reale
-ancora aperta. Il pacchetto resta unsigned da laboratorio. La firma manca e
-l'integrazione runtime Defender non è implementata; la quarantena segnalata per
-MeshCentral non è stata rimossa né risolta da OmniDesk.
+ancora aperta. Il sorgente 0.8.17 non è ancora un MSI pubblicato; il pacchetto
+scaricabile resta unsigned 0.8.16. La firma manca; la
+quarantena segnalata per MeshCentral non è stata rimossa né risolta da OmniDesk.
 
 ### Backup — retention locale opt-in
 
