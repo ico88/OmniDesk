@@ -109,6 +109,13 @@ public static class AgentScenario
         Assert.True(status.GetProperty("online").GetBoolean());
         Assert.Equal(JsonValueKind.Null, status.GetProperty("inventory").GetProperty("defender").ValueKind);
         Assert.Equal(HttpStatusCode.Forbidden, (await scoped.GetAsync($"/api/devices/{id}/security/defender")).StatusCode);
+        var attention = await admin.GetFromJsonAsync<JsonElement[]>("/api/dashboard/device-attention");
+        var attentionDevice = Assert.Single(attention!, item => item.GetProperty("id").GetGuid() == id);
+        Assert.Contains(attentionDevice.GetProperty("defenderIssues").EnumerateArray(), issue => issue.GetString() == "Defender: Tamper Protection disattivata");
+        Assert.Contains(attentionDevice.GetProperty("defenderIssues").EnumerateArray(), issue => issue.GetString() == "Aggiornamenti Windows non verificati");
+        var scopedAttention = await scoped.GetFromJsonAsync<JsonElement[]>("/api/dashboard/device-attention");
+        Assert.DoesNotContain(scopedAttention!, item => item.GetProperty("defenderIssues").EnumerateArray()
+            .Any(issue => issue.GetString()?.StartsWith("Defender:", StringComparison.Ordinal) == true));
         agent.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Assertion(key));
         Assert.Equal(HttpStatusCode.NoContent, (await agent.PutAsJsonAsync("/api/agent/inventory", inventory with { Defender = null })).StatusCode);
         defenderResponse = await admin.GetFromJsonAsync<JsonElement>($"/api/devices/{id}/security/defender");
