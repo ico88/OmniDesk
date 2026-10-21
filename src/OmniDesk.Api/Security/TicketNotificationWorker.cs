@@ -1,13 +1,11 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
 using OmniDesk.Api.Data;
 using OmniDesk.Api.ServiceDesk;
 
 namespace OmniDesk.Api.Security;
 
-public sealed class TicketNotificationWorker(IServiceScopeFactory scopes, ILogger<TicketNotificationWorker> logger,
-    IOptions<OutboundEmailOptions>? emailOptions = null) : BackgroundService
+public sealed class TicketNotificationWorker(IServiceScopeFactory scopes, ILogger<TicketNotificationWorker> logger) : BackgroundService
 {
     private const string Consumer = "ticket-notifications.v1";
 
@@ -60,7 +58,7 @@ public sealed class TicketNotificationWorker(IServiceScopeFactory scopes, ILogge
             try
             {
                 await ProjectNotifications(db, scope.ServiceProvider.GetRequiredService<PermissionService>(), evt, now, ct,
-                    emailOptions?.Value.Enabled ?? false);
+                    outboundEmailEnabled: true);
                 var delivery = await db.CoreOutboxDeliveries.FindAsync([evt.Id, Consumer], ct);
                 if (delivery is null)
                 {
@@ -165,6 +163,8 @@ public sealed class TicketNotificationWorker(IServiceScopeFactory scopes, ILogge
                     ticket.DeviceId, ticket.SiteId, ct)) continue;
             if (evt.EventType == "ticket.attachment.ready" && TryString(root, "visibility", out var attachmentVisibility) &&
                 attachmentVisibility == "internal" && !await permissions.Allows(userId, "tickets.note.internal", ticket.DeviceId, siteId: ticket.SiteId)) continue;
+            if (await db.UserNotifications.AnyAsync(existing => existing.EventId == evt.Id && existing.UserId == userId, ct))
+                continue;
             var notification = new UserNotification
             {
                 EventId = evt.Id, UserId = userId, TicketId = ticket.Id,

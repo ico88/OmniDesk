@@ -4,7 +4,6 @@ using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.Extensions.Options;
 using OmniDesk.Api.Data;
 using OmniDesk.Api.Security;
 using OmniDesk.Api.ServiceDesk;
@@ -21,7 +20,7 @@ public static class AuthEndpoints
     {
         app.MapGet("/api/auth/csrf", (HttpContext c, IAntiforgery a) => Results.Ok(new { token = a.GetAndStoreTokens(c).RequestToken }));
         app.MapPost("/api/auth/login", async (LoginRequest r, SignInManager<AppUser> signIn, UserManager<AppUser> users,
-            IPasswordHasher<AppUser> hasher, IOutboundEmailSender emailSender, IOptions<OutboundEmailOptions> email, AppDbContext db, ILoggerFactory loggerFactory,
+            IPasswordHasher<AppUser> hasher, IOutboundEmailSender emailSender, AppDbContext db, ILoggerFactory loggerFactory,
             CancellationToken cancellationToken) => {
             if (string.IsNullOrWhiteSpace(r.Email) || r.Email.Length > 254 || string.IsNullOrEmpty(r.Password) || r.Password.Length > 1024) return Results.BadRequest();
             var user = await users.FindByEmailAsync(r.Email);
@@ -184,16 +183,15 @@ public static class AuthEndpoints
             await signIn.SignOutAsync();
             return Results.NoContent();
         }).RequireAuthorization();
-        app.MapGet("/api/auth/me", async (HttpContext c, UserManager<AppUser> users, PermissionService permissions) => {
+        app.MapGet("/api/auth/me", async (HttpContext c, UserManager<AppUser> users, PermissionService permissions, IOutboundEmailSender email) => {
             var user = await users.GetUserAsync(c.User);
-            var outbound = app.Configuration.GetSection(OutboundEmailOptions.SectionName).Get<OutboundEmailOptions>() ?? new OutboundEmailOptions();
-            return user is null ? Results.Unauthorized() : Results.Ok(new { user.Id, user.Email, user.DisplayName, user.EmailNotificationsEnabled, emailNotificationsAvailable = outbound.Enabled && outbound.IsValid() && !string.IsNullOrWhiteSpace(user.Email), globalPermissions = await permissions.Global(user.Id), twoFactorAvailable = app.Configuration.GetValue<bool>("Security:TotpEnabled"), twoFactorEnabled = user.TwoFactorEnabled });
+            return user is null ? Results.Unauthorized() : Results.Ok(new { user.Id, user.Email, user.DisplayName, user.EmailNotificationsEnabled, emailNotificationsAvailable = await email.IsEnabledAsync(c.RequestAborted) && !string.IsNullOrWhiteSpace(user.Email), globalPermissions = await permissions.Global(user.Id), twoFactorAvailable = app.Configuration.GetValue<bool>("Security:TotpEnabled"), twoFactorEnabled = user.TwoFactorEnabled });
         }).RequireAuthorization();
         app.MapPut("/api/auth/email-notifications", async (EmailNotificationsRequest request, HttpContext c,
-            UserManager<AppUser> users, AppDbContext db, IOptions<OutboundEmailOptions> email) => {
+            UserManager<AppUser> users, AppDbContext db, IOutboundEmailSender email) => {
             var user = await users.GetUserAsync(c.User);
             if (user is null) return Results.Unauthorized();
-            if (request.Enabled && (!email.Value.Enabled || string.IsNullOrWhiteSpace(user.Email)))
+            if (request.Enabled && (!await email.IsEnabledAsync(c.RequestAborted) || string.IsNullOrWhiteSpace(user.Email)))
                 return Results.BadRequest(new { error = "Email notifications require an account email address and server email configuration." });
             user.EmailNotificationsEnabled = request.Enabled;
             user.EmailNotificationsEnabledAt = request.Enabled ? DateTimeOffset.UtcNow : null;

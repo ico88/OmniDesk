@@ -66,7 +66,8 @@ if (!outboundEmail.IsValid()) throw new InvalidOperationException("Outbound emai
 if (builder.Configuration.GetValue<bool>("Security:EmailTwoFactorEnabled") &&
     (!outboundEmail.Enabled || !outboundEmail.IsValid() || builder.Configuration.GetValue<bool>("Security:TotpEnabled")))
     throw new InvalidOperationException("Email 2FA requires valid enabled SMTP and cannot be enabled together with TOTP.");
-builder.Services.AddSingleton<IOutboundEmailSender, SmtpOutboundEmailSender>();
+builder.Services.AddScoped<IOutboundEmailSender, SmtpOutboundEmailSender>();
+builder.Services.AddScoped<SmtpOutboundEmailSender>();
 builder.Services.AddSingleton<AttachmentStorage>();
 builder.Services.AddSingleton<IAttachmentScanner, ClamAvAttachmentScanner>();
 builder.Services.AddHostedService<AttachmentScanWorker>();
@@ -232,6 +233,7 @@ app.MapGet("/api/health/ready", async (AppDbContext db) => {
 app.MapAuthEndpoints();
 app.MapManagementEndpoints();
 app.MapBackupNasEndpoints();
+app.MapOutboundEmailSettingsEndpoints();
 app.MapUserLifecycleEndpoints();
 app.MapAgentEndpoints();
 app.MapDeviceManagementEndpoints();

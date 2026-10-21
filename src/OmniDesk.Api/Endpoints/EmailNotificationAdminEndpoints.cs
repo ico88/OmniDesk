@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
 using OmniDesk.Api.Data;
 using OmniDesk.Api.Security;
 using OmniDesk.Api.ServiceDesk;
@@ -41,11 +40,11 @@ public static class EmailNotificationAdminEndpoints
         });
 
         admin.MapPost("/{notificationId:guid}/retry", async (Guid notificationId, HttpContext context,
-            AppDbContext db, PermissionService permissions, IOptions<OutboundEmailOptions> email) =>
+            AppDbContext db, PermissionService permissions, IOutboundEmailSender email) =>
         {
             var actorId = context.User.UserId();
             if (!await permissions.Allows(actorId, "administration")) return Results.Forbid();
-            if (!email.Value.Enabled || !email.Value.IsValid())
+            if (!await email.IsEnabledAsync(context.RequestAborted))
                 return Results.Conflict(new { error = "Outbound email is not configured." });
 
             await using var transaction = await db.Database.BeginTransactionAsync(context.RequestAborted);

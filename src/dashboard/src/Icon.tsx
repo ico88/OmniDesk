@@ -15,6 +15,7 @@ const icons: Record<string, LucideIcon> = {
   knowledge: BookOpen,
   branding: Palette,
   backups: Files,
+  emailSettings: Mail,
   users: Users,
   audit: Activity,
   logout: LogOut,

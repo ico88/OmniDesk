@@ -287,6 +287,38 @@ namespace OmniDesk.Api.Migrations
                     b.ToTable("AuditEvents");
                 });
 
+            modelBuilder.Entity("OmniDesk.Api.Data.BackupNasSettings", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("LastAttemptAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("LastErrorCode")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<string>("LastStatus")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTimeOffset?>("LastSuccessAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ProtectedConfiguration")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("BackupNasSettings", t =>
+                        {
+                            t.HasCheckConstraint("CK_BackupNasSettings_Singleton", "\"Id\" = 1");
+                        });
+                });
+
             modelBuilder.Entity("OmniDesk.Api.Data.Branding", b =>
                 {
                     b.Property<int>("Id")
@@ -329,18 +361,6 @@ namespace OmniDesk.Api.Migrations
                             PrimaryColor = "#2563eb",
                             Theme = "dark"
                         });
-                });
-
-            modelBuilder.Entity("OmniDesk.Api.Data.BackupNasSettings", b =>
-                {
-                    b.Property<int>("Id").ValueGeneratedNever().HasColumnType("integer");
-                    b.Property<string>("ProtectedConfiguration").IsRequired().HasColumnType("text");
-                    b.Property<DateTimeOffset?>("LastAttemptAt").HasColumnType("timestamp with time zone");
-                    b.Property<DateTimeOffset?>("LastSuccessAt").HasColumnType("timestamp with time zone");
-                    b.Property<string>("LastStatus").IsRequired().HasMaxLength(20).HasColumnType("character varying(20)");
-                    b.Property<string>("LastErrorCode").HasMaxLength(40).HasColumnType("character varying(40)");
-                    b.HasKey("Id");
-                    b.ToTable("BackupNasSettings", t => t.HasCheckConstraint("CK_BackupNasSettings_Singleton", "\"Id\" = 1"));
                 });
 
             modelBuilder.Entity("OmniDesk.Api.Data.CoreOutboxDelivery", b =>
@@ -843,6 +863,23 @@ namespace OmniDesk.Api.Migrations
                         .IsUnique();
 
                     b.ToTable("MeshDeviceMappings");
+                });
+
+            modelBuilder.Entity("OmniDesk.Api.Data.OutboundEmailSettings", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ProtectedConfiguration")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("OutboundEmailSettings", t =>
+                        {
+                            t.HasCheckConstraint("CK_OutboundEmailSettings_Singleton", "\"Id\" = 1");
+                        });
                 });
 
             modelBuilder.Entity("OmniDesk.Api.Data.PortalDeviceAccess", b =>

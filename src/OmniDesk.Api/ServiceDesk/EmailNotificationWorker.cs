@@ -1,15 +1,12 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
 using OmniDesk.Api.Data;
 using OmniDesk.Api.Security;
 
 namespace OmniDesk.Api.ServiceDesk;
 
-public sealed class EmailNotificationWorker(IServiceScopeFactory scopes, ILogger<EmailNotificationWorker> logger,
-    IOptions<OutboundEmailOptions> options) : BackgroundService
+public sealed class EmailNotificationWorker(IServiceScopeFactory scopes, ILogger<EmailNotificationWorker> logger) : BackgroundService
 {
     private static readonly TimeSpan Lease = TimeSpan.FromMinutes(2);
-    private readonly OutboundEmailOptions settings = options.Value;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -20,7 +17,7 @@ public sealed class EmailNotificationWorker(IServiceScopeFactory scopes, ILogger
             {
                 try
                 {
-                    if (settings.Enabled && await ProcessNext(stoppingToken)) continue;
+                    if (await ProcessNext(stoppingToken)) continue;
                     await timer.WaitForNextTickAsync(stoppingToken);
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
@@ -36,10 +33,10 @@ public sealed class EmailNotificationWorker(IServiceScopeFactory scopes, ILogger
 
     public async Task<bool> ProcessNext(CancellationToken ct)
     {
-        if (!settings.Enabled || !settings.IsValid()) return false;
         Guid id;
         using (var scope = scopes.CreateScope())
         {
+            if (!await scope.ServiceProvider.GetRequiredService<IOutboundEmailSender>().IsEnabledAsync(ct)) return false;
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             await using var tx = await db.Database.BeginTransactionAsync(ct);
             var now = DateTimeOffset.UtcNow;
@@ -92,6 +89,8 @@ public sealed class EmailNotificationWorker(IServiceScopeFactory scopes, ILogger
                 return true;
             }
 
+            var emailConfiguration = await scope.ServiceProvider.GetRequiredService<SmtpOutboundEmailSender>().ReadConfigurationAsync(ct);
+            var dashboardUrl = emailConfiguration.DashboardUrl.TrimEnd('/');
             var kind = notification!.Kind switch
             {
                 "device.offline" => "Dispositivo non raggiungibile",
@@ -106,8 +105,8 @@ public sealed class EmailNotificationWorker(IServiceScopeFactory scopes, ILogger
             };
             var subject = ticket is not null ? $"OmniDesk: {kind} #{ticket.Number}" : $"OmniDesk: {kind}";
             var content = ticket is not null
-                ? $"{kind} #{ticket.Number}.\n\nApri OmniDesk per consultare il ticket: {settings.DashboardUrl.TrimEnd('/')}/?ticket={ticket.Id}\n"
-                : $"{kind}: {device!.Name}.\n\nApri OmniDesk e consulta i dispositivi: {settings.DashboardUrl.TrimEnd('/')}\n";
+                ? $"{kind} #{ticket.Number}.\n\nApri OmniDesk per consultare il ticket: {dashboardUrl}/?ticket={ticket.Id}\n"
+                : $"{kind}: {device!.Name}.\n\nApri OmniDesk e consulta i dispositivi: {dashboardUrl}\n";
             var message = new OutboundEmailMessage(user!.Email!, subject, content,
                 $"notification-{id:N}@omnidesk.invalid");
             await scope.ServiceProvider.GetRequiredService<IOutboundEmailSender>().SendAsync(message, ct);

@@ -36,6 +36,11 @@ public sealed class BackupNasSettings
     public string LastStatus { get; set; } = "never";
     public string? LastErrorCode { get; set; }
 }
+public sealed class OutboundEmailSettings
+{
+    public int Id { get; set; } = 1;
+    public string ProtectedConfiguration { get; set; } = "";
+}
 public sealed class AuditEvent
 {
     public long Id { get; set; }
@@ -72,6 +77,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
     public DbSet<ScopeGrant> ScopeGrants => Set<ScopeGrant>();
     public DbSet<Branding> Branding => Set<Branding>();
     public DbSet<BackupNasSettings> BackupNasSettings => Set<BackupNasSettings>();
+    public DbSet<OutboundEmailSettings> OutboundEmailSettings => Set<OutboundEmailSettings>();
     public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
     public DbSet<EnrollmentToken> EnrollmentTokens => Set<EnrollmentToken>();
     public DbSet<DeviceCredential> DeviceCredentials => Set<DeviceCredential>();
@@ -294,6 +300,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
         b.Entity<BackupNasSettings>().Property(x => x.ProtectedConfiguration).HasColumnType("text");
         b.Entity<BackupNasSettings>().Property(x => x.LastStatus).HasMaxLength(20);
         b.Entity<BackupNasSettings>().Property(x => x.LastErrorCode).HasMaxLength(40);
+        b.Entity<OutboundEmailSettings>().ToTable(t => t.HasCheckConstraint("CK_OutboundEmailSettings_Singleton", "\"Id\" = 1"));
+        b.Entity<OutboundEmailSettings>().Property(x => x.Id).ValueGeneratedNever();
+        b.Entity<OutboundEmailSettings>().Property(x => x.ProtectedConfiguration).HasColumnType("text");
         b.Entity<AuditEvent>().HasIndex(x => x.At);
         b.Entity<CoreOutboxEvent>().Property(x => x.EventType).HasMaxLength(100);
         b.Entity<CoreOutboxEvent>().Property(x => x.AggregateType).HasMaxLength(50);
