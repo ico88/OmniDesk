@@ -22,7 +22,7 @@ public static class RemoteAgentUpdateScenario
         try
         {
             var msi = Convert.FromHexString("D0CF11E0A1B11AE1").Concat("isolated MSI fixture"u8.ToArray()).ToArray();
-            const string version = "0.8.2";
+            const string version = "0.8.19";
             var packagePath = Path.Combine(directory, $"OmniDesk.Windows.LAN-{version}.zip");
             using (var archive = ZipFile.Open(packagePath, ZipArchiveMode.Create))
             await using (var output = archive.CreateEntry("OmniDesk.Agent.msi").Open()) await output.WriteAsync(msi);
@@ -42,6 +42,11 @@ public static class RemoteAgentUpdateScenario
             Assert.Equal(HttpStatusCode.Conflict, (await admin.PostAsJsonAsync($"/api/admin/devices/{device}/agent-update", new AgentUpdateRequest(Guid.NewGuid()))).StatusCode);
             await SetAgentVersion("0.8.1");
             Assert.Equal(HttpStatusCode.Forbidden, (await scoped.PostAsJsonAsync($"/api/admin/devices/{device}/agent-update", new AgentUpdateRequest(Guid.NewGuid()))).StatusCode);
+            await SetAgentVersion("0.8.17");
+            var legacyUpdater = await admin.PostAsJsonAsync($"/api/admin/devices/{device}/agent-update", new AgentUpdateRequest(Guid.NewGuid()));
+            Assert.Equal(HttpStatusCode.Conflict, legacyUpdater.StatusCode);
+            Assert.Equal("updater_unavailable", (await legacyUpdater.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("code").GetString());
+            await SetAgentVersion("0.8.18");
             var queued = await admin.PostAsJsonAsync($"/api/admin/devices/{device}/agent-update", new AgentUpdateRequest(Guid.NewGuid()));
             Assert.Equal(HttpStatusCode.Created, queued.StatusCode);
             agent.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", assertion());
