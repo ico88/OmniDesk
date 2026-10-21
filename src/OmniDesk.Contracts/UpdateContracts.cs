@@ -6,7 +6,9 @@ public sealed record AgentUpdateRequest(Guid RequestId);
 public sealed record UpdateLease(Guid Id, Guid LeaseId, string Kind, UpdateSelection[] Updates, DateTimeOffset LeaseExpiresAt,
     AgentUpdatePackage? AgentUpdate = null, ServiceControlPayload? ServiceControl = null, ProcessControlPayload? ProcessControl = null);
 public sealed record UpdateItem(Guid UpdateId, int Revision, string Title, string[] Kb, bool Downloaded, int? ResultCode = null);
-public sealed record UpdateResultRequest(Guid LeaseId, bool Succeeded, bool RebootRequired, UpdateItem[] Updates, string? Error = null, string? DiagnosticJson = null);
+public sealed record UpdateResultRequest(Guid LeaseId, bool Succeeded, bool RebootRequired, UpdateItem[] Updates, string? Error = null, string? DiagnosticJson = null,
+    string? FailureCategory = null, string? PreviousVersion = null, string? TargetVersion = null, string? InstalledVersion = null,
+    string? RollbackState = null, int? WindowsInstallerExitCode = null);
 public sealed record DiagnosticRequest(Guid RequestId);
 public sealed record ServiceControlPayload(string ServiceName, string Action);
 public sealed record ServiceControlRequest(Guid RequestId, string ServiceName, string Action);

@@ -11,7 +11,8 @@ using System.Management;
 using OmniDesk.Contracts;
 namespace OmniDesk.Agent.Windows;
 internal sealed record UpdateReceipt(Guid JobId, Guid LeaseId, UpdateResultRequest? Result, string? Kind = null,
-    string? TargetVersion = null, string? MsiSha256 = null, string? State = null, DateTimeOffset? StartedAt = null);
+    string? TargetVersion = null, string? MsiSha256 = null, string? State = null, DateTimeOffset? StartedAt = null,
+    string? PreviousVersion = null, string? PreviousMsiPath = null, string? PreviousMsiSha256 = null);
 public sealed class UpdateWorker(ILogger<UpdateWorker> logger) : BackgroundService
 {
     private static readonly JsonSerializerOptions Json = new() { PropertyNameCaseInsensitive = true };
@@ -44,8 +45,13 @@ public sealed class UpdateWorker(ILogger<UpdateWorker> logger) : BackgroundServi
                             {
                                 var installed = Version.TryParse(AgentVersion(), out var parsed) ? parsed : new Version(0, 0);
                                 var target = Version.TryParse(receipt.TargetVersion, out var expected) ? expected : new Version(int.MaxValue, 0);
-                                var succeeded = installed >= target;
-                                receipt = receipt with { State = succeeded ? "installed" : "failed", Result = new(receipt.LeaseId, succeeded, false, [], succeeded ? null : "MSI update did not complete; inspect Windows Installer log before retry") }; Save(receiptPath, receipt);
+                                var health = AgentUpdateHealth.Read();
+                                var startedAt = receipt.StartedAt.GetValueOrDefault();
+                                var succeeded = installed >= target && startedAt != default && health is not null && health.HeartbeatAt >= startedAt &&
+                                    Version.TryParse(health.Version, out var healthyVersion) && healthyVersion >= target;
+                                receipt = receipt with { State = succeeded ? "installed" : "failed", Result = new(receipt.LeaseId, succeeded, false, [], succeeded ? null : "L’aggiornamento non ha completato il controllo salute; consulta il registro Windows Installer.",
+                                    FailureCategory: succeeded ? null : "installer_result_unknown", PreviousVersion: receipt.PreviousVersion,
+                                    TargetVersion: receipt.TargetVersion, InstalledVersion: installed.ToString(), RollbackState: succeeded ? "not_needed" : "not_verified") }; Save(receiptPath, receipt);
                             }
                         }
                         else
@@ -69,6 +75,7 @@ public sealed class UpdateWorker(ILogger<UpdateWorker> logger) : BackgroundServi
                             {
                                 var staged = Path.Combine(AgentIdentity.Folder, $"agent-update-{receipt.JobId:N}.msi");
                                 if (File.Exists(staged)) File.Delete(staged);
+                                if (receipt.Result.RollbackState is not ("failed" or "service_unhealthy") && receipt.PreviousMsiPath is { } previous && File.Exists(previous)) File.Delete(previous);
                                 var updater = Path.Combine(AgentIdentity.Folder, "OmniDeskUpdater.exe");
                                 if (File.Exists(updater)) File.Delete(updater);
                                 if (receipt.Result.Succeeded) { var log = Path.Combine(AgentIdentity.Folder, $"agent-update-{receipt.JobId:N}.log"); if (File.Exists(log)) File.Delete(log); }
@@ -89,7 +96,11 @@ public sealed class UpdateWorker(ILogger<UpdateWorker> logger) : BackgroundServi
                                 UpdateResultRequest? outcome;
                                 try { outcome = await BeginAgentUpdate(job, client, server, identity.Assertion(), receiptPath, stoppingToken); }
                                 catch (Exception e) when (e is HttpRequestException or InvalidDataException or InvalidOperationException or UnauthorizedAccessException or IOException or Win32Exception)
-                                { outcome = new(job.LeaseId, false, false, [], $"Agent update staging failed ({e.GetType().Name})"); }
+                                { outcome = new(job.LeaseId, false, false, [], $"Preparazione aggiornamento non riuscita ({e.GetType().Name}).", FailureCategory: e switch {
+                                    InvalidDataException => "integrity_check_failed", UnauthorizedAccessException => "file_access_denied",
+                                    RollbackPackageUnavailableException => "rollback_package_unavailable",
+                                    HttpRequestException => "download_failed", InvalidOperationException => "invalid_package",
+                                    _ => "file_io_failed" }, TargetVersion: job.AgentUpdate?.Version, RollbackState: "not_started"); }
                                 if (outcome is not null) Save(receiptPath, new UpdateReceipt(job.Id, job.LeaseId, outcome, "agent.update"));
                                 else logger.LogInformation("Agent MSI update launched; the protected receipt will be reported when Windows Installer completes.");
                             }
@@ -238,13 +249,23 @@ public sealed class UpdateWorker(ILogger<UpdateWorker> logger) : BackgroundServi
         await using (var verify = File.OpenRead(msiPath))
             if (Convert.ToHexString(await SHA256.HashDataAsync(verify, ct)).ToLowerInvariant() != package.Sha256) throw new InvalidDataException("MSI package hash mismatch");
         AgentIdentity.AssertTrusted(new FileInfo(msiPath));
-        var updaterPath = Path.Combine(AgentIdentity.Folder, "OmniDeskUpdater.exe");
-        var self = Environment.ProcessPath ?? throw new InvalidOperationException("Agent executable path unavailable");
-        File.Copy(self, updaterPath, true); AgentIdentity.AssertTrusted(new FileInfo(updaterPath));
-        Save(receiptPath, new UpdateReceipt(job.Id, job.LeaseId, null, "agent.update", package.Version, package.Sha256, "installing", DateTimeOffset.UtcNow));
-        var start = new ProcessStartInfo(updaterPath) { UseShellExecute = false, CreateNoWindow = true };
-        start.ArgumentList.Add("--apply-agent-update"); start.ArgumentList.Add(receiptPath); start.ArgumentList.Add(msiPath);
-        _ = Process.Start(start) ?? throw new InvalidOperationException("Cannot start protected updater");
+        var previous = await AgentMsiCache.CreateRollbackCopy(job.Id, AgentVersion(), ct);
+        try
+        {
+            var updaterPath = Path.Combine(AgentIdentity.Folder, "OmniDeskUpdater.exe");
+            var self = Environment.ProcessPath ?? throw new InvalidOperationException("Agent executable path unavailable");
+            File.Copy(self, updaterPath, true); AgentIdentity.AssertTrusted(new FileInfo(updaterPath));
+            Save(receiptPath, new UpdateReceipt(job.Id, job.LeaseId, null, "agent.update", package.Version, package.Sha256, "installing", DateTimeOffset.UtcNow,
+                previous.Version, previous.Path, previous.Sha256));
+            var start = new ProcessStartInfo(updaterPath) { UseShellExecute = false, CreateNoWindow = true };
+            start.ArgumentList.Add("--apply-agent-update"); start.ArgumentList.Add(receiptPath); start.ArgumentList.Add(msiPath);
+            _ = Process.Start(start) ?? throw new InvalidOperationException("Cannot start protected updater");
+        }
+        catch
+        {
+            if (File.Exists(previous.Path)) File.Delete(previous.Path);
+            throw;
+        }
         return null;
     }
     private static async Task<UpdateResultRequest> Execute(UpdateLease job, CancellationToken ct)

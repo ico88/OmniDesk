@@ -20,6 +20,7 @@ export type DeviceStatus = {
 };
 type Group = { id: string; name: string };
 type UpdateItem = { UpdateId: string; Revision: number; Title: string; Kb: string[]; ResultCode: number | null };
+type AgentUpdateResult = { Succeeded: boolean; RebootRequired: boolean; Error: string | null; Updates: UpdateItem[]; FailureCategory?: string | null; PreviousVersion?: string | null; TargetVersion?: string | null; InstalledVersion?: string | null; RollbackState?: string | null; WindowsInstallerExitCode?: number | null };
 type UpdateJob = { id: string; kind: string; state: string; createdAt: string; completedAt?: string | null; result: string | null };
 type DiagnosticJob = UpdateJob & { completedAt: string | null };
 type DiagnosticData = { Kind: string; CollectedAt: string; Processes?: { ProcessId: number; Name: string; StartedAt: string; CanTerminate: boolean }[]; Services?: { Name: string; DisplayName: string; State: string; StartType: string }[]; Events?: { Log: string; TimeCreated: string; Id: number; Level: string; Source: string; Message: string }[] };
@@ -27,6 +28,24 @@ type ServiceJob = UpdateJob & { completedAt: string | null; payload?: string };
 type WindowsDownload = { available: boolean; release: { version: string; msiSha256?: string | null; msiSize?: number | null } | null };
 
 const jobLabels: Record<string, string> = { queued: 'In coda', leased: 'In esecuzione', succeeded: 'Completato', failed: 'Non riuscito', cancelled: 'Annullato' };
+const updateFailureLabels: Record<string, string> = { download_failed: 'Download del pacchetto non riuscito', integrity_check_failed: 'Verifica integrità del pacchetto non riuscita', file_access_denied: 'Accesso ai file dell’Agent negato', invalid_package: 'Pacchetto o metadati non validi', rollback_package_unavailable: 'Pacchetto di ripristino non disponibile', file_io_failed: 'Errore durante la scrittura del pacchetto', installer_result_unknown: 'Esito dell’installazione non verificato', msi_install_failed: 'Windows Installer non ha completato l’installazione', post_install_health_failed: 'Il servizio non ha superato il controllo dopo l’aggiornamento' };
+const rollbackLabels: Record<string, string> = { not_started: 'Ripristino non avviato', not_verified: 'Ripristino non verificato', installer_reverted: 'Windows Installer ha annullato l’installazione', service_unhealthy: 'Servizio non disponibile dopo il ripristino', not_needed: 'Non necessario', succeeded: 'Versione precedente ripristinata', failed: 'Ripristino automatico non riuscito' };
+function UpdateResultDetails({ raw, kind, selectedUpdates, onSelectUpdate }: { raw: string; kind: string; selectedUpdates: UpdateItem[]; onSelectUpdate: (item: UpdateItem, selected: boolean) => void }) {
+  try {
+    const result = JSON.parse(raw) as AgentUpdateResult;
+    return <div className="update-result">
+      <p>{result.Succeeded ? kind === 'agent.update' ? 'Agent aggiornato correttamente' : 'Operazione completata' : 'Aggiornamento non riuscito'}{result.RebootRequired ? ' · Riavvio di Windows necessario' : result.Succeeded && kind === 'agent.update' ? ' · Riavvio di Windows non necessario' : ''}</p>
+      {kind === 'agent.update' && <div className="update-diagnostics">
+        {result.FailureCategory && <p><strong>Diagnosi:</strong> {updateFailureLabels[result.FailureCategory] ?? 'Errore Agent non classificato'}</p>}
+        {(result.PreviousVersion || result.TargetVersion || result.InstalledVersion) && <p><strong>Versioni:</strong> {result.PreviousVersion ?? '—'} → {result.TargetVersion ?? '—'}{result.InstalledVersion ? ` · installata ${result.InstalledVersion}` : ''}</p>}
+        {result.RollbackState && <p><strong>Ripristino:</strong> {rollbackLabels[result.RollbackState] ?? 'Stato non riconosciuto'}</p>}
+        {result.WindowsInstallerExitCode != null && <p><strong>Windows Installer:</strong> codice {result.WindowsInstallerExitCode}</p>}
+      </div>}
+      {result.Error && <p className="error" role="alert">{result.Error}</p>}
+      {kind === 'scan' && result.Succeeded && result.Updates.map(item => <label className="update-choice" key={`${item.UpdateId}-${item.Revision}`}><input type="checkbox" checked={selectedUpdates.some(x => x.UpdateId === item.UpdateId)} onChange={event => onSelectUpdate(item, event.target.checked)}/>{item.Title} · {item.Kb.join(', ')}</label>)}
+    </div>;
+  } catch { return <p>Risultato non leggibile; richiedi di nuovo l’elenco lavori.</p>; }
+}
 const elapsed = (from: string, to = Date.now()) => {
   const seconds = Math.max(0, Math.floor((to - new Date(from).getTime()) / 1000));
   return seconds < 60 ? `${seconds} secondi` : `${Math.floor(seconds / 60)} min ${seconds % 60} sec`;
@@ -208,7 +227,7 @@ export function DeviceWorkspace({ device, admin, groups, sites, onDeviceChanged,
           {job.kind === 'agent.update' && job.state === 'leased' && <p className="muted">Installazione MSI in corso. Il servizio Agent può riavviarsi durante l’operazione; OmniDesk non riavvia Windows. La pagina controlla l’esito automaticamente ogni 5 secondi.</p>}
           {job.kind === 'agent.update' && job.state === 'leased' && Date.now() - new Date(job.createdAt).getTime() >= 5 * 60_000 && <p className="network-stale-note" role="status"><AlertTriangle size={15}/>Nessun esito ricevuto dopo 5 minuti: non significa che l’installazione sia fallita. Serve la conferma dell’Agent; ultimo controllo {new Date(jobsCheckedAt).toLocaleTimeString('it-IT')}.</p>}
           {job.state === 'queued' && <button className="secondary compact" disabled={busy} onClick={() => void work(async () => { await api(`/devices/${device.id}/updates/${job.id}`, 'DELETE'); await loadJobs(); })}>Annulla</button>}
-          {job.result && (() => { try { const result = JSON.parse(job.result) as { Succeeded: boolean; RebootRequired: boolean; Error: string | null; Updates: UpdateItem[] }; return <div className="update-result"><p>{result.Succeeded ? job.kind === 'agent.update' ? 'Agent aggiornato correttamente' : 'Operazione completata' : 'Aggiornamento non riuscito'}{result.RebootRequired ? ' · Riavvio di Windows necessario' : result.Succeeded && job.kind === 'agent.update' ? ' · Riavvio di Windows non necessario' : ''}</p>{result.Error && <p className="error" role="alert">{result.Error}</p>}{job.kind === 'scan' && result.Succeeded && result.Updates.map(item => <label className="update-choice" key={`${item.UpdateId}-${item.Revision}`}><input type="checkbox" checked={selectedUpdates.some(x => x.UpdateId === item.UpdateId)} onChange={event => setSelectedUpdates(event.target.checked ? [...selectedUpdates.filter(x => x.UpdateId !== item.UpdateId), item] : selectedUpdates.filter(x => x.UpdateId !== item.UpdateId))}/>{item.Title} · {item.Kb.join(', ')}</label>)}</div>; } catch { return <p>Risultato non leggibile; richiedi di nuovo l’elenco lavori.</p>; } })()}
+          {job.result && <UpdateResultDetails raw={job.result} kind={job.kind} selectedUpdates={selectedUpdates} onSelectUpdate={(item, selected) => setSelectedUpdates(selected ? [...selectedUpdates.filter(x => x.UpdateId !== item.UpdateId), item] : selectedUpdates.filter(x => x.UpdateId !== item.UpdateId))}/>}
         </article>)}
         {!!selectedUpdates.length && <button disabled={busy || device.revoked} onClick={() => void work(async () => { await api(`/devices/${device.id}/updates/install`, 'POST', { requestId: crypto.randomUUID(), updates: selectedUpdates.map(item => ({ updateId: item.UpdateId, revision: item.Revision })) }); setSelectedUpdates([]); await loadJobs(); })}>Installa {selectedUpdates.length} aggiornamenti selezionati</button>}
       </>}

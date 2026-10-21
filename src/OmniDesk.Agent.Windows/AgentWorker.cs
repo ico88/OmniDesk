@@ -30,6 +30,8 @@ public sealed class AgentWorker(ILogger<AgentWorker> logger, AgentRuntimeState s
                     }
                     await Send("api/agent/metrics", HttpMethod.Post, collector.Metrics());
                     state.Heartbeat();
+                    try { AgentUpdateHealth.RecordHeartbeat(); }
+                    catch (Exception e) when (e is IOException or UnauthorizedAccessException) { logger.LogWarning("Local update health receipt unavailable ({Type}).", e.GetType().Name); }
                     if (DateTimeOffset.UtcNow - inventoryAt > TimeSpan.FromHours(24))
                     { await Send("api/agent/inventory", HttpMethod.Put, collector.Inventory()); inventoryAt = DateTimeOffset.UtcNow; }
                 }

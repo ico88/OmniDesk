@@ -254,6 +254,9 @@ public static class UpdateEndpoints
             var id = Guid.Parse(c.User.UserId()); var now = DateTimeOffset.UtcNow;
             var job = await db.UpdateJobs.AsNoTracking().SingleOrDefaultAsync(x => x.Id == jobId && x.DeviceId == id && x.LeaseId == r.LeaseId);
             if (job is null) return Results.NotFound();
+            if (job.Kind == "agent.update" && !ValidAgentUpdateResult(r)) return Results.BadRequest();
+            if (job.Kind != "agent.update" && (r.FailureCategory is not null || r.PreviousVersion is not null || r.TargetVersion is not null ||
+                r.InstalledVersion is not null || r.RollbackState is not null || r.WindowsInstallerExitCode is not null)) return Results.BadRequest();
             if (job.Kind.StartsWith("diagnostics.") && (r.Succeeded ? r.DiagnosticJson is null || !ValidDiagnostic(job.Kind, r.DiagnosticJson) : r.DiagnosticJson is not null)) return Results.BadRequest();
             if (!job.Kind.StartsWith("diagnostics.") && r.DiagnosticJson is not null) return Results.BadRequest();
             if ((job.State is "succeeded" or "failed") && job.Result is not null) return Results.NoContent();
@@ -265,6 +268,18 @@ public static class UpdateEndpoints
             var resultAction = job.Kind.StartsWith("diagnostics.") ? "diagnostics.result." : job.Kind.StartsWith("service.") ? "service.control.result." : job.Kind == "process.kill" ? "process.control.result." : "update.result.";
             db.AuditEvents.Add(Event(null, resultAction + state, jobId)); await db.SaveChangesAsync(); await tx.CommitAsync(); return Results.NoContent();
         });
+    }
+    private static bool ValidAgentUpdateResult(UpdateResultRequest result)
+    {
+        var categories = new[] { "download_failed", "integrity_check_failed", "file_access_denied", "invalid_package", "rollback_package_unavailable", "file_io_failed",
+            "installer_result_unknown", "msi_install_failed", "post_install_health_failed" };
+        var rollbackStates = new[] { "not_started", "not_verified", "installer_reverted", "service_unhealthy", "not_needed", "succeeded", "failed" };
+        return (result.FailureCategory is null || categories.Contains(result.FailureCategory, StringComparer.Ordinal)) &&
+            (result.RollbackState is null || rollbackStates.Contains(result.RollbackState, StringComparer.Ordinal)) &&
+            (result.PreviousVersion is null || result.PreviousVersion.Length <= 64) &&
+            (result.TargetVersion is null || result.TargetVersion.Length <= 64) &&
+            (result.InstalledVersion is null || result.InstalledVersion.Length <= 64) &&
+            (result.WindowsInstallerExitCode is null || result.WindowsInstallerExitCode is >= 0 and <= 65535);
     }
     private static AuditEvent Event(string? actor, string action, Guid id) => new() { ActorId = actor, Action = action, Target = id.ToString() };
     private static IResult AgentUnavailable() => Results.Conflict(new {

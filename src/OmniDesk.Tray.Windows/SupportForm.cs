@@ -13,12 +13,13 @@ internal sealed class SupportForm : Form
     private readonly TextBox description = new() { MaxLength = 8000, Multiline = true, Dock = DockStyle.Fill, ScrollBars = ScrollBars.Vertical, PlaceholderText = "Che cosa stavi facendo? Che cosa è successo?" };
     private readonly CheckBox consent = new() { Text = "Acconsento ad allegare lo screenshot al team IT", AutoSize = true, Dock = DockStyle.Fill };
     private readonly PictureBox preview = new() { Dock = DockStyle.Fill, SizeMode = PictureBoxSizeMode.Zoom, BorderStyle = BorderStyle.FixedSingle };
+    private readonly Label previewPlaceholder = new() { Dock = DockStyle.Fill, Text = "Anteprima dello screenshot\r\nNon verrà inviato senza il tuo consenso.", TextAlign = ContentAlignment.MiddleCenter };
     private readonly ComboBox ticketPicker = new() { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly TextBox conversation = new() { ReadOnly = true, Multiline = true, ScrollBars = ScrollBars.Vertical, Dock = DockStyle.Fill };
     private readonly ComboBox attachmentPicker = new() { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly Button downloadAttachment = new() { Text = "Scarica allegato", AutoSize = true, Enabled = false };
     private readonly TextBox replyText = new() { MaxLength = 8000, Multiline = true, Dock = DockStyle.Fill, ScrollBars = ScrollBars.Vertical, PlaceholderText = "Scrivi un messaggio al team IT" };
-    private readonly Label result = new() { Dock = DockStyle.Bottom, Height = 42, Text = "Puoi inviare una richiesta o controllare i tuoi ticket." };
+    private readonly Label result = new() { Dock = DockStyle.Bottom, Height = 48, Padding = new Padding(22, 0, 22, 0), TextAlign = ContentAlignment.MiddleLeft, Text = "Puoi inviare una richiesta o controllare i tuoi ticket." };
     private readonly TabControl pages = new() { Dock = DockStyle.Fill };
     private readonly Label ticketSummary = new() { Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true };
     private readonly Button send = new() { Text = "Invia richiesta al team IT", AutoSize = true };
@@ -36,36 +37,58 @@ internal sealed class SupportForm : Form
 
     public SupportForm()
     {
-        Text = "OmniDesk — Assistenza"; Width = 760; Height = 800; MinimumSize = new Size(640, 650); StartPosition = FormStartPosition.CenterScreen;
-        var requestPage = new TabPage("Nuova richiesta");
-        var ticketsPage = new TabPage("I miei ticket");
+        Text = "OmniDesk — Assistenza"; Width = 850; Height = 790; MinimumSize = new Size(720, 700); StartPosition = FormStartPosition.CenterScreen;
+        BackColor = Color.FromArgb(244, 247, 251); Font = new Font("Segoe UI", 9F); ForeColor = Color.FromArgb(33, 48, 69);
+        var requestPage = new TabPage("Nuova richiesta") { BackColor = BackColor, Padding = new Padding(0) };
+        var ticketsPage = new TabPage("I miei ticket") { BackColor = BackColor, Padding = new Padding(0) };
         pages.TabPages.AddRange([requestPage, ticketsPage]);
 
-        var requestLayout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 9, Padding = new Padding(16) };
+        var requestLayout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 6, Padding = new Padding(22, 18, 22, 18), BackColor = BackColor };
         requestLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        requestLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 35));
-        requestLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 24)); requestLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
-        requestLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 24)); requestLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
-        requestLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 24)); requestLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        requestLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 160)); requestLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));
-        var requestHeading = new Label { Text = "Descrivi il problema: il team IT riceverà la richiesta collegata a questo computer.", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true };
-        var screenshotBox = new GroupBox { Text = "Screenshot facoltativo", Dock = DockStyle.Fill, Padding = new Padding(8) };
-        var screenshotLayout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 2 };
-        screenshotLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 48)); screenshotLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 52));
-        screenshotLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 65)); screenshotLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 35));
-        var screenshotActions = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = true, AutoScroll = true };
+        requestLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 88));
+        requestLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 82));
+        requestLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 29));
+        requestLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        requestLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 176));
+        requestLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 58));
+        var requestHeading = new Panel { Dock = DockStyle.Fill, BackColor = Color.White, Padding = new Padding(18, 12, 18, 12), Margin = new Padding(0, 0, 0, 12) };
+        var requestTitle = new Label { Text = "Come possiamo aiutarti?", Dock = DockStyle.Top, Height = 34, Font = new Font("Segoe UI Semibold", 17F), ForeColor = Color.FromArgb(25, 45, 70) };
+        var requestSubheading = new Label { Text = "La richiesta sarà collegata a questo computer e inviata al team IT.", Dock = DockStyle.Fill, ForeColor = Color.FromArgb(91, 108, 130), AutoEllipsis = true };
+        requestHeading.Controls.Add(requestSubheading); requestHeading.Controls.Add(requestTitle);
+
+        var details = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 2, BackColor = BackColor, Margin = new Padding(0) };
+        details.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 66)); details.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 34));
+        details.RowStyles.Add(new RowStyle(SizeType.Absolute, 25)); details.RowStyles.Add(new RowStyle(SizeType.Absolute, 43));
+        var subjectLabel = FieldLabel("Oggetto"); var categoryLabel = FieldLabel("Categoria");
+        details.Controls.Add(subjectLabel, 0, 0); details.Controls.Add(categoryLabel, 1, 0);
+        details.Controls.Add(subject, 0, 1); details.Controls.Add(category, 1, 1);
+
+        var screenshotBox = new Panel { Dock = DockStyle.Fill, BackColor = Color.White, Padding = new Padding(12), Margin = new Padding(0, 8, 0, 0) };
+        var screenshotLayout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 2, BackColor = Color.White };
+        screenshotLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 52)); screenshotLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 48));
+        screenshotLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 33)); screenshotLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        var screenshotTitle = new Label { Text = "Screenshot  ·  facoltativo", Dock = DockStyle.Fill, Font = new Font("Segoe UI Semibold", 10F), ForeColor = Color.FromArgb(25, 45, 70) };
+        screenshotLayout.Controls.Add(screenshotTitle, 0, 0); screenshotLayout.SetColumnSpan(screenshotTitle, 2);
+        var previewPanel = new Panel { Dock = DockStyle.Fill, BackColor = Color.FromArgb(245, 248, 252), Margin = new Padding(0, 0, 14, 0) };
+        preview.BackColor = Color.FromArgb(245, 248, 252); previewPlaceholder.ForeColor = Color.FromArgb(115, 130, 149);
+        previewPanel.Controls.Add(preview); previewPanel.Controls.Add(previewPlaceholder);
+        var screenshotActions = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoScroll = true, Padding = new Padding(4, 0, 0, 0) };
         screenshotActions.Controls.Add(capture); screenshotActions.Controls.Add(remove);
-        screenshotLayout.Controls.Add(preview, 0, 0); screenshotLayout.SetRowSpan(preview, 2);
-        screenshotLayout.Controls.Add(screenshotActions, 1, 0); screenshotLayout.Controls.Add(consent, 1, 1);
+        screenshotActions.Controls.Add(new Label { Text = "Puoi controllare l’anteprima prima dell’invio. Lo screenshot viene allegato solo se acquisito e autorizzato qui.", AutoSize = true, MaximumSize = new Size(300, 0), ForeColor = Color.FromArgb(91, 108, 130), Padding = new Padding(2, 3, 2, 5) });
+        consent.Text = "Allega lo screenshot alla richiesta"; consent.AutoSize = true; consent.Dock = DockStyle.None;
+        screenshotActions.Controls.Add(consent);
+        screenshotLayout.Controls.Add(previewPanel, 0, 1); screenshotLayout.Controls.Add(screenshotActions, 1, 1);
         screenshotBox.Controls.Add(screenshotLayout);
-        var sendPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(0, 7, 0, 0) };
+        var sendPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(0, 10, 0, 0), BackColor = BackColor };
         sendPanel.Controls.Add(send);
-        requestLayout.Controls.Add(requestHeading, 0, 0);
-        requestLayout.Controls.Add(new Label { Text = "Oggetto", Dock = DockStyle.Fill, TextAlign = ContentAlignment.BottomLeft }, 0, 1); requestLayout.Controls.Add(subject, 0, 2);
-        requestLayout.Controls.Add(new Label { Text = "Categoria", Dock = DockStyle.Fill, TextAlign = ContentAlignment.BottomLeft }, 0, 3); requestLayout.Controls.Add(category, 0, 4);
-        requestLayout.Controls.Add(new Label { Text = "Descrizione", Dock = DockStyle.Fill, TextAlign = ContentAlignment.BottomLeft }, 0, 5); requestLayout.Controls.Add(description, 0, 6);
-        requestLayout.Controls.Add(screenshotBox, 0, 7); requestLayout.Controls.Add(sendPanel, 0, 8);
+        requestLayout.Controls.Add(requestHeading, 0, 0); requestLayout.Controls.Add(details, 0, 1);
+        requestLayout.Controls.Add(FieldLabel("Descrizione"), 0, 2); requestLayout.Controls.Add(description, 0, 3);
+        requestLayout.Controls.Add(screenshotBox, 0, 4); requestLayout.Controls.Add(sendPanel, 0, 5);
         requestPage.Controls.Add(requestLayout);
+
+        StyleInput(subject); StyleInput(category); StyleInput(description); StyleInput(ticketPicker); StyleInput(replyText);
+        StyleButton(send, primary: true); StyleButton(capture); StyleButton(remove); StyleButton(refresh); StyleButton(reply, primary: true); StyleButton(downloadAttachment);
+        result.BackColor = Color.FromArgb(235, 241, 248); result.ForeColor = Color.FromArgb(57, 75, 98);
 
         var ticketLayout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 6, Padding = new Padding(12) };
         ticketLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
@@ -93,7 +116,24 @@ internal sealed class SupportForm : Form
         pages.SelectedIndexChanged += async (_, _) => { if (pages.SelectedTab == ticketsPage) await List(); };
         Shown += async (_, _) => await List();
     }
-    private void ClearImage() { screenshot = null; preview.Image?.Dispose(); preview.Image = null; consent.Checked = false; pending = null; }
+    private static Label FieldLabel(string text) => new() { Text = text, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, Font = new Font("Segoe UI Semibold", 9F), ForeColor = Color.FromArgb(57, 75, 98), Margin = new Padding(0) };
+    private static void StyleInput(Control control)
+    {
+        control.Font = new Font("Segoe UI", 10F); control.BackColor = Color.White; control.ForeColor = Color.FromArgb(33, 48, 69);
+        control.Margin = new Padding(0, 0, 12, 3);
+        if (control is TextBox text) { text.BorderStyle = BorderStyle.FixedSingle; text.Padding = new Padding(8); }
+        if (control is ComboBox combo) { combo.FlatStyle = FlatStyle.Flat; }
+    }
+    private static void StyleButton(Button button, bool primary = false)
+    {
+        button.FlatStyle = FlatStyle.Flat; button.FlatAppearance.BorderSize = 1; button.Cursor = Cursors.Hand;
+        button.Font = new Font("Segoe UI Semibold", 9F); button.Padding = new Padding(11, 4, 11, 4); button.Height = 36;
+        button.BackColor = primary ? Color.FromArgb(37, 99, 235) : Color.White;
+        button.ForeColor = primary ? Color.White : Color.FromArgb(47, 66, 90);
+        button.FlatAppearance.BorderColor = primary ? Color.FromArgb(37, 99, 235) : Color.FromArgb(213, 222, 233);
+        button.FlatAppearance.MouseOverBackColor = primary ? Color.FromArgb(29, 78, 216) : Color.FromArgb(242, 246, 251);
+    }
+    private void ClearImage() { screenshot = null; preview.Image?.Dispose(); preview.Image = null; previewPlaceholder.Visible = true; consent.Checked = false; pending = null; }
     private void CaptureScreen()
     {
         if (MessageBox.Show(this, "Verrà acquisito lo schermo principale della tua sessione. Chiudi o nascondi prima i dati riservati. Continuare?", "Screenshot", MessageBoxButtons.YesNo) != DialogResult.Yes) return;
@@ -110,7 +150,7 @@ internal sealed class SupportForm : Form
                 using var resized = new Bitmap(Math.Max(1,(int)(original.Width*scale)),Math.Max(1,(int)(original.Height*scale)),PixelFormat.Format32bppArgb);
                 using (var g = Graphics.FromImage(resized)) g.DrawImage(original,0,0,resized.Width,resized.Height);
                 using var stream = new MemoryStream(); resized.Save(stream,ImageFormat.Png);
-                if (stream.Length <= 524288) { screenshot = StripMetadata(stream.ToArray()); preview.Image = new Bitmap(resized); break; }
+                if (stream.Length <= 524288) { screenshot = StripMetadata(stream.ToArray()); preview.Image = new Bitmap(resized); previewPlaceholder.Visible = false; break; }
             }
             result.Text = screenshot is null ? "Immagine troppo grande. Richiesta inviabile senza screenshot." : "Verifica l'anteprima e seleziona il consenso prima dell'invio.";
         }
