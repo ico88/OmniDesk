@@ -15,13 +15,14 @@ import { BackupSettings } from './BackupSettings';
 type User = { id: string; email: string; displayName: string | null; emailNotificationsEnabled: boolean; emailNotificationsAvailable: boolean; globalPermissions: string[]; twoFactorAvailable: boolean; twoFactorEnabled: boolean };
 type Branding = { name: string; logoUrl: string; primaryColor: string; theme: 'light' | 'dark' };
 type Device = { id: string; name: string; groupId: string | null; siteId: string | null; online: boolean; revoked: boolean; lastSeen: string | null };
+type DeviceAttention = { id: string; name: string; online: boolean; lastSeen: string | null; pendingUpdates: number | null; updateState: string | null; updateCheckedAt: string | null; defenderIssues: string[]; defenderObservedAt: string | null };
 type Group = { id: string; name: string };
 type Site = { id: string; name: string; isArchived: boolean };
 type Audit = { id: number; at: string; action: string; target: string; outcome: string };
 type EmailLoginChallenge = { requiresTwoFactor: true; challengeToken: string; maskedEmail: string; expiresInSeconds: number };
 const defaults: Branding = { name: 'OmniDesk', logoUrl: '', primaryColor: '#2563eb', theme: 'dark' };
 
-function DeviceOverview({ devices, refreshedAt, busy, onRefresh, onOpen }: { devices: Device[]; refreshedAt: Date | null; busy: boolean; onRefresh: () => void; onOpen: (device: Device) => void }) {
+function DeviceOverview({ devices, attentionTiles, refreshedAt, busy, onRefresh, onOpen }: { devices: Device[]; attentionTiles: DeviceAttention[]; refreshedAt: Date | null; busy: boolean; onRefresh: () => void; onOpen: (device: Device) => void }) {
   const active = devices.filter(device => !device.revoked);
   const online = active.filter(device => device.online);
   const offline = active.filter(device => !device.online);
@@ -45,6 +46,20 @@ function DeviceOverview({ devices, refreshedAt, busy, onRefresh, onOpen }: { dev
         {recent.length === 0 ? <p className="overview-empty">Non sono ancora arrivati heartbeat dai dispositivi.</p> : <div className="overview-device-list">{recent.map(device=><article key={device.id}><span className={`status-pill ${device.revoked?'danger':device.online?'online':'offline'}`}>{device.revoked?'Revocato':device.online?'Online':'Offline'}</span><div className="overview-device-info"><strong>{device.name}</strong><small>Ultimo contatto: {when(device.lastSeen)}</small></div><button className="secondary compact" onClick={()=>onOpen(device)}>Apri</button></article>)}</div>}
       </section>
     </div>
+    <section className="panel overview-attention">
+      <div className="section-heading"><div><span className="eyebrow">AGGIORNAMENTI E SICUREZZA</span><h2>PC da verificare <span className="count">{attentionTiles.length}</span></h2></div><small>Stati rilevati dall’ultima scansione e dall’ultimo report Agent.</small></div>
+      {attentionTiles.length === 0 ? <p className="overview-empty">Nessun aggiornamento in sospeso o problema Defender rilevato nei dispositivi accessibili.</p> : <div className="attention-tiles">{attentionTiles.map(item => {
+        const device = devices.find(candidate => candidate.id === item.id);
+        return <article className="attention-tile" key={item.id}>
+          <div className="attention-tile-heading"><span className={`status-pill ${item.online?'online':'offline'}`}>{item.online?'Online':'Offline'}</span><strong title={item.name}>{item.name}</strong></div>
+          <ul>{item.defenderIssues.map(issue=><li className="attention-defender" key={issue}>{issue}</li>)}
+            {item.pendingUpdates != null && item.pendingUpdates > 0 && <li className="attention-updates">{item.pendingUpdates} aggiornament{item.pendingUpdates===1?'o':'i'} Windows in sospeso</li>}
+          </ul>
+          <small>Ultimo contatto: {when(item.lastSeen)}</small>
+          {device && <button className="secondary compact" disabled={busy} onClick={()=>onOpen(device)}>Apri dispositivo</button>}
+        </article>;
+      })}</div>}
+    </section>
   </>;
 }
 
@@ -72,6 +87,7 @@ function App() {
   const [branding, setBranding] = useState(defaults);
   const [draft, setDraft] = useState(defaults);
   const [devices, setDevices] = useState<Device[]>([]);
+  const [deviceAttention, setDeviceAttention] = useState<DeviceAttention[]>([]);
   const [devicesRefreshedAt, setDevicesRefreshedAt] = useState<Date | null>(null);
   const [audit, setAudit] = useState<Audit[]>([]);
   const [widgets, setWidgets] = useState<string[]>(['devices','permissions','authentication']);
@@ -104,8 +120,8 @@ function App() {
   async function load() {
     const me = await api<User>('/auth/me');
     setUser(me);
-    const [brand, list] = await Promise.all([api<Branding>('/branding'), api<Device[]>('/devices')]);
-    setBranding(brand); setDraft(brand); setDevices(list); setDevicesRefreshedAt(new Date()); setWidgets((await api<{widgets:string[]}>('/dashboard/layout')).widgets);
+    const [brand, list, attention] = await Promise.all([api<Branding>('/branding'), api<Device[]>('/devices'), api<DeviceAttention[]>('/dashboard/device-attention')]);
+    setBranding(brand); setDraft(brand); setDevices(list); setDeviceAttention(attention); setDevicesRefreshedAt(new Date()); setWidgets((await api<{widgets:string[]}>('/dashboard/layout')).widgets);
     if (me.globalPermissions.includes('administration')) { const [events, groupList, siteList] = await Promise.all([api<Audit[]>('/admin/audit'), api<Group[]>('/admin/groups'), api<Site[]>('/admin/sites')]); setAudit(events); setGroups(groupList); setSites(siteList); }
     await refreshCsrf();
   }
@@ -115,13 +131,13 @@ function App() {
   useEffect(()=>{
     if(!user||!['overview','devices','support'].includes(tab))return;
     let active=true;
-    void api<Device[]>('/devices').then(list=>{if(active){setDevices(list);setDevicesRefreshedAt(new Date());}}).catch(e=>{if(active)setError(e instanceof Error?e.message:'Elenco dispositivi non disponibile');});
+    void Promise.all([api<Device[]>('/devices'), api<DeviceAttention[]>('/dashboard/device-attention')]).then(([list, attention])=>{if(active){setDevices(list);setDeviceAttention(attention);setDevicesRefreshedAt(new Date());}}).catch(e=>{if(active)setError(e instanceof Error?e.message:'Panoramica dispositivi non disponibile');});
     return()=>{active=false;};
   },[tab,user?.id]);
   useEffect(()=>{
     if(!user||!['overview','devices'].includes(tab))return;
     let active=true;
-    const timer=window.setInterval(()=>{void api<Device[]>('/devices').then(list=>{if(active){setDevices(list);setDevicesRefreshedAt(new Date());}}).catch(e=>{if(active)setError(e instanceof Error?e.message:'Stato dispositivi non aggiornato');});},30_000);
+    const timer=window.setInterval(()=>{void Promise.all([api<Device[]>('/devices'), api<DeviceAttention[]>('/dashboard/device-attention')]).then(([list, attention])=>{if(active){setDevices(list);setDeviceAttention(attention);setDevicesRefreshedAt(new Date());}}).catch(e=>{if(active)setError(e instanceof Error?e.message:'Stato dispositivi non aggiornato');});},30_000);
     return()=>{active=false;window.clearInterval(timer);};
   },[tab,user?.id]);
   useEffect(() => { load().catch(() => setUser(null)).finally(() => setLoading(false)); }, []);
@@ -179,7 +195,7 @@ function App() {
     {tab === 'support' && <SupportDesk sites={sites} devices={devices} visibleDeviceIds={devices.map(d=>d.id)} focusTicketId={focusTicketId} onTicketFocused={()=>setFocusTicketId(null)} onOpenDevice={id=>action(async()=>{const next=await api<DeviceStatus>(`/devices/${id}/status`);setStatus(next);setTab('devices');})}/>}
     {tab === 'myTickets' && <CustomerPortal onMessage={setMessage} focusTicketId={portalFocusTicketId} onTicketFocused={()=>setPortalFocusTicketId(null)}/>}
     {tab === 'knowledge' && canReadKnowledge && <KnowledgeBase canManage={user.globalPermissions.includes('knowledge.manage')} onMessage={setMessage}/>}
-    {tab === 'overview' && <><DeviceOverview devices={devices} refreshedAt={devicesRefreshedAt} busy={busy} onRefresh={()=>void action(async()=>{const list=await api<Device[]>('/devices');setDevices(list);setDevicesRefreshedAt(new Date());})} onOpen={device=>void action(async()=>{setStatus(await api<DeviceStatus>(`/devices/${device.id}/status`));setTab('devices');})}/><section className="panel welcome"><div><span className="eyebrow">IL TUO SPAZIO DI LAVORO</span><h2>Assistenza, senza perdere il filo.</h2><p>Trova un dispositivo, avvia una sessione autorizzata o segui le richieste di assistenza.</p></div><div className="action-row"><button onClick={()=>setTab('devices')}><Icon name="devices"/>Vai ai dispositivi</button><button className="secondary" onClick={()=>setTab('support')}><Icon name="support"/>Apri assistenza</button></div></section></>}
+    {tab === 'overview' && <><DeviceOverview devices={devices} attentionTiles={deviceAttention} refreshedAt={devicesRefreshedAt} busy={busy} onRefresh={()=>void action(async()=>{const [list, attention]=await Promise.all([api<Device[]>('/devices'),api<DeviceAttention[]>('/dashboard/device-attention')]);setDevices(list);setDeviceAttention(attention);setDevicesRefreshedAt(new Date());})} onOpen={device=>void action(async()=>{setStatus(await api<DeviceStatus>(`/devices/${device.id}/status`));setTab('devices');})}/><section className="panel welcome"><div><span className="eyebrow">IL TUO SPAZIO DI LAVORO</span><h2>Assistenza, senza perdere il filo.</h2><p>Trova un dispositivo, avvia una sessione autorizzata o segui le richieste di assistenza.</p></div><div className="action-row"><button onClick={()=>setTab('devices')}><Icon name="devices"/>Vai ai dispositivi</button><button className="secondary" onClick={()=>setTab('support')}><Icon name="support"/>Apri assistenza</button></div></section></>}
     {tab === 'devices' && <><section className="panel device-list"><div className="section-heading"><div><span className="eyebrow">DISPOSITIVI</span><h2>Parco macchine <span className="count">{devices.length}</span></h2></div><div className="action-row">{admin&&<button onClick={()=>{setEnrollment('');setAddDeviceOpen(true);}}><Icon name="plus"/>Aggiungi dispositivo</button>}<button className="secondary" disabled={busy} onClick={() => void action(async () => setDevices(await api<Device[]>('/devices')))}><Icon name="refresh"/>Aggiorna</button></div></div>
       <label className="search-field"><Icon name="search"/><input aria-label="Cerca dispositivo" placeholder="Cerca un dispositivo per nome…" value={search} onChange={e=>setSearch(e.target.value)}/></label>
       {devices.length===0?<div className="empty-state"><Icon name="devices" size={36}/><h3>Il tuo parco macchine parte da qui</h3><p>Registra un Agent Windows per visualizzare il primo dispositivo.</p></div>:filteredDevices.length===0?<p>Nessun dispositivo corrisponde alla ricerca.</p>:<div className="table-wrap"><table><thead><tr><th>Dispositivo</th><th>Stato Agent</th><th>Gruppo</th><th>Sede</th><th></th></tr></thead><tbody>{filteredDevices.map(d=><tr className={status?.id===d.id?'selected-row':''} key={d.id}><td><span className="device-name"><span className="device-symbol"><Icon name="devices"/></span><span title={d.id}>{d.name}</span></span></td><td><span className={`status-pill ${d.revoked?'danger':d.online?'online':'offline'}`} title={d.lastSeen?`Ultimo heartbeat ${new Date(d.lastSeen).toLocaleString('it-IT')}`:'Nessun heartbeat ricevuto'}>{d.revoked?'Revocato':d.online?'Online':'Offline'}</span></td><td>{groups.find(g=>g.id===d.groupId)?.name??(d.groupId?'Gruppo assegnato':'Senza gruppo')}</td><td>{sites.find(s=>s.id===d.siteId)?.name??'Sede non disponibile'}</td><td className="row-action"><button className="secondary" disabled={busy} onClick={()=>void action(async()=>{setStatus(await api<DeviceStatus>(`/devices/${d.id}/status`));})}>Apri<Icon name="arrow" size={16}/></button></td></tr>)}</tbody></table></div>}

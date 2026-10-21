@@ -9,6 +9,7 @@ public static class DashboardEndpoints
     private static readonly string[] Allowed = ["devices", "permissions", "authentication"];
     public static void MapDashboardEndpoints(this WebApplication app)
     {
+        app.MapDeviceAttentionEndpoints();
         var dashboard = app.MapGroup("/api/dashboard").RequireAuthorization();
         dashboard.MapGet("/layout", async (HttpContext c, AppDbContext db) => {
             var value = await db.DashboardLayouts.AsNoTracking().SingleOrDefaultAsync(x => x.UserId == c.User.UserId());

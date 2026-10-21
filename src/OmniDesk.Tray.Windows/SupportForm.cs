@@ -41,7 +41,8 @@ internal sealed class SupportForm : Form
         BackColor = Color.FromArgb(244, 247, 251); Font = new Font("Segoe UI", 9F); ForeColor = Color.FromArgb(33, 48, 69);
         var requestPage = new TabPage("Nuova richiesta") { BackColor = BackColor, Padding = new Padding(0) };
         var ticketsPage = new TabPage("I miei ticket") { BackColor = BackColor, Padding = new Padding(0) };
-        pages.TabPages.AddRange([requestPage, ticketsPage]);
+        var guidePage = new TabPage("Guida rapida") { BackColor = BackColor, Padding = new Padding(0) };
+        pages.TabPages.AddRange([requestPage, ticketsPage, guidePage]);
 
         var requestLayout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 6, Padding = new Padding(22, 18, 22, 18), BackColor = BackColor };
         requestLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
@@ -108,6 +109,22 @@ internal sealed class SupportForm : Form
         ticketLayout.Controls.Add(replyText, 0, 4); ticketLayout.Controls.Add(replyPanel, 0, 5);
         ticketsPage.Controls.Add(ticketLayout);
 
+        var guide = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoScroll = true, FlowDirection = FlowDirection.TopDown, WrapContents = false, Padding = new Padding(22, 18, 22, 18), BackColor = BackColor };
+        var guideIntro = new Label { Text = "Apri una richiesta chiara e segui la risposta del team IT da questa finestra.", AutoSize = false, Height = 48, Font = new Font("Segoe UI Semibold", 12F), ForeColor = Color.FromArgb(25, 45, 70), Padding = new Padding(2, 6, 2, 4) };
+        guide.Controls.Add(guideIntro);
+        guide.Controls.Add(GuideCard("1", "Apri l’assistenza", "Fai clic sull’icona OmniDesk vicino all’orologio di Windows e scegli “Ticket di assistenza”. La scheda “Nuova richiesta” è quella iniziale."));
+        guide.Controls.Add(GuideCard("2", "Descrivi il problema", "Scrivi un oggetto breve, scegli la categoria più adatta e spiega che cosa stavi facendo, che cosa è successo e quando. Se compare un messaggio di errore, riportane il testo."));
+        guide.Controls.Add(GuideCard("3", "Valuta lo screenshot (facoltativo)", "Prima di acquisirlo, chiudi o nascondi finestre con dati riservati. Controlla l’anteprima: lo screenshot viene allegato solo se lo acquisisci e selezioni “Allega lo screenshot alla richiesta”. Puoi rimuoverlo prima dell’invio."));
+        guide.Controls.Add(GuideCard("4", "Invia e conserva il numero", "Fai clic su “Invia richiesta al team IT” e attendi la conferma. Annota il codice OD mostrato: identifica il ticket."));
+        guide.Controls.Add(GuideCard("5", "Controlla gli aggiornamenti", "Apri “I miei ticket”, aggiorna l’elenco e seleziona il codice OD. Leggi la conversazione, rispondi al team IT e scarica gli allegati disponibili."));
+        guide.Controls.Add(GuideCard("!", "Proteggi i tuoi dati", "Non inserire password, codici MFA o altri segreti nel ticket e non includerli negli screenshot. Se l’invio fallisce, annota il messaggio e l’orario e contatta il team IT."));
+        guide.Resize += (_, _) =>
+        {
+            var width = Math.Max(260, guide.ClientSize.Width - guide.Padding.Horizontal - 24);
+            foreach (Control control in guide.Controls) control.Width = width;
+        };
+        guidePage.Controls.Add(guide);
+
         category.Items.AddRange(["Generale", "Hardware", "Software", "Rete", "Account", "Altro"]); category.SelectedIndex = 0;
         Controls.Add(pages); Controls.Add(result);
         capture.Click += (_, _) => CaptureScreen(); remove.Click += (_, _) => ClearImage();
@@ -117,6 +134,14 @@ internal sealed class SupportForm : Form
         Shown += async (_, _) => await List();
     }
     private static Label FieldLabel(string text) => new() { Text = text, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, Font = new Font("Segoe UI Semibold", 9F), ForeColor = Color.FromArgb(57, 75, 98), Margin = new Padding(0) };
+    private static Panel GuideCard(string number, string title, string body)
+    {
+        var card = new Panel { Height = 128, BackColor = Color.White, Padding = new Padding(15, 12, 15, 10), Margin = new Padding(0, 0, 0, 10), BorderStyle = BorderStyle.FixedSingle };
+        var heading = new Label { Text = $"{number}   {title}", Dock = DockStyle.Top, Height = 28, Font = new Font("Segoe UI Semibold", 10F), ForeColor = Color.FromArgb(25, 45, 70) };
+        var text = new Label { Text = body, Dock = DockStyle.Fill, AutoEllipsis = false, ForeColor = Color.FromArgb(75, 92, 114), UseMnemonic = false };
+        card.Controls.Add(text); card.Controls.Add(heading);
+        return card;
+    }
     private static void StyleInput(Control control)
     {
         control.Font = new Font("Segoe UI", 10F); control.BackColor = Color.White; control.ForeColor = Color.FromArgb(33, 48, 69);
