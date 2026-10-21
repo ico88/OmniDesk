@@ -16,7 +16,9 @@ guida operatore consultabile nella finestra Assistenza e una copia in
 aggiunge una tile per ciascun PC con aggiornamenti Windows da verificare/in
 sospeso o con Defender da controllare, rispettando i permessi `updates` e
 `endpointsecurity.defender.view`. CI Linux e Windows e kit unsigned 0.8.18 sono
-già pubblicati. Gli aggiornamenti remoti da versioni precedenti
+già pubblicati; la CI 0.8.19 ha superato test e collaudo MSI, ma l'upload
+dell'artifact Windows è ancora in corso. Le tile sono live sul server.
+Gli aggiornamenti remoti da versioni precedenti
 a 0.8.18 sono bloccati: il primo passaggio si installa una volta dal kit MSI
 scaricato manualmente dalla scheda aggiornamenti. Gli aggiornamenti successivi
 usano il nuovo controllo salute e il ripristino. Restano il collaudo su PC
