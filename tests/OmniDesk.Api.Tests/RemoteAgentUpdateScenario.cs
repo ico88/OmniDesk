@@ -54,7 +54,14 @@ public static class RemoteAgentUpdateScenario
             agent.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", assertion());
             Assert.Equal(HttpStatusCode.NotFound, (await agent.GetAsync($"/api/agent/jobs/{lease.Id}/package?leaseId={Guid.NewGuid()}")).StatusCode);
             agent.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", assertion());
-            Assert.Equal(HttpStatusCode.NoContent, (await agent.PostAsJsonAsync($"/api/agent/jobs/{lease.Id}/result", new UpdateResultRequest(lease.LeaseId, false, false, [], "fixture complete"))).StatusCode);
+            Assert.Equal(HttpStatusCode.BadRequest, (await agent.PostAsJsonAsync($"/api/agent/jobs/{lease.Id}/result", new UpdateResultRequest(
+                lease.LeaseId, false, false, [], "fixture complete", FailureCategory: "invented_category", TargetVersion: version))).StatusCode);
+            agent.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", assertion());
+            Assert.Equal(HttpStatusCode.BadRequest, (await agent.PostAsJsonAsync($"/api/agent/jobs/{lease.Id}/result", new UpdateResultRequest(
+                lease.LeaseId, false, false, [], "fixture complete", FailureCategory: "download_failed", TargetVersion: new string('9', 65)))).StatusCode);
+            agent.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", assertion());
+            Assert.Equal(HttpStatusCode.NoContent, (await agent.PostAsJsonAsync($"/api/agent/jobs/{lease.Id}/result", new UpdateResultRequest(
+                lease.LeaseId, false, false, [], "fixture complete", FailureCategory: "download_failed", TargetVersion: version, RollbackState: "not_started"))).StatusCode);
         }
         finally
         {
