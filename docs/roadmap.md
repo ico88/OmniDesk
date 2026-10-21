@@ -4,14 +4,14 @@
 
 ### Configurazione email SMTP amministrativa
 
-In sviluppo la scheda **Email SMTP** nelle impostazioni amministrative consente di
+La scheda **Email SMTP** nelle impostazioni amministrative consente di
 configurare host, porta TLS 465/587, mittente, credenziali e URL dashboard, e di
 inviare esplicitamente una email di prova. Le impostazioni vengono salvate in una
 riga database singleton; la configurazione completa, inclusa la password, è
 protetta con ASP.NET Data Protection. La UI non rilegge mai la password e permette
 di mantenerla o rimuoverla. Le notifiche email leggono la configurazione aggiornata
 senza riavviare i worker. Questo non abilita la 2FA email, che resta separata e
-disattivata. La procedura operativa è in [smtp-settings.md](smtp-settings.md); distribuzione e verifica sono registrate in [validation.md](validation.md).
+disattivata. La schermata è distribuita sul server e serve il bundle aggiornato; la migrazione è applicata. Il provider SMTP reale va ancora configurato dalla dashboard e verificato con una email di prova. La procedura è in [smtp-settings.md](smtp-settings.md); i dettagli sono in [validation.md](validation.md).
 
 ### Agent Windows — aggiornamento affidabile e ticket dalla tray
 
