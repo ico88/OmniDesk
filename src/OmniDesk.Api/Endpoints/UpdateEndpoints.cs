@@ -11,7 +11,9 @@ using Microsoft.Extensions.Options;
 namespace OmniDesk.Api.Endpoints;
 public static class UpdateEndpoints
 {
-    private static readonly Version MinimumUpdaterVersion = new(0, 8, 1);
+    // 0.8.18 is the first updater that verifies post-install health and keeps a
+    // verified rollback MSI. Older agents must bootstrap once with the MSI.
+    private static readonly Version MinimumUpdaterVersion = new(0, 8, 18);
     public static void MapUpdateEndpoints(this WebApplication app)
     {
         var adminUpdates = app.MapGroup("/api/admin/devices/{id:guid}/agent-update").RequireAuthorization().AddEndpointFilter(async (c, next) =>
@@ -25,7 +27,7 @@ public static class UpdateEndpoints
             var deviceVersion = metrics is null ? null : JsonSerializer.Deserialize<MetricsRequest>(metrics.Payload)?.AgentVersion;
             if (metrics is null || metrics.ReceivedAt < DevicePresenceOptions.Cutoff(DateTimeOffset.UtcNow, presence.Value)) return Results.Conflict(new { code = "device_offline", message = "Il dispositivo non invia heartbeat recenti." });
             if (!Version.TryParse(deviceVersion, out var installed) || !Version.TryParse(release.Version, out var target)) return Results.Conflict(new { code = "agent_version_unknown", message = "La versione Agent non è nota; aggiorna il dispositivo con MSI una volta." });
-            if (installed < MinimumUpdaterVersion) return Results.Conflict(new { code = "updater_unavailable", message = "Questa versione Agent non include l’aggiornatore remoto; installa una volta l’MSI 0.8.1 o successivo." });
+            if (installed < MinimumUpdaterVersion) return Results.Conflict(new { code = "updater_unavailable", message = "Questa versione Agent non include l’aggiornamento con controllo salute e ripristino; installa una volta l’MSI 0.8.18 o successivo." });
             if (installed >= target) return Results.Conflict(new { code = "already_current", message = "L’Agent installato è già aggiornato." });
             await using var tx = await db.Database.BeginTransactionAsync();
             await DeviceOperationLock.Acquire(db, id);
