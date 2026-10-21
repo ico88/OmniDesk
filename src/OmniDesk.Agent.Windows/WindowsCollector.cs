@@ -2,12 +2,65 @@ using System.Management;
 using System.Net.NetworkInformation;
 using System.Runtime.InteropServices;
 using System.Reflection;
+using System.Diagnostics;
+using System.Text.Json;
 using Microsoft.Win32;
 using OmniDesk.Contracts;
 
 namespace OmniDesk.Agent.Windows;
 public sealed class WindowsCollector
 {
+    private static readonly JsonSerializerOptions DefenderJsonOptions = new(JsonSerializerDefaults.Web);
+    private const string DefenderReadOnlyScript = """
+        $ErrorActionPreference = 'Stop'
+        function Get-SafeDate($value) {
+          if ($null -eq $value) { return $null }
+          try { $date = [datetime]$value; if ($date.Year -lt 1971 -or $date -gt [datetime]::UtcNow.AddMinutes(10)) { return $null }; return $date.ToUniversalTime().ToString('o') } catch { return $null }
+        }
+        $statusCommand = Get-Command Get-MpComputerStatus -ErrorAction SilentlyContinue
+        if ($null -eq $statusCommand) {
+          [pscustomobject]@{ observedAt = [DateTimeOffset]::UtcNow.ToString('o'); providerState = 'unsupported'; managementSource = 'unknown'; exclusionsAvailable = $false; exclusionsTruncated = $false; exclusions = $null } | ConvertTo-Json -Compress
+          exit 0
+        }
+        try {
+          $s = Get-MpComputerStatus
+          $preference = $null
+          $exclusionsAvailable = $false
+          try { $preference = Get-MpPreference; $exclusionsAvailable = $true } catch { }
+          $items = [System.Collections.Generic.List[object]]::new()
+          $truncated = $false
+          if ($exclusionsAvailable) {
+            foreach ($value in @($preference.ExclusionPath)) {
+              if ($null -eq $value -or [string]::IsNullOrWhiteSpace([string]$value)) { continue }
+              if ($items.Count -ge 256 -or ([string]$value).Length -gt 512) { $truncated = $true; continue }
+              $items.Add([pscustomobject]@{ kind = 'path'; value = [string]$value })
+            }
+            foreach ($value in @($preference.ExclusionProcess)) {
+              if ($null -eq $value -or [string]::IsNullOrWhiteSpace([string]$value)) { continue }
+              if ($items.Count -ge 256 -or ([string]$value).Length -gt 512) { $truncated = $true; continue }
+              $items.Add([pscustomobject]@{ kind = 'process'; value = [string]$value })
+            }
+            foreach ($value in @($preference.ExclusionExtension)) {
+              if ($null -eq $value -or [string]::IsNullOrWhiteSpace([string]$value)) { continue }
+              if ($items.Count -ge 256 -or ([string]$value).Length -gt 512) { $truncated = $true; continue }
+              $items.Add([pscustomobject]@{ kind = 'extension'; value = [string]$value })
+            }
+          }
+          [pscustomobject]@{
+            observedAt = [DateTimeOffset]::UtcNow.ToString('o'); providerState = 'available'
+            antivirusEnabled = if ($null -eq $s.AntivirusEnabled) { $null } else { [bool]$s.AntivirusEnabled }
+            realTimeProtectionEnabled = if ($null -eq $s.RealTimeProtectionEnabled) { $null } else { [bool]$s.RealTimeProtectionEnabled }
+            tamperProtection = if ($null -eq $s.IsTamperProtected) { $null } else { [bool]$s.IsTamperProtected }
+            engineVersion = [string]$s.AMEngineVersion; signatureVersion = [string]$s.AntivirusSignatureVersion
+            signatureUpdatedAt = Get-SafeDate $s.AntivirusSignatureLastUpdated
+            quickScanStartTime = Get-SafeDate $s.QuickScanStartTime; fullScanStartTime = Get-SafeDate $s.FullScanStartTime
+            managementSource = 'unknown'; exclusionsAvailable = $exclusionsAvailable; exclusionsTruncated = $truncated
+            exclusions = if ($exclusionsAvailable) { [object[]]$items.ToArray() } else { $null }
+          } | ConvertTo-Json -Compress -Depth 4
+        } catch {
+          [pscustomobject]@{ observedAt = [DateTimeOffset]::UtcNow.ToString('o'); providerState = 'error'; managementSource = 'unknown'; exclusionsAvailable = $false; exclusionsTruncated = $false; exclusions = $null } | ConvertTo-Json -Compress
+        }
+        """;
     private (ulong Idle, ulong Kernel, ulong User)? previous;
     public MetricsRequest Metrics()
     {
@@ -97,7 +150,53 @@ public sealed class WindowsCollector
         var distinct = software.Distinct().OrderBy(x => x.Name).ToArray();
         if (distinct.Length > 2000) warnings.Add("Software inventory truncated to 2000 entries");
         return new(RuntimeInformation.OSDescription, RuntimeInformation.OSArchitecture.ToString(), hardware["Manufacturer"], hardware["Model"],
-            NormalizeSerial(bios["SerialNumber"]), processor["Name"], Environment.ProcessorCount, distinct.Take(2000).ToArray(), warnings.ToArray());
+            NormalizeSerial(bios["SerialNumber"]), processor["Name"], Environment.ProcessorCount, distinct.Take(2000).ToArray(), warnings.ToArray(), DefenderSnapshot());
+    }
+    private static DefenderSnapshotRequest DefenderSnapshot()
+    {
+        DefenderSnapshotRequest Unavailable(string state) => new(DateTimeOffset.UtcNow, state, null, null, null, null, null, null, null, null,
+            "unknown", false, false, null);
+        try
+        {
+            var systemDirectory = Environment.GetFolderPath(Environment.SpecialFolder.System);
+            var executable = Path.Combine(systemDirectory, "WindowsPowerShell", "v1.0", "powershell.exe");
+            var start = new ProcessStartInfo(executable)
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                StandardOutputEncoding = System.Text.Encoding.UTF8,
+                StandardErrorEncoding = System.Text.Encoding.UTF8
+            };
+            start.ArgumentList.Add("-NoLogo");
+            start.ArgumentList.Add("-NoProfile");
+            start.ArgumentList.Add("-NonInteractive");
+            start.ArgumentList.Add("-ExecutionPolicy");
+            start.ArgumentList.Add("RemoteSigned");
+            start.ArgumentList.Add("-Command");
+            start.ArgumentList.Add(DefenderReadOnlyScript);
+            using var process = Process.Start(start);
+            if (process is null) return Unavailable("unsupported");
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+            var outputTask = process.StandardOutput.ReadToEndAsync(timeout.Token);
+            var errorTask = process.StandardError.ReadToEndAsync(timeout.Token);
+            try { process.WaitForExitAsync(timeout.Token).GetAwaiter().GetResult(); }
+            catch (OperationCanceledException)
+            {
+                try { process.Kill(entireProcessTree: true); } catch (InvalidOperationException) { }
+                return Unavailable("error");
+            }
+            var output = outputTask.GetAwaiter().GetResult();
+            _ = errorTask.GetAwaiter().GetResult();
+            if (output.Length > 256 * 1024) return Unavailable("error");
+            return JsonSerializer.Deserialize<DefenderSnapshotRequest>(output, DefenderJsonOptions) ?? Unavailable("error");
+        }
+        catch (Exception exception) when (exception is System.ComponentModel.Win32Exception or IOException or UnauthorizedAccessException or
+            OperationCanceledException or JsonException or InvalidOperationException or ArgumentException)
+        {
+            return Unavailable(exception is System.ComponentModel.Win32Exception ? "unsupported" : "error");
+        }
     }
     private static SmartDiskItem[]? CollectSmartStatus()
     {

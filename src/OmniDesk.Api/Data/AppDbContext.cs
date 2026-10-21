@@ -27,6 +27,15 @@ public sealed class Branding
     public string PrimaryColor { get; set; } = "#2563eb";
     public string Theme { get; set; } = "dark";
 }
+public sealed class BackupNasSettings
+{
+    public int Id { get; set; } = 1;
+    public string ProtectedConfiguration { get; set; } = "";
+    public DateTimeOffset? LastAttemptAt { get; set; }
+    public DateTimeOffset? LastSuccessAt { get; set; }
+    public string LastStatus { get; set; } = "never";
+    public string? LastErrorCode { get; set; }
+}
 public sealed class AuditEvent
 {
     public long Id { get; set; }
@@ -62,6 +71,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
     public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
     public DbSet<ScopeGrant> ScopeGrants => Set<ScopeGrant>();
     public DbSet<Branding> Branding => Set<Branding>();
+    public DbSet<BackupNasSettings> BackupNasSettings => Set<BackupNasSettings>();
     public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
     public DbSet<EnrollmentToken> EnrollmentTokens => Set<EnrollmentToken>();
     public DbSet<DeviceCredential> DeviceCredentials => Set<DeviceCredential>();
@@ -279,6 +289,11 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ident
         b.Entity<Branding>().Property(x => x.Name).HasMaxLength(100);
         b.Entity<Branding>().Property(x => x.LogoUrl).HasMaxLength(2048);
         b.Entity<Branding>().HasData(new Branding());
+        b.Entity<BackupNasSettings>().ToTable(t => t.HasCheckConstraint("CK_BackupNasSettings_Singleton", "\"Id\" = 1"));
+        b.Entity<BackupNasSettings>().Property(x => x.Id).ValueGeneratedNever();
+        b.Entity<BackupNasSettings>().Property(x => x.ProtectedConfiguration).HasColumnType("text");
+        b.Entity<BackupNasSettings>().Property(x => x.LastStatus).HasMaxLength(20);
+        b.Entity<BackupNasSettings>().Property(x => x.LastErrorCode).HasMaxLength(40);
         b.Entity<AuditEvent>().HasIndex(x => x.At);
         b.Entity<CoreOutboxEvent>().Property(x => x.EventType).HasMaxLength(100);
         b.Entity<CoreOutboxEvent>().Property(x => x.AggregateType).HasMaxLength(50);

@@ -14,6 +14,7 @@ const icons: Record<string, LucideIcon> = {
   myTickets: MessageSquare,
   knowledge: BookOpen,
   branding: Palette,
+  backups: Files,
   users: Users,
   audit: Activity,
   logout: LogOut,

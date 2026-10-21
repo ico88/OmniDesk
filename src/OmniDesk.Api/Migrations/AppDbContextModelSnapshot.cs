@@ -331,6 +331,18 @@ namespace OmniDesk.Api.Migrations
                         });
                 });
 
+            modelBuilder.Entity("OmniDesk.Api.Data.BackupNasSettings", b =>
+                {
+                    b.Property<int>("Id").ValueGeneratedNever().HasColumnType("integer");
+                    b.Property<string>("ProtectedConfiguration").IsRequired().HasColumnType("text");
+                    b.Property<DateTimeOffset?>("LastAttemptAt").HasColumnType("timestamp with time zone");
+                    b.Property<DateTimeOffset?>("LastSuccessAt").HasColumnType("timestamp with time zone");
+                    b.Property<string>("LastStatus").IsRequired().HasMaxLength(20).HasColumnType("character varying(20)");
+                    b.Property<string>("LastErrorCode").HasMaxLength(40).HasColumnType("character varying(40)");
+                    b.HasKey("Id");
+                    b.ToTable("BackupNasSettings", t => t.HasCheckConstraint("CK_BackupNasSettings_Singleton", "\"Id\" = 1"));
+                });
+
             modelBuilder.Entity("OmniDesk.Api.Data.CoreOutboxDelivery", b =>
                 {
                     b.Property<Guid>("EventId")
@@ -1029,6 +1041,11 @@ namespace OmniDesk.Api.Migrations
                         {
                             RoleId = "Administrator",
                             Permission = "knowledge.manage"
+                        },
+                        new
+                        {
+                            RoleId = "Administrator",
+                            Permission = "endpointsecurity.defender.view"
                         },
                         new
                         {

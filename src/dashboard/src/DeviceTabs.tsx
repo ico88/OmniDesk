@@ -1,7 +1,7 @@
-import { Activity, ClipboardList, Gauge, LifeBuoy, Monitor, Package, ScrollText, ServerCog, type LucideIcon } from 'lucide-react';
+import { Activity, ClipboardList, Gauge, LifeBuoy, Monitor, Package, ScrollText, ServerCog, ShieldCheck, type LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 
-export type DeviceTabId = 'overview' | 'desktop' | 'processes' | 'services' | 'software' | 'updates' | 'events' | 'tickets';
+export type DeviceTabId = 'overview' | 'desktop' | 'processes' | 'services' | 'software' | 'updates' | 'events' | 'tickets' | 'defender';
 
 const tabs: { id: DeviceTabId; label: string; icon: LucideIcon }[] = [
   { id: 'desktop', label: 'Desktop remoto', icon: Monitor },
@@ -11,6 +11,7 @@ const tabs: { id: DeviceTabId; label: string; icon: LucideIcon }[] = [
   { id: 'software', label: 'Software installato', icon: Package },
   { id: 'updates', label: 'Aggiornamenti', icon: ClipboardList },
   { id: 'events', label: 'Eventi e log', icon: ScrollText },
+  { id: 'defender', label: 'Microsoft Defender', icon: ShieldCheck },
   { id: 'tickets', label: 'Ticket e interventi', icon: LifeBuoy },
 ];
 

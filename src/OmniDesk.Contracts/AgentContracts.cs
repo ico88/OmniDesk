@@ -8,5 +8,13 @@ public sealed record MetricsRequest(double? CpuPercent, long TotalMemoryBytes, l
 public sealed record SmartDiskItem(string Name, string Status);
 public sealed record SoftwareItem(string Name, string? Version, string? Publisher);
 public sealed record InventoryRequest(string OperatingSystem, string Architecture, string? Manufacturer,
-    string? Model, string? SerialNumber, string? Processor, int LogicalProcessors, SoftwareItem[] Software, string[] Warnings);
+    string? Model, string? SerialNumber, string? Processor, int LogicalProcessors, SoftwareItem[] Software, string[] Warnings,
+    DefenderSnapshotRequest? Defender = null);
 public sealed record NetworkAdapterItem(string Name, string Type, string MacAddress, string[] IpAddresses);
+public sealed record DefenderExclusionItem(string Kind, string Value);
+public sealed record DefenderSnapshotRequest(DateTimeOffset ObservedAt, string ProviderState,
+    bool? AntivirusEnabled, bool? RealTimeProtectionEnabled, bool? TamperProtection,
+    string? EngineVersion, string? SignatureVersion, DateTimeOffset? SignatureUpdatedAt,
+    DateTimeOffset? QuickScanStartTime, DateTimeOffset? FullScanStartTime,
+    string ManagementSource, bool ExclusionsAvailable, bool ExclusionsTruncated,
+    DefenderExclusionItem[]? Exclusions);

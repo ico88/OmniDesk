@@ -1,4 +1,5 @@
 using System.Threading.RateLimiting;
+using System.Text.Json;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.DataProtection;
@@ -126,6 +127,63 @@ if (args.Contains("--bootstrap"))
     Console.WriteLine("Administrator created. Remove bootstrap secret file.");
     return;
 }
+if (args.Contains("--reset-admin-password"))
+{
+    if (args.Length != 3 || args[0] != "--reset-admin-password")
+        throw new InvalidOperationException("Usage: --reset-admin-password <administrator-email> <password-file|->");
+    var email = args[1];
+    var passwordFile = args[2];
+    var password = passwordFile == "-" ? await Console.In.ReadToEndAsync() : await File.ReadAllTextAsync(passwordFile);
+    if (password.Length is < 14 or > 1024 || password.Contains('\0'))
+        throw new InvalidOperationException("Password file must contain a password between 14 and 1024 characters.");
+    await using var scope = app.Services.CreateAsyncScope();
+    var users = scope.ServiceProvider.GetRequiredService<UserManager<AppUser>>();
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    var user = await users.FindByEmailAsync(email)
+        ?? throw new InvalidOperationException("Administrator account was not found.");
+    if (user.IsDisabled || !await users.IsInRoleAsync(user, "Administrator"))
+        throw new InvalidOperationException("Password reset is allowed only for an active Administrator account.");
+    await using var tx = await db.Database.BeginTransactionAsync();
+    var token = await users.GeneratePasswordResetTokenAsync(user);
+    var result = await users.ResetPasswordAsync(user, token, password);
+    if (!result.Succeeded)
+        throw new InvalidOperationException("Password reset rejected: " + string.Join(",", result.Errors.Select(x => x.Code)));
+    db.AuditEvents.Add(new AuditEvent { Action = "user.password.reset.cli", Target = user.Id });
+    await db.SaveChangesAsync();
+    await tx.CommitAsync();
+    Console.WriteLine("Administrator password reset succeeded. Existing sessions will expire after security-stamp validation.");
+    return;
+}
+if (args.Contains("--backup-nas-export"))
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    var row = await db.BackupNasSettings.SingleOrDefaultAsync(x => x.Id == 1);
+    var settings = BackupNasEndpoints.Unprotect(row, scope.ServiceProvider.GetRequiredService<IDataProtectionProvider>());
+    Console.WriteLine(JsonSerializer.Serialize(new { settings, lastSuccessAt = row?.LastSuccessAt }, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+    return;
+}
+if (args.Contains("--backup-nas-record-start") || args.Contains("--backup-nas-record-success") || args.Contains("--backup-nas-record-failure"))
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    var row = await db.BackupNasSettings.SingleOrDefaultAsync(x => x.Id == 1);
+    if (row is not null)
+    {
+        row.LastAttemptAt = DateTimeOffset.UtcNow;
+        if (args.Contains("--backup-nas-record-start")) { row.LastStatus = "running"; row.LastErrorCode = null; }
+        if (args.Contains("--backup-nas-record-success")) { row.LastStatus = "success"; row.LastSuccessAt = DateTimeOffset.UtcNow; row.LastErrorCode = null; }
+        if (args.Contains("--backup-nas-record-failure"))
+        {
+            row.LastStatus = "failed";
+            var index = Array.IndexOf(args, "--backup-nas-record-failure");
+            var errorCode = index >= 0 && index + 1 < args.Length ? args[index + 1] : "unknown";
+            row.LastErrorCode = errorCode.Length <= 40 && errorCode.All(ch => char.IsAsciiLetterOrDigit(ch) || ch is '_' or '-') ? errorCode : "unknown";
+        }
+        await db.SaveChangesAsync();
+    }
+    return;
+}
 app.UseExceptionHandler(handler => handler.Run(async c => {
     c.Response.StatusCode = 500;
     await c.Response.WriteAsJsonAsync(new { error = "Internal error", traceId = c.TraceIdentifier });
@@ -173,6 +231,7 @@ app.MapGet("/api/health/ready", async (AppDbContext db) => {
 });
 app.MapAuthEndpoints();
 app.MapManagementEndpoints();
+app.MapBackupNasEndpoints();
 app.MapUserLifecycleEndpoints();
 app.MapAgentEndpoints();
 app.MapDeviceManagementEndpoints();

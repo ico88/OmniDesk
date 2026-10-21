@@ -5,6 +5,7 @@ import { DevicePanel, DeviceTabs, type DeviceTabId } from './DeviceTabs';
 import { DeviceManagement } from './DeviceManagement';
 import { RustDeskRemote } from './RustDeskRemote';
 import { RustDeskDownload } from './RustDeskDownload';
+import { DefenderStatus } from './DefenderStatus';
 import { SupportDesk } from './SupportDesk';
 import { Icon } from './Icon';
 import { reportsFilteredNetworkAdapters } from './deviceNetwork';
@@ -187,6 +188,8 @@ export function DeviceWorkspace({ device, admin, groups, sites, onDeviceChanged,
         <p className="sidebar-note">Lo stato online dell’Agent non conferma la disponibilità di RustDesk su questo dispositivo.</p>
       </aside>
     </div></DevicePanel>}
+
+    {activeTab === 'defender' && <DevicePanel id="defender">{count('endpointsecurity.defender.view') ? <DefenderStatus key={device.id} deviceId={device.id}/> : <p>Non hai il permesso endpointsecurity.defender.view su questo dispositivo.</p>}</DevicePanel>}
 
     {activeTab === 'software' && <DevicePanel id="software"><div className="section-heading"><div><span className="eyebrow">INVENTARIO</span><h3>Software installato</h3></div><span className="count">{inventory?.software.length ?? 0}</span></div>
       {!inventory ? <p>Inventario non ancora ricevuto dall’agente.</p> : <div className="table-wrap"><table><thead><tr><th>Software</th><th>Versione</th><th>Produttore</th></tr></thead><tbody>{inventory.software.map((app, index) => <tr key={`${app.name}-${index}`}><td>{app.name}</td><td>{app.version || '—'}</td><td>{app.publisher || '—'}</td></tr>)}</tbody></table></div>}

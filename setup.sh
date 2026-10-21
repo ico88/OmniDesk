@@ -104,7 +104,7 @@ for name in ('db_password', 'db_runtime_password'):
     p.chmod(0o444)
 PY
 
-compose=(docker compose -p omnidesk-production -f compose.yaml -f compose.direct.yaml)
+compose=(docker compose -p omnidesk-production -f compose.yaml -f compose.direct.yaml -f compose.rustdesk-pilot.yaml)
 "${compose[@]}" config --quiet
 if ! $start; then
   echo 'Public Caddy configuration ready. Review .env; no containers were started. Run ./setup.sh --start to deploy.'
@@ -165,7 +165,7 @@ for attempt in {1..30}; do
   sleep 2
 done
 if ! $ready; then
-  echo 'Public HTTPS readiness check failed. Inspect: docker compose -p omnidesk-production -f compose.yaml -f compose.direct.yaml logs --tail=100 api caddy' >&2
+  echo 'Public HTTPS readiness check failed. Inspect: docker compose -p omnidesk-production -f compose.yaml -f compose.direct.yaml -f compose.rustdesk-pilot.yaml logs --tail=100 api caddy' >&2
   exit 1
 fi
 redirect=$(curl --silent --show-error --max-time 5 --output /dev/null --write-out '%{redirect_url}' --resolve "${domain}:80:10.0.0.53" "http://${domain}/")

@@ -1,0 +1,13 @@
+[Unit]
+Description=Check the configured OmniDesk backup schedule
+Wants=network-online.target
+After=network-online.target docker.service remote-fs.target
+
+[Service]
+Type=oneshot
+User=fdurso
+Group=fdurso
+SupplementaryGroups=docker
+WorkingDirectory=%h/projects/OmniDesk
+ExecStart=%h/projects/OmniDesk/scripts/backup-nas.sh
+UMask=0077

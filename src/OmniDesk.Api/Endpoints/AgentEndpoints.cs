@@ -97,8 +97,18 @@ public static class AgentEndpoints
                 new[] { r.Manufacturer, r.Model, r.SerialNumber, r.Processor }.Any(x => x?.Length > 500) ||
                 r.LogicalProcessors is < 1 or > 65536 || r.Software is null || r.Software.Length > 2000 ||
                 r.Software.Any(x => x is null || string.IsNullOrWhiteSpace(x.Name) || x.Name.Length > 500 || x.Version?.Length > 200 || x.Publisher?.Length > 500) ||
-                r.Warnings is null || r.Warnings.Length > 50 || r.Warnings.Any(x => x is null || x.Length > 500)) return Results.BadRequest();
+                r.Warnings is null || r.Warnings.Length > 50 || r.Warnings.Any(x => x is null || x.Length > 500) ||
+                !ValidDefenderSnapshot(r.Defender)) return Results.BadRequest();
             var id = Guid.Parse(c.User.UserId()); var now = DateTimeOffset.UtcNow; var payload = JsonSerializer.Serialize(r);
+            var previous = await db.DeviceInventories.AsNoTracking().SingleOrDefaultAsync(x => x.DeviceId == id);
+            if (previous is not null)
+            {
+                var previousInventory = JsonSerializer.Deserialize<InventoryRequest>(previous.Payload);
+                var previousDefender = previousInventory?.Defender;
+                if (previousDefender is not null && (r.Defender is null || previousDefender.ObservedAt >= r.Defender.ObservedAt))
+                    r = r with { Defender = previousDefender };
+                payload = JsonSerializer.Serialize(r);
+            }
             var updated = await db.DeviceInventories.Where(x => x.DeviceId == id).ExecuteUpdateAsync(s => s.SetProperty(x => x.ReceivedAt, now).SetProperty(x => x.Payload, payload));
             if (updated == 0) { db.DeviceInventories.Add(new DeviceInventory { DeviceId = id, ReceivedAt = now, Payload = payload }); await db.SaveChangesAsync(); }
             return Results.NoContent();
@@ -112,10 +122,21 @@ public static class AgentEndpoints
             var revoked = await db.DeviceCredentials.AnyAsync(x => x.DeviceId == id && x.RevokedAt != null);
             var capabilities = new List<string>();
             foreach (var capability in Permissions.All) if (await p.Allows(c.User.UserId(), capability, id)) capabilities.Add(capability);
+            var inventoryPayload = inventory is null ? null : JsonSerializer.Deserialize<InventoryRequest>(inventory.Payload);
+            if (inventoryPayload is not null && !capabilities.Contains("endpointsecurity.defender.view"))
+                inventoryPayload = inventoryPayload with { Defender = null };
             return Results.Ok(new { device.Id, device.Name, device.GroupId, device.SiteId, revoked, capabilities,
                 lastSeen = metrics?.ReceivedAt, online = !revoked && metrics?.ReceivedAt > DevicePresenceOptions.Cutoff(DateTimeOffset.UtcNow, presence.Value),
                 metrics = metrics is null ? null : JsonSerializer.Deserialize<MetricsRequest>(metrics.Payload),
-                inventoryAt = inventory?.ReceivedAt, inventory = inventory is null ? null : JsonSerializer.Deserialize<InventoryRequest>(inventory.Payload) });
+                inventoryAt = inventory?.ReceivedAt, inventory = inventoryPayload });
+        });
+        read.MapGet("/{id:guid}/security/defender", async (Guid id, HttpContext c, AppDbContext db, PermissionService p) => {
+            var userId = c.User.UserId();
+            if (!await p.Allows(userId, "view", id) || !await p.Allows(userId, "endpointsecurity.defender.view", id)) return Results.Forbid();
+            var row = await db.DeviceInventories.AsNoTracking().SingleOrDefaultAsync(x => x.DeviceId == id);
+            if (row is null) return Results.Ok(new { observedAt = (DateTimeOffset?)null, receivedAt = (DateTimeOffset?)null, snapshot = (DefenderSnapshotRequest?)null });
+            var inventory = JsonSerializer.Deserialize<InventoryRequest>(row.Payload);
+            return Results.Ok(new { observedAt = inventory?.Defender?.ObservedAt, receivedAt = row.ReceivedAt, snapshot = inventory?.Defender });
         });
     }
     public static string Hash(string token) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
@@ -134,4 +155,27 @@ public static class AgentEndpoints
     private static bool ValidSmartDisks(OmniDesk.Contracts.SmartDiskItem[]? disks) => disks is null ||
         (disks.Length <= 64 && disks.All(x => x is not null && !string.IsNullOrWhiteSpace(x.Name) && x.Name.Length <= 256 &&
             x.Status is "unavailable" or "predicted_failure" or "no_failure_predicted"));
+    private static bool ValidDefenderSnapshot(DefenderSnapshotRequest? report)
+    {
+        if (report is null) return true;
+        var now = DateTimeOffset.UtcNow;
+        static bool ValidDate(DateTimeOffset? value, DateTimeOffset now) => value is null || (value > DateTimeOffset.UnixEpoch && value < now.AddMinutes(10));
+        if (report.ObservedAt <= now.AddDays(-14) || report.ObservedAt >= now.AddMinutes(10) ||
+            report.ProviderState is not ("available" or "unsupported" or "error") ||
+            (report.EngineVersion?.Length ?? 0) > 64 || (report.SignatureVersion?.Length ?? 0) > 64 ||
+            report.ManagementSource != "unknown" || !ValidDate(report.SignatureUpdatedAt, now) ||
+            !ValidDate(report.QuickScanStartTime, now) || !ValidDate(report.FullScanStartTime, now) ||
+            report.ExclusionsTruncated && !report.ExclusionsAvailable)
+            return false;
+        if (report.ProviderState != "available" && (report.AntivirusEnabled is not null || report.RealTimeProtectionEnabled is not null ||
+            report.TamperProtection is not null || report.EngineVersion is not null || report.SignatureVersion is not null ||
+            report.SignatureUpdatedAt is not null || report.QuickScanStartTime is not null || report.FullScanStartTime is not null))
+            return false;
+        if (report.Exclusions is null ? report.ExclusionsAvailable : !report.ExclusionsAvailable || report.Exclusions.Length > 256)
+            return false;
+        if (report.Exclusions?.Any(x => x is null || x.Kind is not ("path" or "process" or "extension") ||
+                string.IsNullOrWhiteSpace(x.Value) || x.Value.Length > 512 || x.Value.Contains('\0')) == true)
+            return false;
+        return true;
+    }
 }
