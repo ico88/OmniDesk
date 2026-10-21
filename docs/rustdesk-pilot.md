@@ -22,6 +22,18 @@ server keys live in the Docker volume `rustdesk_pilot_data`. Preserve this
 volume for the test; deleting it rotates the server identity and invalidates
 the configured client key.
 
+When recreating or updating the production API while this pilot is enabled,
+include all three Compose files (`compose.yaml`, `compose.direct.yaml`, and
+`compose.rustdesk-pilot.yaml`). Omitting the RustDesk overlay silently removes
+the API's ID server, relay, and public-key settings even though the RustDesk
+container itself remains healthy. For example:
+
+```bash
+docker compose -p omnidesk-production \
+  -f compose.yaml -f compose.direct.yaml -f compose.rustdesk-pilot.yaml \
+  up -d --no-deps api
+```
+
 OmniDesk now stores an administrator-verified RustDesk peer ID for each device.
 The Desktop remoto page displays the ID server, relay server, blank OSS API
 server field, and public server key for client setup. An operator with the
