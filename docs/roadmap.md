@@ -2,6 +2,17 @@
 
 **Snapshot corrente: 2026-10-21.** Le prime sezioni descrivono lo stato corrente; il resto del documento conserva decisioni e milestone storiche. Per stato distribuito e gate aperti fare riferimento a [completion-status.md](completion-status.md) e alle registrazioni più recenti in [validation.md](validation.md). Le note storiche con versioni precedenti o “non pubblicato” non sovrascrivono lo snapshot.
 
+### Configurazione email SMTP amministrativa
+
+In sviluppo la scheda **Email SMTP** nelle impostazioni amministrative consente di
+configurare host, porta TLS 465/587, mittente, credenziali e URL dashboard, e di
+inviare esplicitamente una email di prova. Le impostazioni vengono salvate in una
+riga database singleton; la configurazione completa, inclusa la password, è
+protetta con ASP.NET Data Protection. La UI non rilegge mai la password e permette
+di mantenerla o rimuoverla. Le notifiche email leggono la configurazione aggiornata
+senza riavviare i worker. Questo non abilita la 2FA email, che resta separata e
+disattivata. La procedura operativa è in [smtp-settings.md](smtp-settings.md); distribuzione e verifica sono registrate in [validation.md](validation.md).
+
 ### Agent Windows — aggiornamento affidabile e ticket dalla tray
 
 Il kit LAN 0.8.18 è pubblicato e scaricabile. La versione 0.8.18 aggiunge

@@ -1,5 +1,13 @@
 # Stato e verifiche — 18 ottobre 2026
 
+### Impostazioni SMTP amministrative — implementazione validata, deploy pendente — 2026-10-21
+
+- Aggiunta la voce amministrativa **Email SMTP** con host, porta TLS 465/587, mittente, username/password, URL HTTPS dashboard e invio di prova esplicito. Le mutazioni richiedono autenticazione, `administration` e antiforgery.
+- Configurazione singleton versionata con migrazione `20261021172928_OutboundEmailSettings`; payload cifrato tramite ASP.NET Data Protection. Le risposte non includono la password. La configurazione salvata prevale su quella environment; se si lascia vuoto il campo password, la password precedente viene mantenuta.
+- `SmtpOutboundEmailSender` carica la configurazione corrente per invio e worker; le notifiche con consenso restano accodate se SMTP è disabilitato. La 2FA email non viene attivata e mantiene il proprio flag separato.
+- `./scripts/test.sh` passato: 106 test API/PostgreSQL, build dashboard e 12/12 test Vitest. La migrazione è stata applicata nel database isolato della suite. `docker compose -f compose.yaml -f compose.direct.yaml -f compose.rustdesk-pilot.yaml config --quiet` e `git diff --check` passati.
+- Deploy produzione non ancora eseguito; configurare e verificare l'invio con il provider reale dopo la pubblicazione.
+
 ### Windows Agent 0.8.17 — raccolta Defender read-only (sorgenti, non validata)
 
 - Aggiunto collector Agent basato su comandi PowerShell fissi, timeout e output JSON limitato; raccoglie stato antivirus, protezione realtime, Tamper Protection, versioni/data firme, scansioni e fino a 256 esclusioni. Errori e provider assenti sono classificati senza inventare stato; la provenienza delle policy è `unknown`.
