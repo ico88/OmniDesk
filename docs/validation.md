@@ -2380,6 +2380,14 @@ stata eseguita né provata con un provider email reale.
 - Deploy API/dashboard dal commit `d2f9cd1` dopo backup verificato `.backups/20261021T153154Z.NtouM8`; il restore isolato ha verificato DB, 57 migrazioni, Identity, HTTPS e CA Caddy. Nessuna migrazione live. Ricreati solo API e dashboard con Compose; readiness HTTPS `ready`, bundle live `index-rj8jOWbO.js`. DB, Caddy, ClamAV e RustDesk sono rimasti attivi. L'endpoint di download Agent richiede autenticazione (401 anonimo atteso). Nessun collaudo su PC Windows reale: UI Tray, update e rollback devono ancora essere provati. Firma Authenticode subordinata al grant Azure Artifact Signing.
 - Corretto il banner “Configurazione del server RustDesk incompleta”: il container API ricreato nel deploy precedente non aveva le variabili RustDesk perché era stato avviato senza `compose.rustdesk-pilot.yaml`. Compose completo validato e solo l'API ricreata con tutti e tre gli overlay; ora `RustDesk__IdServer` e `RustDesk__RelayServer` sono impostati su `omnidesk.cricatania.it`, la chiave pubblica rispetta il formato previsto (lunghezza 44, valore non registrato qui), il container RustDesk è healthy e `/api/health/ready` restituisce `ready`. Nessuna modifica a DB, chiavi o container RustDesk. Aggiunta nota operativa per includere sempre l'overlay in `docs/rustdesk-pilot.md`.
 
+### Guida ticket Tray e tile di attenzione panoramica — 2026-10-21
+
+- Scritta la [guida operatore per i ticket dalla Tray](tray-ticket-guide.md) e integrata nella finestra Assistenza come scheda “Guida rapida”. Spiega avvio, compilazione, screenshot con consenso, numero OD e consultazione/risposta ai ticket.
+- Aggiunto `GET /api/dashboard/device-attention`: raccoglie l'esito dell'ultima scansione Windows Update e il report Defender per i dispositivi visibili. L'endpoint restituisce tile solo per scansioni mancanti/fallite o aggiornamenti pendenti e per snapshot Defender mancanti, obsoleti o con protezioni esplicitamente disattivate. I dati update e Defender rispettano rispettivamente i permessi `updates` e `endpointsecurity.defender.view`.
+- La panoramica mostra una tile per dispositivo da verificare e aggiorna i dati insieme allo stato dispositivi ogni 30 secondi; il pulsante apre la scheda dispositivo. Il report Defender resta read-only.
+- Build container API e dashboard passata (`docker compose build api dashboard`). `./scripts/test.sh` passato: 106/106 test API/PostgreSQL, build TypeScript/Vite e 12/12 Vitest. Il test Agent verifica che l'utente scoped senza permesso Defender non riceva i relativi alert. `git diff --check` passato.
+- Il kit Tray/MSI 0.8.19, pipeline Windows, deploy API/dashboard e controllo visuale sul PC pilota sono ancora da completare; nessun claim di distribuzione o test Windows reale.
+
 ### Recupero password amministratore CLI — 2026-10-21
 
 - Aggiunta modalità `--reset-admin-password <email> -` che riceve la password su

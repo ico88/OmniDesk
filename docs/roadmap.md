@@ -4,15 +4,19 @@
 
 ### Agent Windows — aggiornamento affidabile e ticket dalla tray
 
-Il kit LAN 0.8.17 è pubblicato e scaricabile. Il follow-up 0.8.18 aggiunge
+Il kit LAN 0.8.18 è pubblicato e scaricabile. La versione 0.8.18 aggiunge
 verifica del servizio e di un heartbeat dopo l'installazione MSI, conservazione
 protetta del pacchetto precedente e un solo tentativo di ripristino automatico
 se il nuovo Agent non supera il controllo salute. La scheda aggiornamenti
 mostrerà categoria di errore, versioni, codice MSI e stato del ripristino. La
 schermata “Nuova richiesta” della tray è stata ridisegnata con campi ordinati,
-anteprima screenshot e consenso più chiaro. CI Linux e Windows passate; API e
-dashboard distribuite con readiness HTTPS verificata; kit unsigned 0.8.18
-promosso e checksum verificato. Gli aggiornamenti remoti da versioni precedenti
+anteprima screenshot e consenso più chiaro. La versione 0.8.19 aggiunge una
+guida operatore consultabile nella finestra Assistenza e una copia in
+`docs/tray-ticket-guide.md`; il pacchetto è in preparazione. La panoramica
+aggiunge una tile per ciascun PC con aggiornamenti Windows da verificare/in
+sospeso o con Defender da controllare, rispettando i permessi `updates` e
+`endpointsecurity.defender.view`. CI Linux e Windows e kit unsigned 0.8.18 sono
+già pubblicati. Gli aggiornamenti remoti da versioni precedenti
 a 0.8.18 sono bloccati: il primo passaggio si installa una volta dal kit MSI
 scaricato manualmente dalla scheda aggiornamenti. Gli aggiornamenti successivi
 usano il nuovo controllo salute e il ripristino. Restano il collaudo su PC
