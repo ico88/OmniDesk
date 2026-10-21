@@ -2,6 +2,19 @@
 
 **Snapshot corrente: 2026-10-21.** Le prime sezioni descrivono lo stato corrente; il resto del documento conserva decisioni e milestone storiche. Per stato distribuito e gate aperti fare riferimento a [completion-status.md](completion-status.md) e alle registrazioni più recenti in [validation.md](validation.md). Le note storiche con versioni precedenti o “non pubblicato” non sovrascrivono lo snapshot.
 
+### Agent Windows — aggiornamento affidabile e ticket dalla tray
+
+Il kit LAN 0.8.17 è pubblicato e scaricabile. Il follow-up 0.8.18 aggiunge
+verifica del servizio e di un heartbeat dopo l'installazione MSI, conservazione
+protetta del pacchetto precedente e un solo tentativo di ripristino automatico
+se il nuovo Agent non supera il controllo salute. La scheda aggiornamenti
+mostrerà categoria di errore, versioni, codice MSI e stato del ripristino. La
+schermata “Nuova richiesta” della tray è stata ridisegnata con campi ordinati,
+anteprima screenshot e consenso più chiaro. Build e CI Windows, deploy API e
+dashboard e promozione del kit 0.8.18 devono ancora essere registrati prima di
+considerare questa milestone pubblicata; il primo passaggio 0.8.17 → 0.8.18 è
+gestito dall'updater già installato e non può usare il nuovo controllo salute.
+
 Per recupero credenziali amministratore è disponibile [la procedura CLI con ASP.NET Identity](admin-password-recovery.md); il file bootstrap contiene soltanto la password iniziale e non permette di leggere password cambiate.
 
 ### Backup server notturno su NAS Samba
@@ -97,10 +110,11 @@ scheda Defender in sola lettura, protetta dal nuovo permesso
 Administrator. La cronologia e le policy di gruppo non fanno parte di questa
 prima fase.
 
-Agent/Tray/Setup/MSI sono stati portati a 0.8.17. Codice ancora da compilare e
-verificare in CI; il kit pubblicato resta 0.8.16 e l'istanza live non è stata
-aggiornata. Firma Authenticode e collaudo su PC Windows reale richiedono
-certificato e hardware/accesso esterni. Dettagli in
+Agent/Tray/Setup/MSI 0.8.17 hanno superato CI Windows e il kit unsigned è stato
+pubblicato nel download LAN. L'API e la dashboard Defender sono live; il PC
+pilota deve ancora inviare e verificare un report reale. Firma Authenticode e
+collaudo Windows restano gate separati. Il follow-up 0.8.18 in verifica è
+descritto nello snapshot iniziale. Dettagli in
 [validation](validation.md) e [specifica Defender](endpoint-security-defender.md).
 
 ### RustDesk OSS pilot — standard native transport
@@ -164,10 +178,10 @@ nessuna modifica runtime Defender in questa milestone. Analisi completa:
 La specifica confronta anche il lifecycle MSI: firma Authenticode quando
 disponibile, verifica hash/firma, diagnostica Defender in dashboard, interventi
 solo amministrativi sugli strumenti Windows, health check dopo MSI e rollback
-bounded. Stato corrente del pacchetto: Agent 0.8.16 pubblicato per il download
-autenticato; CI Windows passata, prova di sostituzione identità sul PC reale
-ancora aperta. Il sorgente 0.8.17 non è ancora un MSI pubblicato; il pacchetto
-scaricabile resta unsigned 0.8.16. La firma manca; la
+bounded. Stato del pacchetto al termine della milestone Defender: Agent 0.8.17
+pubblicato per il download autenticato; prova di sostituzione identità sul PC
+reale ancora aperta. Il follow-up 0.8.18 aggiunge health check e rollback
+bounded ed è in pipeline. La firma manca; la
 quarantena segnalata per MeshCentral non è stata rimossa né risolta da OmniDesk.
 
 ### Backup — retention locale opt-in
