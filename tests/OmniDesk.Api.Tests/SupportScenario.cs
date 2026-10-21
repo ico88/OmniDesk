@@ -273,17 +273,16 @@ public static class SupportScenario
             recipient.EmailNotificationsEnabled = true;
             var notification = await db.UserNotifications.SingleAsync(x => x.Id == emailNotificationId);
             recipient.EmailNotificationsEnabledAt = notification.CreatedAt.AddSeconds(-1);
-            db.EmailNotificationDeliveries.Add(new EmailNotificationDelivery { NotificationId = emailNotificationId });
+            if (!await db.EmailNotificationDeliveries.AnyAsync(delivery => delivery.NotificationId == emailNotificationId))
+                db.EmailNotificationDeliveries.Add(new EmailNotificationDelivery { NotificationId = emailNotificationId });
             await db.SaveChangesAsync();
         }
+        factory.OutboundEmail.Enabled = true;
         var emailWorker = new EmailNotificationWorker(factory.Services.GetRequiredService<IServiceScopeFactory>(),
-            NullLogger<EmailNotificationWorker>.Instance, Options.Create(new OutboundEmailOptions
-            {
-                Enabled = true, Host = "smtp.example.test", Port = 587, FromAddress = "help@example.test",
-                Username = "omni", PasswordFile = "/tmp/smtp-test-secret", DashboardUrl = "https://desk.example.test"
-            }));
-        Assert.True(await emailWorker.ProcessNext(CancellationToken.None));
-        var deliveredEmail = Assert.Single(factory.OutboundEmail.Sent, email => email.Subject.Contains($"#{ticket.Number}", StringComparison.Ordinal));
+            NullLogger<EmailNotificationWorker>.Instance);
+        while (await emailWorker.ProcessNext(CancellationToken.None)) { }
+        var deliveredEmail = Assert.Single(factory.OutboundEmail.Sent, email => email.Subject.Contains($"Nuova risposta al ticket #{ticket.Number}", StringComparison.Ordinal));
+        factory.OutboundEmail.Enabled = false;
         Assert.Contains($"#{ticket.Number}", deliveredEmail.Subject);
         Assert.Contains("https://desk.example.test/?ticket=", deliveredEmail.TextBody);
         Assert.DoesNotContain(ticket.Subject, deliveredEmail.Subject + deliveredEmail.TextBody, StringComparison.Ordinal);
@@ -306,7 +305,9 @@ public static class SupportScenario
         Assert.Equal("dead", deadLetter.GetProperty("state").GetString());
         Assert.DoesNotContain("scoped@example.test", deadLetters.ToString(), StringComparison.Ordinal);
         Assert.Equal(HttpStatusCode.Forbidden, (await scoped.PostAsync($"/api/admin/email-notifications/{emailNotificationId}/retry", null)).StatusCode);
+        factory.OutboundEmail.Enabled = true;
         Assert.Equal(HttpStatusCode.NoContent, (await admin.PostAsync($"/api/admin/email-notifications/{emailNotificationId}/retry", null)).StatusCode);
+        factory.OutboundEmail.Enabled = false;
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();

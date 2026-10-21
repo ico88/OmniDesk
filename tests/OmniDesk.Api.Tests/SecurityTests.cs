@@ -62,6 +62,8 @@ public sealed class FakeOutboundEmailSender : IOutboundEmailSender
 {
     private readonly System.Collections.Concurrent.ConcurrentQueue<OutboundEmailMessage> sent = new();
     public IReadOnlyCollection<OutboundEmailMessage> Sent => sent.ToArray();
+    public bool Enabled { get; set; } = true;
+    public Task<bool> IsEnabledAsync(CancellationToken cancellationToken) => Task.FromResult(Enabled);
     public Task SendAsync(OutboundEmailMessage message, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -146,6 +148,22 @@ public sealed class SecurityTests : IClassFixture<ApiFactory>, IAsyncLifetime
         await Login(viewer, "viewer@example.test");
         Assert.Equal(HttpStatusCode.Forbidden, (await viewer.GetAsync("/api/admin/audit")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await viewer.GetAsync("/api/admin/backup-nas")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await viewer.GetAsync("/api/admin/outbound-email")).StatusCode);
+        var smtpRequest = new { enabled = true, host = "smtp.example.test", port = 587, fromAddress = "help@example.test", fromName = "OmniDesk", dashboardUrl = "https://desk.example.test", username = "omni-user", password = "SMTP-secret-fixture", clearPassword = false };
+        Assert.Equal(HttpStatusCode.NoContent, (await admin.PutAsJsonAsync("/api/admin/outbound-email", smtpRequest)).StatusCode);
+        var smtpSettings = await admin.GetFromJsonAsync<JsonElement>("/api/admin/outbound-email");
+        Assert.True(smtpSettings.GetProperty("configured").GetBoolean());
+        Assert.True(smtpSettings.GetProperty("passwordConfigured").GetBoolean());
+        Assert.False(smtpSettings.ToString().Contains("SMTP-secret-fixture", StringComparison.Ordinal));
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var protectedSmtp = (await db.OutboundEmailSettings.SingleAsync()).ProtectedConfiguration;
+            Assert.DoesNotContain("SMTP-secret-fixture", protectedSmtp, StringComparison.Ordinal);
+        }
+        factory.OutboundEmail.Enabled = true;
+        Assert.Equal(HttpStatusCode.NoContent, (await admin.PostAsJsonAsync("/api/admin/outbound-email/test", new { recipient = "admin@example.test" })).StatusCode);
+        Assert.Contains(factory.OutboundEmail.Sent, message => message.Recipient == "admin@example.test");
         Assert.Equal(HttpStatusCode.Forbidden, (await viewer.PostAsJsonAsync($"/api/admin/devices/{device}/agent-update", new { requestId = Guid.NewGuid() })).StatusCode);
         var branding = new { name = "Test brand", logoUrl = "", primaryColor = "#123456", theme = "light" };
         Assert.Equal(HttpStatusCode.Forbidden, (await viewer.PutAsJsonAsync("/api/branding", branding)).StatusCode);

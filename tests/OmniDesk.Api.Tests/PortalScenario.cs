@@ -118,11 +118,6 @@ public static class PortalScenario
             Assert.Equal(HttpStatusCode.NotFound, (await outsider.GetAsync($"{attachmentPath}/{attachmentId}")).StatusCode);
         }
 
-        var emailOptions = Options.Create(new OutboundEmailOptions
-        {
-            Enabled = true, Host = "smtp.example.test", Port = 587, FromAddress = "help@example.test",
-            Username = "omni", PasswordFile = "/tmp/not-used-smtp-secret", DashboardUrl = "https://desk.example.test"
-        });
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -134,8 +129,9 @@ public static class PortalScenario
         }
         Assert.Equal(HttpStatusCode.NoContent, (await admin.PostAsJsonAsync($"/api/support/{ticketId}/internal-notes", new { expectedVersion = 2L, body = "Nota riservata al team" })).StatusCode);
         Assert.Equal(HttpStatusCode.NoContent, (await admin.PutAsJsonAsync($"/api/support/{ticketId}", new { expectedVersion = 3L, state = "in_progress", resolution = "Stiamo verificando il collegamento." , addReply = true })).StatusCode);
+        factory.OutboundEmail.Enabled = true;
         var ticketNotificationWorker = new TicketNotificationWorker(factory.Services.GetRequiredService<IServiceScopeFactory>(),
-            NullLogger<TicketNotificationWorker>.Instance, emailOptions);
+            NullLogger<TicketNotificationWorker>.Instance);
         while (await ticketNotificationWorker.ProcessNext(CancellationToken.None)) { }
         var portalInbox = await portal.GetFromJsonAsync<JsonElement>("/api/notifications");
         var requesterNotice = Assert.Single(portalInbox.GetProperty("notifications").EnumerateArray(), item =>
@@ -143,7 +139,7 @@ public static class PortalScenario
         Assert.Equal(HttpStatusCode.NoContent, (await portal.PostAsync($"/api/notifications/{requesterNotice.GetProperty("id").GetGuid()}/read", null)).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await outsider.PostAsync($"/api/notifications/{requesterNotice.GetProperty("id").GetGuid()}/read", null)).StatusCode);
         var emailWorker = new EmailNotificationWorker(factory.Services.GetRequiredService<IServiceScopeFactory>(),
-            NullLogger<EmailNotificationWorker>.Instance, emailOptions);
+            NullLogger<EmailNotificationWorker>.Instance);
         while (await emailWorker.ProcessNext(CancellationToken.None)) { }
         var requesterEmail = Assert.Single(factory.OutboundEmail.Sent, message => message.Recipient == "portal-user@example.test" && message.Subject.Contains($"#{ticket.GetProperty("number").GetInt64()}"));
         Assert.Contains("Nuova risposta dell'assistenza al ticket", requesterEmail.Subject);

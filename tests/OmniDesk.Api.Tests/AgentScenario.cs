@@ -184,12 +184,7 @@ public static class AgentScenario
         Assert.DoesNotContain(persistedAlerts.GetProperty("notifications").EnumerateArray(), alert =>
             alert.TryGetProperty("deviceId", out var target) && target.ValueKind == JsonValueKind.String && target.GetGuid() == hiddenDeviceId);
         var offlineEmailWorker = new OmniDesk.Api.ServiceDesk.EmailNotificationWorker(
-            factory.Services.GetRequiredService<IServiceScopeFactory>(), NullLogger<OmniDesk.Api.ServiceDesk.EmailNotificationWorker>.Instance,
-            Options.Create(new OmniDesk.Api.ServiceDesk.OutboundEmailOptions
-            {
-                Enabled = true, Host = "smtp.example.test", Port = 587, FromAddress = "help@example.test",
-                Username = "omni", PasswordFile = "/tmp/smtp-test-secret", DashboardUrl = "https://desk.example.test"
-            }));
+            factory.Services.GetRequiredService<IServiceScopeFactory>(), NullLogger<OmniDesk.Api.ServiceDesk.EmailNotificationWorker>.Instance);
         for (var i = 0; i < 100 && !factory.OutboundEmail.Sent.Any(email => email.Subject.Contains("Dispositivo non raggiungibile", StringComparison.Ordinal)) &&
              await offlineEmailWorker.ProcessNext(CancellationToken.None); i++) { }
         var offlineEmail = Assert.Single(factory.OutboundEmail.Sent, email => email.Subject.Contains("Dispositivo non raggiungibile", StringComparison.Ordinal));
