@@ -30,7 +30,9 @@ services:
         test -d /source/identity_keys
         test -d /source/caddy_data
         find /source/identity_keys -type f -print -quit | grep -q .
-        test -s /source/caddy_data/caddy/pki/authorities/local/root.crt
+        # Public Caddy deployments persist ACME certificates, not necessarily
+        # a local internal CA. The isolated restore Caddyfile creates its own
+        # verification-only CA when the source volume has no local root.
         cp -a /source/identity_keys/. /keys/
         if [ -d /source/attachments ]; then cp -a /source/attachments/. /attachments/; fi
         cp -a /source/caddy_data/. /caddy-data/

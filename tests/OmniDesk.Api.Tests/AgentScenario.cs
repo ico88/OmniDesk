@@ -96,12 +96,23 @@ public static class AgentScenario
         agent.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Assertion(key));
         Assert.Equal(HttpStatusCode.BadRequest, (await agent.PostAsJsonAsync("/api/agent/metrics", metrics with { NetworkAdapters = [new("Wi-Fi", "Wireless80211", "invalid", ["not-an-ip"])] })).StatusCode);
         agent.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Assertion(key));
-        var inventory = new InventoryRequest("Windows fixture", "X64", "Fixture", "Test", "SN-TEST-123", "Test CPU", 8, [new("Test app", "1.0", "Test")], []);
+        var defender = new DefenderSnapshotRequest(DateTimeOffset.UtcNow, "available", true, true, false, "1.1", "1.2",
+            DateTimeOffset.UtcNow.AddHours(-2), null, null, "unknown", true, false, [new("path", "C:\\OmniDesk\\Cache")]);
+        var inventory = new InventoryRequest("Windows fixture", "X64", "Fixture", "Test", "SN-TEST-123", "Test CPU", 8, [new("Test app", "1.0", "Test")], [], defender);
         Assert.Equal(HttpStatusCode.NoContent, (await agent.PutAsJsonAsync("/api/agent/inventory", inventory)).StatusCode);
+        var defenderResponse = await admin.GetFromJsonAsync<JsonElement>($"/api/devices/{id}/security/defender");
+        Assert.Equal("available", defenderResponse.GetProperty("snapshot").GetProperty("providerState").GetString());
+        Assert.Equal("C:\\OmniDesk\\Cache", defenderResponse.GetProperty("snapshot").GetProperty("exclusions")[0].GetProperty("value").GetString());
         Assert.Equal(HttpStatusCode.Forbidden, (await scoped.GetAsync($"/api/devices/{id}/status")).StatusCode);
         Assert.Equal(HttpStatusCode.Created, (await admin.PostAsJsonAsync("/api/admin/grants", new { userId = scopedId, role = "Viewer", groupId = group, deviceId = (Guid?)null })).StatusCode);
         var status = await scoped.GetFromJsonAsync<JsonElement>($"/api/devices/{id}/status");
         Assert.True(status.GetProperty("online").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, status.GetProperty("inventory").GetProperty("defender").ValueKind);
+        Assert.Equal(HttpStatusCode.Forbidden, (await scoped.GetAsync($"/api/devices/{id}/security/defender")).StatusCode);
+        agent.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Assertion(key));
+        Assert.Equal(HttpStatusCode.NoContent, (await agent.PutAsJsonAsync("/api/agent/inventory", inventory with { Defender = null })).StatusCode);
+        defenderResponse = await admin.GetFromJsonAsync<JsonElement>($"/api/devices/{id}/security/defender");
+        Assert.Equal("available", defenderResponse.GetProperty("snapshot").GetProperty("providerState").GetString());
         var statusAdapters = status.GetProperty("metrics").GetProperty("networkAdapters").EnumerateArray().ToArray();
         Assert.Equal(2, statusAdapters.Length);
         Assert.Equal("AABBCCDDEEFF", statusAdapters[0].GetProperty("macAddress").GetString());

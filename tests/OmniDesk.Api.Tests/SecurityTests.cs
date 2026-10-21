@@ -145,6 +145,7 @@ public sealed class SecurityTests : IClassFixture<ApiFactory>, IAsyncLifetime
         using var viewer = Client();
         await Login(viewer, "viewer@example.test");
         Assert.Equal(HttpStatusCode.Forbidden, (await viewer.GetAsync("/api/admin/audit")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await viewer.GetAsync("/api/admin/backup-nas")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await viewer.PostAsJsonAsync($"/api/admin/devices/{device}/agent-update", new { requestId = Guid.NewGuid() })).StatusCode);
         var branding = new { name = "Test brand", logoUrl = "", primaryColor = "#123456", theme = "light" };
         Assert.Equal(HttpStatusCode.Forbidden, (await viewer.PutAsJsonAsync("/api/branding", branding)).StatusCode);
@@ -152,6 +153,23 @@ public sealed class SecurityTests : IClassFixture<ApiFactory>, IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, (await admin.PutAsJsonAsync("/api/branding", branding)).StatusCode);
         var saved = await viewer.GetFromJsonAsync<Branding>("/api/branding");
         Assert.Equal("Test brand", saved!.Name);
+        var backupSettings = await admin.GetFromJsonAsync<JsonElement>("/api/admin/backup-nas");
+        Assert.False(backupSettings.GetProperty("configured").GetBoolean());
+        var recipient = "age1" + new string('a', 58);
+        var backupRequest = new { enabled = true, server = "nas.example.test", share = "Backup/OmniDesk", username = "omnidesk-backup", password = "Samba-secret-123!", clearPassword = false, domain = "WORKGROUP", ageRecipient = recipient, scheduleTime = "03:15", timeZoneId = "Europe/Rome", keepCount = 7 };
+        Assert.Equal(HttpStatusCode.BadRequest, (await admin.PutAsJsonAsync("/api/admin/backup-nas", new { enabled = true, server = "nas.example.test", share = "Backup/OmniDesk", username = "omnidesk-backup", password = "Samba-secret-123!", clearPassword = false, domain = "WORKGROUP", ageRecipient = recipient, scheduleTime = "03:15", timeZoneId = "Not/AZone", keepCount = 7 })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await admin.PutAsJsonAsync("/api/admin/backup-nas", backupRequest)).StatusCode);
+        backupSettings = await admin.GetFromJsonAsync<JsonElement>("/api/admin/backup-nas");
+        Assert.True(backupSettings.GetProperty("configured").GetBoolean());
+        Assert.True(backupSettings.GetProperty("passwordConfigured").GetBoolean());
+        Assert.False(backupSettings.TryGetProperty("password", out _), "The API must never return the Samba password.");
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var stored = await db.BackupNasSettings.SingleAsync();
+            Assert.DoesNotContain("Samba-secret-123!", stored.ProtectedConfiguration);
+            Assert.Contains(await db.AuditEvents.ToListAsync(), x => x.Action == "backup.nas.settings.update" && !x.Target.Contains("Samba-secret"));
+        }
         using var scoped = Client();
         await Login(scoped, "scoped@example.test");
         Assert.Empty((await scoped.GetFromJsonAsync<Device[]>("/api/devices"))!);
