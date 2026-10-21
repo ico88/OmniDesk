@@ -10,12 +10,13 @@ protetta del pacchetto precedente e un solo tentativo di ripristino automatico
 se il nuovo Agent non supera il controllo salute. La scheda aggiornamenti
 mostrerà categoria di errore, versioni, codice MSI e stato del ripristino. La
 schermata “Nuova richiesta” della tray è stata ridisegnata con campi ordinati,
-anteprima screenshot e consenso più chiaro. Build e CI Windows, deploy API e
-dashboard e promozione del kit 0.8.18 devono ancora essere registrati prima di
-considerare questa milestone pubblicata. Gli aggiornamenti remoti da versioni
-precedenti a 0.8.18 sono bloccati: il primo passaggio si installa una volta dal
-kit MSI scaricato manualmente. Gli aggiornamenti successivi usano il nuovo
-controllo salute e il ripristino.
+anteprima screenshot e consenso più chiaro. CI Linux e Windows passate; API e
+dashboard distribuite con readiness HTTPS verificata; kit unsigned 0.8.18
+promosso e checksum verificato. Gli aggiornamenti remoti da versioni precedenti
+a 0.8.18 sono bloccati: il primo passaggio si installa una volta dal kit MSI
+scaricato manualmente dalla scheda aggiornamenti. Gli aggiornamenti successivi
+usano il nuovo controllo salute e il ripristino. Restano il collaudo su PC
+pilota e la firma Authenticode, subordinata al grant Azure Artifact Signing.
 
 Per recupero credenziali amministratore è disponibile [la procedura CLI con ASP.NET Identity](admin-password-recovery.md); il file bootstrap contiene soltanto la password iniziale e non permette di leggere password cambiate.
 
