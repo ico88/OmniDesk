@@ -1,0 +1,56 @@
+feature,area,priority,original,clone,notes
+Vedere e controllare lo schermo Windows remoto (mouse e tastiera),sessione,must,yes,no,oggi delegato al client RustDesk esterno
+Accesso non assistito a PC gestito dall'elenco dispositivi,avvio,must,yes,no,fonte 5; nessuna conferma lato remoto
+Sessione assistita con consenso esplicito dell'utente (Allow/Decline),avvio,must,yes,no,fonte 4; OmniDesk RemoteSession.ConsentRequired esiste
+Sessione assistita con codice o link monouso,avvio,must,yes,no,fonte 4; link raccomandato rispetto a ID+password
+Modulo di supporto temporaneo senza installazione per PC non gestiti,avvio,should,yes,no,QuickSupport; richiede eseguibile firmato
+Connessione con ID + password temporanea,avvio,should,yes,no,fonte 6; ripiego
+Stato online/offline e disponibilità remota per dispositivo,avvio,must,yes,no,endpoint availability Mesh già presente
+Funziona dietro NAT tramite relay self-hosted,trasporto,must,yes,no,TeamViewer usa la propria rete; noi relay interno
+Cifratura end-to-end della sessione con librerie standard,sicurezza,must,yes,no,fonte 14; niente crittografia personalizzata (AGENTS.md)
+Controllo su schermata di login UAC e desktop sicuro,sessione,must,yes,no,richiede servizio SYSTEM nell'Agent
+Multi-monitor (scelta monitor e monitor in finestre separate),vista,must,yes,no,fonte 3
+Qualità automatica / velocità / qualità e scala adattata/originale,vista,should,yes,no,fonte 3
+Cambio risoluzione remota e nascondi sfondo,vista,could,yes,no,fonte 3
+Mostra cursore remoto e aggiorna schermo,vista,could,yes,no,fonte 3
+Sessioni in tab,vista,should,yes,no,fonte 3
+Invia Ctrl+Alt+Del e combinazioni di tasti,azioni,must,yes,no,fonte 3
+Modalità tastiera diretta,azioni,could,yes,no,fonte 3
+Riavvio remoto con riconnessione automatica (anche modalità provvisoria),azioni,must,yes,no,fonte 3 e 5
+Blocca ora / blocca a fine sessione / disconnetti utente,azioni,must,yes,no,fonte 3; impostazione Always/Never/Automatic
+Sincronizzazione appunti e incolla come digitazione,azioni,must,yes,no,fonte 3; controllabile da policy
+Disabilita input remoto,azioni,should,yes,no,fonte 3
+Schermo nero sul PC remoto,azioni,should,yes,no,fonte 3; a licenza in TeamViewer
+Informazioni sistema remoto / connessione / sessione,azioni,should,yes,no,inventario già raccolto dall'Agent
+Lascia nota visibile all'utente dopo la sessione,azioni,could,yes,no,fonte 3; può passare dalla Tray
+Script / Quick Steps in sessione,azioni,could,yes,no,a licenza; API terminale esistenti ma nascoste
+Trasferimento file nei due sensi,file,must,yes,no,API file esistenti ma nascoste in console
+File box in sessione,file,could,yes,no,fonte 3
+Chat tecnico-utente,comunica,should,yes,no,fonte 3
+Audio del PC remoto,comunica,could,yes,no,fonte 3
+Audio e video chiamata,comunica,could,yes,skip,non necessario per uso interno
+Lavagna (whiteboard),comunica,could,yes,skip,non necessario per uso interno
+Invita altri tecnici nella sessione,comunica,should,yes,no,fonte 3
+Inverti ruoli con il partner,comunica,could,yes,no,a licenza in TeamViewer
+Screenshot (salva / copia),registrazione,should,yes,no,fonte 3
+Registrazione manuale avvia/pausa/stop,registrazione,should,yes,no,fonte 3
+Registrazione automatica imposta da policy con conferma tecnico,registrazione,should,yes,no,fonte 10
+Indicatore visibile all'utente di sessione e registrazione attive,sicurezza,must,yes,no,inferito; necessario per trasparenza
+Chiusura sessione dal tecnico e dall'utente,sessione,must,yes,no,fonte 3; oggi non controllata con RustDesk
+Revoca permessi o dispositivo chiude la sessione aperta,sicurezza,must,yes,no,gate aperto in OmniDesk; non documentato in TeamViewer
+Autorizzazione server per ogni sessione (permesso remote.control per ambito),sicurezza,must,yes,no,esiste in OmniDesk
+Policy per device/gruppo con impostazioni forzate,policy,must,yes,no,fonte 9; consenso / appunti / file / registrazione / blocco
+Block e allowlist di chi può connettersi,policy,should,yes,no,fonte 11; da noi equivale ai permessi per ambito
+Backoff sui tentativi di accesso falliti,sicurezza,must,yes,no,fonte 14
+Approvazione push di nuovi dispositivi di login,sicurezza,could,yes,skip,OmniDesk usa TOTP / 2FA email
+Report connessioni con filtri ed export CSV in UTC,report,must,yes,no,fonte 8; audit OmniDesk già esistente
+Commento / note sulla sessione,report,should,yes,no,fonte 3 Comment; collegabile ai ticket
+Collegare la sessione a un ticket Service Desk,report,should,no,no,aggiunta OmniDesk
+Wake-on-LAN tramite altro Agent nella LAN,avvio,should,yes,no,fonte 13
+Installazione dell'Agent permanente da una sessione assistita,avvio,should,yes,no,fonte 5 Scenario A; serve MSI firmato
+Aggiornamento remoto del client,azioni,could,yes,no,updater Agent già presente
+Stampa remota TeamViewer Printing,file,could,yes,skip,driver proprietario
+VPN TeamViewer,file,could,yes,skip,driver proprietario
+Tia / riassunto AI della sessione,file,could,yes,skip,fuori scope
+Augment session / AR,comunica,could,yes,skip,fuori scope
+Client macOS / Linux / mobile,piattaforme,could,yes,skip,OmniDesk è Windows-only
