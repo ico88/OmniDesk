@@ -11,10 +11,10 @@ Esiti e limiti dettagliati: `docs/validation.md` di quel repository.
 | S08 Dispositivi | 2026-11-15 | fatto (M1): elenco con stato online, utente collegato, ricerca, filtro gruppo, revocati; dettaglio, rinomina/sposta, revoca; token di registrazione | pulsante Connetti (M2) | ordinamento EF dopo proiezione su record; chiusura WebSocket già chiusa dal server |
 | S09 Sessione | 2026-11-15 | fatto (M2): viewer WebCodecs, mouse/tastiera, schermo intero, Termina, stati | toolbar completa, multi-monitor, Ctrl+Alt+Canc (M3); collaudo su PC Windows reale | Vortice senza ICodecAPI (interfaccia COM scritta a mano); D3D11CreateDevice ambiguo; corsa nel test dei ticket |
 | S01–S03 Assistenza | 2026-11-15 | parziale: rotta | tutto (M4) | — |
-| S17 Policy | 2026-11-15 | parziale: rotta | tutto (M3) | — |
-| S18 Report | 2026-11-15 | parziale (M2): elenco sessioni con durata ed esito | filtri in console, CSV (M3) | — |
+| S17 Policy | 2026-11-15 | fatto (M3a): elenco con regole in chiaro, crea/modifica, assegna ai gruppi, predefinita, elimina con conferma; policy effettiva nel dettaglio PC | assegnazione a singoli PC dalla console; appunti/file (M3b) | WebSocket chiuso annullando prima la ricezione: Bye perso 5/10, corretto |
+| S18 Report | 2026-11-15 | fatto (M3a): filtri per data, export CSV UTC | filtro per PC in console | — |
 
-Dopo M2 la parità calcolata da parity.py è 18,8/100 (3 must-have su 21 fatti, altri parziali in attesa del collaudo Windows). Dopo M1 nessuna riga di `features.csv` passa a `yes`: la riga "Stato online/offline e disponibilità remota per dispositivo" resta `no` finché non esiste la parte "disponibilità remota" (M2). Nessuna riga passa a `yes` o `partial`: M0 costruisce le
+Dopo M3a la parità è 27,4/100 (5 must-have su 21): consenso, indicatore, Ctrl+Alt+Canc, multi-monitor e blocco a fine sessione provati con host di prova nel browser e con autodiagnosi su Windows in CI; collaudo su PC reale da fare. Dopo M2 la parità calcolata da parity.py è 18,8/100 (3 must-have su 21 fatti, altri parziali in attesa del collaudo Windows). Dopo M1 nessuna riga di `features.csv` passa a `yes`: la riga "Stato online/offline e disponibilità remota per dispositivo" resta `no` finché non esiste la parte "disponibilità remota" (M2). Nessuna riga passa a `yes` o `partial`: M0 costruisce le
 fondamenta (accesso, permessi, audit, protocollo, deployment), non ancora una
 funzione di connessione remota. Le schermate future non mostrano dati
 d'esempio, per non far sembrare operativo ciò che non lo è.
