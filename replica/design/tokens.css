@@ -1,0 +1,139 @@
+/* Generato da tokens.json: non modificare a mano. */
+
+:root {
+  color-scheme: light dark;
+  --od-font-sans: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --od-font-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+  --od-text-xs: 12px;
+  --od-leading-xs: 16px;
+  --od-weight-xs: 500;
+  --od-text-sm: 14px;
+  --od-leading-sm: 20px;
+  --od-weight-sm: 400;
+  --od-text-base: 16px;
+  --od-leading-base: 24px;
+  --od-weight-base: 400;
+  --od-text-lg: 20px;
+  --od-leading-lg: 28px;
+  --od-weight-lg: 600;
+  --od-text-xl: 24px;
+  --od-leading-xl: 32px;
+  --od-weight-xl: 600;
+  --od-text-display: 32px;
+  --od-leading-display: 40px;
+  --od-weight-display: 600;
+  --od-text-code: 28px;
+  --od-leading-code: 36px;
+  --od-weight-code: 500;
+  --od-space-0: 0px;
+  --od-space-1: 4px;
+  --od-space-2: 8px;
+  --od-space-3: 12px;
+  --od-space-4: 16px;
+  --od-space-5: 20px;
+  --od-space-6: 24px;
+  --od-space-7: 32px;
+  --od-space-8: 40px;
+  --od-space-9: 48px;
+  --od-space-10: 64px;
+  --od-radius-sm: 4px;
+  --od-radius-md: 6px;
+  --od-radius-lg: 10px;
+  --od-radius-pill: 999px;
+  --od-shadow-card: 0 1px 2px rgba(15,18,17,.06), 0 1px 3px rgba(15,18,17,.08);
+  --od-shadow-pop: 0 8px 24px rgba(15,18,17,.18);
+  --od-shadow-toolbar: 0 4px 16px rgba(0,0,0,.35);
+  --od-motion-fast: 100ms;
+  --od-motion-base: 180ms;
+  --od-motion-ease: cubic-bezier(.2,.8,.2,1);
+  --od-layout-sidebar: 232px;
+  --od-layout-header: 52px;
+  --od-layout-content-max: 1280px;
+  --od-layout-toolbar-height: 40px;
+  --od-layout-indicator-height: 32px;
+  --od-z-toolbar: 40;
+  --od-z-popover: 50;
+  --od-z-dialog: 60;
+  --od-z-toast: 70;
+}
+
+:root, [data-theme="light"] {
+  --od-color-bg: #ffffff;
+  --od-color-surface: #f5f6f4;
+  --od-color-surface-2: #eceeea;
+  --od-color-border: #dcdfda;
+  --od-color-border-input: #7f857e;
+  --od-color-text: #161a17;
+  --od-color-text-muted: #575f58;
+  --od-color-accent: #0b6b5d;
+  --od-color-accent-hover: #09574c;
+  --od-color-on-accent: #ffffff;
+  --od-color-accent-soft: #e3f1ee;
+  --od-color-on-accent-soft: #07463d;
+  --od-color-danger: #b42318;
+  --od-color-on-danger: #ffffff;
+  --od-color-success: #1c7339;
+  --od-color-warning: #8a5200;
+  --od-color-warning-soft: #fdf1dc;
+  --od-color-live: #b54708;
+  --od-color-on-live: #ffffff;
+  --od-color-recording: #b8123f;
+  --od-color-on-recording: #ffffff;
+  --od-color-focus: #0b6b5d;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --od-color-bg: #0f1211;
+    --od-color-surface: #181c1a;
+    --od-color-surface-2: #212624;
+    --od-color-border: #2f3532;
+    --od-color-border-input: #7b847e;
+    --od-color-text: #edf0ed;
+    --od-color-text-muted: #a3aca5;
+    --od-color-accent: #4fc3a9;
+    --od-color-accent-hover: #6fd1bb;
+    --od-color-on-accent: #06241d;
+    --od-color-accent-soft: #13312a;
+    --od-color-on-accent-soft: #9fe3d3;
+    --od-color-danger: #f97066;
+    --od-color-on-danger: #2a0805;
+    --od-color-success: #5fd38a;
+    --od-color-warning: #f5b84a;
+    --od-color-warning-soft: #33260c;
+    --od-color-live: #fb923c;
+    --od-color-on-live: #2b1203;
+    --od-color-recording: #fb6f92;
+    --od-color-on-recording: #2b0610;
+    --od-color-focus: #6fd1bb;
+  }
+}
+
+[data-theme="dark"] {
+  --od-color-bg: #0f1211;
+  --od-color-surface: #181c1a;
+  --od-color-surface-2: #212624;
+  --od-color-border: #2f3532;
+  --od-color-border-input: #7b847e;
+  --od-color-text: #edf0ed;
+  --od-color-text-muted: #a3aca5;
+  --od-color-accent: #4fc3a9;
+  --od-color-accent-hover: #6fd1bb;
+  --od-color-on-accent: #06241d;
+  --od-color-accent-soft: #13312a;
+  --od-color-on-accent-soft: #9fe3d3;
+  --od-color-danger: #f97066;
+  --od-color-on-danger: #2a0805;
+  --od-color-success: #5fd38a;
+  --od-color-warning: #f5b84a;
+  --od-color-warning-soft: #33260c;
+  --od-color-live: #fb923c;
+  --od-color-on-live: #2b1203;
+  --od-color-recording: #fb6f92;
+  --od-color-on-recording: #2b0610;
+  --od-color-focus: #6fd1bb;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --od-motion-fast: 0ms; --od-motion-base: 0ms; }
+}

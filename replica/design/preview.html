@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OmniDesk design check</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+  /* Pagina di prova delle primitive: solo variabili dei token, nessun hex. */
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--od-color-bg); color: var(--od-color-text);
+         font: var(--od-weight-sm) var(--od-text-sm)/var(--od-leading-sm) var(--od-font-sans); }
+  main { max-width: var(--od-layout-content-max); margin: 0 auto; padding: var(--od-space-7) var(--od-space-4); }
+  h1 { font-size: var(--od-text-xl); line-height: var(--od-leading-xl); font-weight: var(--od-weight-xl); margin: 0 0 var(--od-space-2); }
+  h2 { font-size: var(--od-text-lg); line-height: var(--od-leading-lg); font-weight: var(--od-weight-lg); margin: var(--od-space-8) 0 var(--od-space-4); }
+  .muted { color: var(--od-color-text-muted); }
+  .row { display: flex; flex-wrap: wrap; gap: var(--od-space-3); align-items: center; }
+  .card { background: var(--od-color-surface); border: 1px solid var(--od-color-border); border-radius: var(--od-radius-lg); padding: var(--od-space-5); box-shadow: var(--od-shadow-card); }
+  .grid { display: grid; gap: var(--od-space-5); grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+
+  .btn { font: inherit; font-weight: 600; height: 36px; padding: 0 var(--od-space-4); border-radius: var(--od-radius-md);
+         border: 1px solid transparent; cursor: pointer; display: inline-flex; align-items: center; gap: var(--od-space-2);
+         transition: background var(--od-motion-fast) var(--od-motion-ease); }
+  .btn:focus-visible, .field input:focus-visible, .ib:focus-visible { outline: 2px solid var(--od-color-focus); outline-offset: 2px; }
+  .btn.sm { height: 32px; } .btn.lg { height: 44px; }
+  .primary { background: var(--od-color-accent); color: var(--od-color-on-accent); }
+  .primary:hover, .primary.hover { background: var(--od-color-accent-hover); }
+  .secondary { background: var(--od-color-surface-2); color: var(--od-color-text); border-color: var(--od-color-border); }
+  .ghost { background: transparent; color: var(--od-color-text); }
+  .ghost:hover { background: var(--od-color-surface-2); }
+  .danger { background: var(--od-color-danger); color: var(--od-color-on-danger); }
+  .btn[disabled] { opacity: .5; cursor: not-allowed; }
+  .spin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: s 0.8s linear infinite; }
+  @keyframes s { to { transform: rotate(1turn); } }
+  @media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
+
+  .field { display: grid; gap: var(--od-space-1); min-width: 240px; }
+  .field label { font-weight: 600; }
+  .field input { font: inherit; height: 36px; padding: 0 var(--od-space-3); border-radius: var(--od-radius-md);
+                 border: 1px solid var(--od-color-border-input); background: var(--od-color-bg); color: var(--od-color-text); }
+  .field input::placeholder { color: var(--od-color-text-muted); }
+  .field.error input { border-color: var(--od-color-danger); }
+  .field .msg { font-size: var(--od-text-xs); line-height: var(--od-leading-xs); }
+  .field.error .msg { color: var(--od-color-danger); }
+  .code { font-family: var(--od-font-mono); font-size: var(--od-text-code); line-height: var(--od-leading-code); font-weight: var(--od-weight-code);
+          letter-spacing: .08em; font-variant-numeric: tabular-nums; }
+  .field input.code { height: 52px; text-align: center; }
+
+  .badge { display: inline-flex; align-items: center; gap: 6px; height: 20px; padding: 0 var(--od-space-2); border-radius: var(--od-radius-pill);
+           font-size: var(--od-text-xs); line-height: var(--od-leading-xs); font-weight: var(--od-weight-xs); background: var(--od-color-surface-2); white-space: nowrap; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .on { background: var(--od-color-success); } .off { border: 1.5px solid var(--od-color-text-muted); }
+  .live-dot { background: var(--od-color-live); }
+  .b-live { background: var(--od-color-live); color: var(--od-color-on-live); }
+  .b-rec { background: var(--od-color-recording); color: var(--od-color-on-recording); }
+  .b-soft { background: var(--od-color-accent-soft); color: var(--od-color-on-accent-soft); }
+  .b-danger { color: var(--od-color-danger); }
+
+  .toast { display: flex; gap: var(--od-space-3); align-items: start; padding: var(--od-space-3) var(--od-space-4); background: var(--od-color-surface-2);
+           border-left: 3px solid var(--od-color-success); border-radius: var(--od-radius-md); box-shadow: var(--od-shadow-pop); max-width: 380px; }
+  .toast.err { border-left-color: var(--od-color-danger); }
+  .toast.warn { border-left-color: var(--od-color-warning); }
+
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font-weight: 600; color: var(--od-color-text-muted); font-size: var(--od-text-xs); padding: var(--od-space-2) var(--od-space-3); border-bottom: 1px solid var(--od-color-border); }
+  td { padding: var(--od-space-3); border-bottom: 1px solid var(--od-color-border); vertical-align: middle; }
+  tr.hover td { background: var(--od-color-surface); }
+  .table-wrap { position: relative; overflow-x: auto; border: 1px solid var(--od-color-border); border-radius: var(--od-radius-lg); }
+
+  .empty { text-align: center; padding: var(--od-space-8) var(--od-space-4); }
+  .empty svg { color: var(--od-color-text-muted); }
+
+  .codebox { background: var(--od-color-surface); border-radius: var(--od-radius-lg); padding: var(--od-space-5); display: grid; gap: var(--od-space-3); }
+
+  /* Viewer: sempre tema dark */
+  .viewer { border-radius: var(--od-radius-lg); overflow: hidden; position: relative; height: 380px; background: var(--od-color-bg); color: var(--od-color-text); }
+  .screen { position: absolute; inset: 56px 32px 24px; border-radius: var(--od-radius-sm);
+            background: linear-gradient(135deg, var(--od-color-surface-2), var(--od-color-surface)); }
+  .screen::after { content: "schermo remoto (canvas)"; position: absolute; inset: 0; display: grid; place-items: center; color: var(--od-color-text-muted); }
+  .toolbar { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); display: flex; gap: 2px; align-items: center;
+             height: var(--od-layout-toolbar-height); padding: 0 var(--od-space-2); background: var(--od-color-surface-2);
+             border: 1px solid var(--od-color-border); border-radius: var(--od-radius-lg); box-shadow: var(--od-shadow-toolbar); z-index: var(--od-z-toolbar); }
+  .sep { width: 1px; height: 20px; background: var(--od-color-border); margin: 0 var(--od-space-1); }
+  .ib { width: 32px; height: 32px; display: grid; place-items: center; border-radius: var(--od-radius-md); border: 0; background: transparent; color: var(--od-color-text); cursor: pointer; }
+  .ib:hover { background: var(--od-color-surface); }
+  .ib[aria-pressed="true"] { background: var(--od-color-accent-soft); color: var(--od-color-on-accent-soft); }
+  .ib.end { color: var(--od-color-danger); }
+  .overlay { position: absolute; inset: 56px 32px 24px; display: grid; place-items: center; }
+  .overlay .panel { background: var(--od-color-surface); border: 1px solid var(--od-color-border); border-radius: var(--od-radius-lg);
+                    padding: var(--od-space-5) var(--od-space-6); text-align: center; box-shadow: var(--od-shadow-pop); max-width: 360px; }
+
+  /* Assist (rappresentazione HTML della finestra WPF) */
+  .indicator { display: inline-flex; align-items: center; gap: var(--od-space-3); height: var(--od-layout-indicator-height);
+               padding: 0 var(--od-space-2) 0 var(--od-space-3); border-radius: 0 0 var(--od-radius-md) var(--od-radius-md);
+               background: var(--od-color-live); color: var(--od-color-on-live); font-weight: 600; max-width: 100%; white-space: nowrap; }
+  .indicator .who { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .indicator .sm-btn { font: inherit; font-weight: 600; height: 24px; padding: 0 var(--od-space-2); border-radius: var(--od-radius-sm);
+                       border: 1px solid currentColor; background: transparent; color: inherit; cursor: pointer; }
+  .consent { max-width: 420px; background: var(--od-color-bg); border: 1px solid var(--od-color-border); border-radius: var(--od-radius-lg);
+             box-shadow: var(--od-shadow-pop); padding: var(--od-space-6); display: grid; gap: var(--od-space-3); }
+  .warnbox { background: var(--od-color-warning-soft); color: var(--od-color-warning); border-radius: var(--od-radius-md); padding: var(--od-space-2) var(--od-space-3); font-weight: 600; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Primitive OmniDesk</h1>
+  <p class="muted">Pagina di verifica del design system. Valori solo dai token; testi d'esempio.</p>
+
+  <h2>Pulsanti</h2>
+  <div class="row">
+    <button class="btn primary">Connetti</button>
+    <button class="btn primary hover">Connetti (hover)</button>
+    <button class="btn secondary">Solo visione</button>
+    <button class="btn ghost">Annulla</button>
+    <button class="btn danger">Termina sessione</button>
+    <button class="btn primary" disabled>Non disponibile</button>
+    <button class="btn primary" aria-busy="true" disabled><span class="spin" aria-hidden="true"></span>Connessione…</button>
+    <button class="btn primary sm">Piccolo</button>
+    <button class="btn secondary lg">Grande</button>
+  </div>
+
+  <h2>Campi</h2>
+  <div class="row" style="align-items:start">
+    <div class="field"><label for="f1">Nome sessione</label><input id="f1" placeholder="Es. stampante ufficio"></div>
+    <div class="field error"><label for="f2">Password</label><input id="f2" type="password" value="xxxxxx" aria-invalid="true" aria-describedby="f2m"><span class="msg" id="f2m">Password non corretta</span></div>
+    <div class="field"><label for="f3">Codice dal tecnico</label><input id="f3" class="code" inputmode="numeric" autocomplete="one-time-code" value="482 913 507"><span class="msg muted">9 cifre</span></div>
+  </div>
+
+  <h2>Stati e badge</h2>
+  <div class="row">
+    <span class="badge"><span class="dot on"></span>Online</span>
+    <span class="badge"><span class="dot off"></span>Offline</span>
+    <span class="badge b-live">In sessione</span>
+    <span class="badge b-rec">Registrazione</span>
+    <span class="badge b-soft">Accesso non assistito</span>
+    <span class="badge b-danger">Revocato</span>
+  </div>
+
+  <h2>Notifiche</h2>
+  <div class="row" style="align-items:start">
+    <div class="toast" role="status"><div><strong>Sessione terminata</strong><div class="muted">Durata 12 min · PC-UFFICIO-03</div></div></div>
+    <div class="toast warn" role="status"><div><strong>Connessione lenta</strong><div class="muted">Qualità ridotta automaticamente</div></div></div>
+    <div class="toast err" role="alert"><div><strong>Azione non consentita</strong><div class="muted">La policy del dispositivo non permette lo schermo nero</div></div></div>
+  </div>
+
+  <h2>Elenco dispositivi (S08)</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Stato</th><th>Nome</th><th>Gruppo</th><th>Utente</th><th>Ultimo contatto</th><th><span class="sr">Azioni</span></th></tr></thead>
+      <tbody>
+        <tr class="hover"><td><span class="badge"><span class="dot on"></span>Online</span></td><td><strong>PC-UFFICIO-03</strong></td><td>Segreteria</td><td>a.bianchi</td><td class="muted">ora</td><td><button class="btn primary sm" aria-label="Connetti a PC-UFFICIO-03">Connetti</button></td></tr>
+        <tr><td><span class="badge b-live">In sessione</span></td><td><strong>PC-MAGAZZINO</strong></td><td>Logistica</td><td>g.verdi</td><td class="muted">ora</td><td><button class="btn secondary sm">Partecipa</button></td></tr>
+        <tr><td><span class="badge"><span class="dot off"></span>Offline</span></td><td><strong>PC-SALA-RIUNIONI</strong></td><td>Segreteria</td><td class="muted">—</td><td class="muted">ieri 18:02</td><td><button class="btn primary sm" disabled title="Il PC non è raggiungibile">Connetti</button></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="grid" style="margin-top:var(--od-space-5)">
+    <div class="card empty">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>
+      <h3 style="margin:var(--od-space-2) 0 0">Nessun dispositivo registrato</h3>
+      <p class="muted">Crea un token di registrazione e installa OmniDesk sul primo PC.</p>
+      <button class="btn primary">Crea token</button>
+    </div>
+    <div class="codebox">
+      <strong>Invito «Stampante ufficio»</strong>
+      <div class="code">482 913 507</div>
+      <div class="row"><button class="btn secondary sm">Copia codice</button><button class="btn ghost sm">Copia link</button></div>
+      <span class="muted">Scade alle 15:40 · da usare una volta sola</span>
+    </div>
+  </div>
+
+  <h2>Viewer di sessione (S09, sempre scuro)</h2>
+  <div class="viewer" data-theme="dark">
+    <div class="screen" aria-hidden="true"></div>
+    <div class="toolbar" role="toolbar" aria-label="Strumenti sessione">
+      <button class="ib" aria-label="Invia Ctrl+Alt+Canc" title="Invia Ctrl+Alt+Canc"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg></button>
+      <button class="ib" aria-label="Blocca il PC" title="Blocca il PC"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></button>
+      <button class="ib" aria-label="Riavvia" title="Riavvia"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button>
+      <span class="sep"></span>
+      <button class="ib" aria-label="Monitor" title="Monitor"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8"/></svg></button>
+      <button class="ib" aria-pressed="true" aria-label="Adatta alla finestra" title="Adatta alla finestra"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+      <span class="sep"></span>
+      <button class="ib" aria-label="File" title="File"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/></svg></button>
+      <button class="ib" aria-label="Chat" title="Chat"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg></button>
+      <span class="sep"></span>
+      <button class="ib end" aria-label="Termina sessione" title="Termina sessione"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+    </div>
+    <div class="overlay" role="status">
+      <div class="panel">
+        <strong>In attesa che l'utente accetti</strong>
+        <p class="muted">A. Bianchi su PC-UFFICIO-03 · ancora 42 s</p>
+        <button class="btn secondary sm">Annulla</button>
+      </div>
+    </div>
+  </div>
+
+  <h2>Assist sul PC dell'utente</h2>
+  <div class="grid">
+    <div>
+      <div class="indicator" role="status"><span class="dot" style="background:var(--od-color-on-live)"></span><span class="who">Marco Rossi è collegato</span><span class="badge b-rec">Registrazione</span><button class="sm-btn">Chat</button><button class="sm-btn">Termina</button></div>
+      <p class="muted">Indicatore sempre visibile, non disattivabile.</p>
+    </div>
+    <div class="consent" role="dialog" aria-labelledby="ct" aria-describedby="cd">
+      <strong id="ct">Marco Rossi (IT) chiede di collegarsi a questo computer</strong>
+      <span id="cd">Potrà vedere lo schermo e usare mouse e tastiera.</span>
+      <span class="warnbox">La sessione verrà registrata.</span>
+      <div class="row"><button class="btn primary">Consenti</button><button class="btn secondary">Rifiuta</button></div>
+      <span class="muted">Rifiutata automaticamente tra 45 s</span>
+    </div>
+  </div>
+</main>
+<style>.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}</style>
+</body>
+</html>
