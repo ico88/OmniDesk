@@ -1,65 +1,111 @@
--- OmniDesk Remote: schema di riferimento per la revisione.
--- STATO: progettato, non applicato, non testato.
--- La migrazione reale va generata con EF Core (convenzione OmniDesk: nomi
--- PascalCase tra virgolette, chiavi Guid generate dall'applicazione,
--- DateTimeOffset -> timestamptz) e confrontata con questo file.
--- Tabelle esistenti referenziate: "Devices", "DeviceGroups", "AspNetUsers",
--- "SupportTickets", "RemoteSessions".
+-- OmniDesk (nuovo, solo connessione remota): schema di riferimento.
+-- STATO: progettato. Verificato solo applicandolo su PostgreSQL 16 di prova
+-- con le tabelle ASP.NET Identity ridotte a stub. La migrazione reale va
+-- generata con EF Core e confrontata con questo file.
+-- Convenzione: nomi PascalCase tra virgolette (Npgsql/EF), chiavi uuid
+-- generate dall'applicazione, tempi timestamptz in UTC.
+-- Tabelle Identity attese (create dalla migrazione Identity): "AspNetUsers", "AspNetRoles".
 
--- 1. RemoteSessions (esistente): nuove colonne e vincoli -----------------
+-- Permessi ------------------------------------------------------------------
 
-ALTER TABLE "RemoteSessions"
-  ADD COLUMN "Engine" text NOT NULL DEFAULT 'meshcentral',
-  ADD COLUMN "Mode" text NOT NULL DEFAULT 'unattended',
-  ADD COLUMN "ConsentState" text NOT NULL DEFAULT 'not_required',
-  ADD COLUMN "ConsentDecidedAt" timestamptz NULL,
-  ADD COLUMN "ConsentWindowsUser" text NULL,
-  ADD COLUMN "StartedAt" timestamptz NULL,
-  ADD COLUMN "LastHeartbeatAt" timestamptz NULL,
-  ADD COLUMN "EndReason" text NULL,
-  ADD COLUMN "TicketId" uuid NULL,
-  ADD COLUMN "InvitationId" uuid NULL,
-  ADD COLUMN "PolicyId" uuid NULL,
-  ADD COLUMN "Comment" text NULL;
+CREATE TABLE "RolePermissions" (
+  "RoleId" text NOT NULL REFERENCES "AspNetRoles"("Id") ON DELETE CASCADE,
+  "Permission" text NOT NULL,
+  PRIMARY KEY ("RoleId", "Permission"),
+  CONSTRAINT "CK_RolePermission_Known" CHECK ("Permission" IN (
+    'devices.view','remote.view','remote.control','remote.unattended',
+    'files','recordings.view','administration'))
+);
 
-ALTER TABLE "RemoteSessions"
-  ADD CONSTRAINT "CK_RemoteSession_Engine"
-    CHECK ("Engine" IN ('meshcentral','rustdesk','native')),
-  ADD CONSTRAINT "CK_RemoteSession_Mode"
-    CHECK ("Mode" IN ('unattended','attended','invitation')),
-  ADD CONSTRAINT "CK_RemoteSession_ConsentState"
-    CHECK ("ConsentState" IN ('not_required','pending','granted','declined','expired')),
-  ADD CONSTRAINT "CK_RemoteSession_State"
-    CHECK ("State" IN ('pending','consent_pending','connecting','active','ended',
-                       'declined','expired','failed','revocation_pending','revoked')),
-  ADD CONSTRAINT "CK_RemoteSession_EndAfterStart"
-    CHECK ("EndedAt" IS NULL OR "EndedAt" >= "CreatedAt"),
-  ADD CONSTRAINT "CK_RemoteSession_CommentLength"
-    CHECK ("Comment" IS NULL OR length("Comment") <= 2000),
-  ADD CONSTRAINT "FK_RemoteSession_Ticket"
-    FOREIGN KEY ("TicketId") REFERENCES "SupportTickets"("Id") ON DELETE SET NULL;
--- Verificare prima i valori di "State" già presenti in produzione
--- (pending, active, revocation_pending, revoked, ended...) per non far
--- fallire il vincolo; eventuali valori diversi vanno mappati nella migrazione.
-
--- Un solo controllo attivo per dispositivo; gli altri tecnici entrano come partecipanti.
-CREATE UNIQUE INDEX "UX_RemoteSession_OneActiveControl"
-  ON "RemoteSessions" ("DeviceId")
-  WHERE "State" IN ('connecting','active') AND "Capability" = 'remote.control';
-CREATE INDEX "IX_RemoteSession_Device_Created" ON "RemoteSessions" ("DeviceId", "CreatedAt" DESC);
-CREATE INDEX "IX_RemoteSession_Actor_Created" ON "RemoteSessions" ("ActorId", "CreatedAt" DESC);
-CREATE INDEX "IX_RemoteSession_OpenStates" ON "RemoteSessions" ("State")
-  WHERE "State" IN ('pending','consent_pending','connecting','active','revocation_pending');
-CREATE INDEX "IX_RemoteSession_Ticket" ON "RemoteSessions" ("TicketId");
-CREATE INDEX "IX_RemoteSession_Invitation" ON "RemoteSessions" ("InvitationId");
-CREATE INDEX "IX_RemoteSession_Policy" ON "RemoteSessions" ("PolicyId");
-
--- 2. Policy ---------------------------------------------------------------
-
-CREATE TABLE "RemotePolicies" (
+CREATE TABLE "DeviceGroups" (
   "Id" uuid PRIMARY KEY,
   "Name" text NOT NULL,
-  "Version" bigint NOT NULL DEFAULT 1,           -- incrementata a ogni modifica; il guard la confronta
+  "CreatedAt" timestamptz NOT NULL DEFAULT now(),
+  "UpdatedAt" timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT "CK_DeviceGroup_Name" CHECK (length("Name") BETWEEN 1 AND 120)
+);
+CREATE UNIQUE INDEX "UX_DeviceGroup_Name" ON "DeviceGroups" (lower("Name"));
+
+CREATE TABLE "Devices" (
+  "Id" uuid PRIMARY KEY,
+  "Name" text NOT NULL,
+  "GroupId" uuid NOT NULL REFERENCES "DeviceGroups"("Id") ON DELETE RESTRICT, -- svuotare il gruppo prima di eliminarlo
+  "MachineName" text NOT NULL,
+  "OsVersion" text NULL,
+  "AgentVersion" text NULL,
+  "MacAddresses" text[] NOT NULL DEFAULT '{}',   -- per Wake-on-LAN
+  "RevokedAt" timestamptz NULL,
+  "CreatedAt" timestamptz NOT NULL DEFAULT now(),
+  "UpdatedAt" timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT "CK_Device_Name" CHECK (length("Name") BETWEEN 1 AND 120)
+);
+CREATE INDEX "IX_Device_Group" ON "Devices" ("GroupId");
+CREATE INDEX "IX_Device_Name" ON "Devices" (lower("Name"));
+
+CREATE TABLE "ScopeGrants" (
+  "Id" uuid PRIMARY KEY,
+  "UserId" text NOT NULL REFERENCES "AspNetUsers"("Id") ON DELETE CASCADE,
+  "RoleId" text NOT NULL REFERENCES "AspNetRoles"("Id") ON DELETE CASCADE,
+  "GroupId" uuid NULL REFERENCES "DeviceGroups"("Id") ON DELETE CASCADE,
+  "DeviceId" uuid NULL REFERENCES "Devices"("Id") ON DELETE CASCADE,
+  "CreatedAt" timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT "CK_ScopeGrant_OneScope" CHECK (num_nonnulls("GroupId","DeviceId") = 1)
+);
+-- I ruoli globali usano AspNetUserRoles di Identity; qui solo ambiti group/device.
+CREATE UNIQUE INDEX "UX_ScopeGrant_Group" ON "ScopeGrants" ("UserId","RoleId","GroupId") WHERE "GroupId" IS NOT NULL;
+CREATE UNIQUE INDEX "UX_ScopeGrant_Device" ON "ScopeGrants" ("UserId","RoleId","DeviceId") WHERE "DeviceId" IS NOT NULL;
+CREATE INDEX "IX_ScopeGrant_Role" ON "ScopeGrants" ("RoleId");
+CREATE INDEX "IX_ScopeGrant_Group" ON "ScopeGrants" ("GroupId");
+CREATE INDEX "IX_ScopeGrant_Device" ON "ScopeGrants" ("DeviceId");
+
+-- Registrazione e identità dispositivo ------------------------------------------
+
+CREATE TABLE "EnrollmentTokens" (
+  "Id" uuid PRIMARY KEY,
+  "TokenHash" bytea NOT NULL,                     -- SHA-256 di un token casuale ad alta entropia
+  "GroupId" uuid NOT NULL REFERENCES "DeviceGroups"("Id") ON DELETE CASCADE,
+  "CreatedBy" text NOT NULL REFERENCES "AspNetUsers"("Id") ON DELETE CASCADE,
+  "ExpiresAt" timestamptz NOT NULL,
+  "ConsumedAt" timestamptz NULL,
+  "ConsumedByDeviceId" uuid NULL REFERENCES "Devices"("Id") ON DELETE SET NULL,
+  "RevokedAt" timestamptz NULL,
+  "CreatedAt" timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT "CK_EnrollmentToken_Expiry" CHECK ("ExpiresAt" > "CreatedAt"
+                                                AND "ExpiresAt" <= "CreatedAt" + interval '7 days')
+);
+CREATE UNIQUE INDEX "UX_EnrollmentToken_Hash" ON "EnrollmentTokens" ("TokenHash");
+CREATE INDEX "IX_EnrollmentToken_Group" ON "EnrollmentTokens" ("GroupId");
+CREATE INDEX "IX_EnrollmentToken_CreatedBy" ON "EnrollmentTokens" ("CreatedBy");
+CREATE INDEX "IX_EnrollmentToken_Device" ON "EnrollmentTokens" ("ConsumedByDeviceId");
+
+CREATE TABLE "DeviceKeys" (
+  "Id" uuid PRIMARY KEY,
+  "DeviceId" uuid NOT NULL REFERENCES "Devices"("Id") ON DELETE CASCADE,
+  "Algorithm" text NOT NULL DEFAULT 'ES256',
+  "PublicKey" bytea NOT NULL,                     -- SubjectPublicKeyInfo DER; la chiave privata resta sul PC
+  "Thumbprint" bytea NOT NULL,
+  "CreatedAt" timestamptz NOT NULL DEFAULT now(),
+  "RevokedAt" timestamptz NULL,
+  CONSTRAINT "CK_DeviceKey_Algorithm" CHECK ("Algorithm" IN ('ES256'))
+);
+CREATE UNIQUE INDEX "UX_DeviceKey_Thumbprint" ON "DeviceKeys" ("Thumbprint");
+CREATE UNIQUE INDEX "UX_DeviceKey_OneActive" ON "DeviceKeys" ("DeviceId") WHERE "RevokedAt" IS NULL;
+
+CREATE TABLE "DevicePresence" (
+  "DeviceId" uuid PRIMARY KEY REFERENCES "Devices"("Id") ON DELETE CASCADE,
+  "IsOnline" boolean NOT NULL DEFAULT false,
+  "LastSeenAt" timestamptz NULL,
+  "ConsoleUser" text NULL,                        -- utente Windows collegato, se presente
+  "ChangedAt" timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX "IX_DevicePresence_Online" ON "DevicePresence" ("IsOnline");
+
+-- Policy -----------------------------------------------------------------------
+
+CREATE TABLE "Policies" (
+  "Id" uuid PRIMARY KEY,
+  "Name" text NOT NULL,
+  "Version" bigint NOT NULL DEFAULT 1,            -- incrementata a ogni modifica, il guardiano la confronta
   "IsDefault" boolean NOT NULL DEFAULT false,
   "RequireConsent" boolean NOT NULL DEFAULT true,
   "AllowUnattended" boolean NOT NULL DEFAULT false,
@@ -70,133 +116,184 @@ CREATE TABLE "RemotePolicies" (
   "AllowBlackScreen" boolean NOT NULL DEFAULT false,
   "AllowDisableInput" boolean NOT NULL DEFAULT false,
   "AllowReboot" boolean NOT NULL DEFAULT true,
+  "AllowCtrlAltDel" boolean NOT NULL DEFAULT true,
   "LockOnEnd" text NOT NULL DEFAULT 'auto',
-  "AutoRecord" boolean NOT NULL DEFAULT false,
-  "RecordingRequiresTechnicianConfirm" boolean NOT NULL DEFAULT true,
+  "Record" text NOT NULL DEFAULT 'off',
   "MaxSessionMinutes" integer NOT NULL DEFAULT 240,
   "CreatedAt" timestamptz NOT NULL DEFAULT now(),
   "UpdatedAt" timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT "CK_RemotePolicy_Clipboard" CHECK ("Clipboard" IN ('off','to_remote','from_remote','both')),
-  CONSTRAINT "CK_RemotePolicy_LockOnEnd" CHECK ("LockOnEnd" IN ('always','never','auto')),
-  CONSTRAINT "CK_RemotePolicy_ConsentTimeout" CHECK ("ConsentTimeoutSeconds" BETWEEN 15 AND 600),
-  CONSTRAINT "CK_RemotePolicy_MaxFile" CHECK ("MaxFileBytes" > 0),
-  CONSTRAINT "CK_RemotePolicy_MaxSession" CHECK ("MaxSessionMinutes" BETWEEN 5 AND 1440),
-  CONSTRAINT "CK_RemotePolicy_ConsentOrUnattended"
-    CHECK (NOT ("AllowUnattended" = false AND "RequireConsent" = false))
+  CONSTRAINT "CK_Policy_Clipboard" CHECK ("Clipboard" IN ('off','to_remote','from_remote','both')),
+  CONSTRAINT "CK_Policy_LockOnEnd" CHECK ("LockOnEnd" IN ('always','never','auto')),
+  CONSTRAINT "CK_Policy_Record" CHECK ("Record" IN ('off','optional','forced')),
+  CONSTRAINT "CK_Policy_ConsentTimeout" CHECK ("ConsentTimeoutSeconds" BETWEEN 15 AND 600),
+  CONSTRAINT "CK_Policy_MaxFile" CHECK ("MaxFileBytes" > 0),
+  CONSTRAINT "CK_Policy_MaxSession" CHECK ("MaxSessionMinutes" BETWEEN 5 AND 1440),
+  CONSTRAINT "CK_Policy_ConsentOrUnattended" CHECK ("RequireConsent" OR "AllowUnattended")
 );
-CREATE UNIQUE INDEX "UX_RemotePolicy_Name" ON "RemotePolicies" (lower("Name"));
-CREATE UNIQUE INDEX "UX_RemotePolicy_SingleDefault" ON "RemotePolicies" ("IsDefault") WHERE "IsDefault";
+CREATE UNIQUE INDEX "UX_Policy_Name" ON "Policies" (lower("Name"));
+CREATE UNIQUE INDEX "UX_Policy_SingleDefault" ON "Policies" ("IsDefault") WHERE "IsDefault";
 
-ALTER TABLE "RemoteSessions"
-  ADD CONSTRAINT "FK_RemoteSession_Policy"
-    FOREIGN KEY ("PolicyId") REFERENCES "RemotePolicies"("Id") ON DELETE SET NULL;
-
--- Precedenza: assegnazione al dispositivo > al gruppo del dispositivo > policy default.
--- OmniDesk ha un solo gruppo per dispositivo: nessuna ambiguità di ereditarietà.
-CREATE TABLE "RemotePolicyAssignments" (
+-- Precedenza: dispositivo > gruppo del dispositivo > policy default.
+CREATE TABLE "PolicyAssignments" (
   "Id" uuid PRIMARY KEY,
-  "PolicyId" uuid NOT NULL REFERENCES "RemotePolicies"("Id") ON DELETE CASCADE,
+  "PolicyId" uuid NOT NULL REFERENCES "Policies"("Id") ON DELETE CASCADE,
   "DeviceId" uuid NULL REFERENCES "Devices"("Id") ON DELETE CASCADE,
   "GroupId" uuid NULL REFERENCES "DeviceGroups"("Id") ON DELETE CASCADE,
   "CreatedAt" timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT "CK_RemotePolicyAssignment_OneScope" CHECK (num_nonnulls("DeviceId","GroupId") = 1)
+  CONSTRAINT "CK_PolicyAssignment_OneScope" CHECK (num_nonnulls("DeviceId","GroupId") = 1)
 );
-CREATE UNIQUE INDEX "UX_RemotePolicyAssignment_Device" ON "RemotePolicyAssignments" ("DeviceId") WHERE "DeviceId" IS NOT NULL;
-CREATE UNIQUE INDEX "UX_RemotePolicyAssignment_Group" ON "RemotePolicyAssignments" ("GroupId") WHERE "GroupId" IS NOT NULL;
-CREATE INDEX "IX_RemotePolicyAssignment_Policy" ON "RemotePolicyAssignments" ("PolicyId");
+CREATE UNIQUE INDEX "UX_PolicyAssignment_Device" ON "PolicyAssignments" ("DeviceId") WHERE "DeviceId" IS NOT NULL;
+CREATE UNIQUE INDEX "UX_PolicyAssignment_Group" ON "PolicyAssignments" ("GroupId") WHERE "GroupId" IS NOT NULL;
+CREATE INDEX "IX_PolicyAssignment_Policy" ON "PolicyAssignments" ("PolicyId");
 
--- 3. Inviti assistiti ------------------------------------------------------
+-- Assistenza con codice ----------------------------------------------------------
 
-CREATE TABLE "RemoteSupportInvitations" (
+CREATE TABLE "Invitations" (
   "Id" uuid PRIMARY KEY,
   "Name" text NOT NULL,
   "CreatedBy" text NOT NULL REFERENCES "AspNetUsers"("Id") ON DELETE CASCADE,
-  "GroupId" uuid NULL REFERENCES "DeviceGroups"("Id") ON DELETE SET NULL, -- ambito su cui il tecnico ha remote.control
-  "CodeHash" bytea NOT NULL,          -- HMAC-SHA256 con chiave server (Data Protection), mai il codice in chiaro
+  "GroupId" uuid NOT NULL REFERENCES "DeviceGroups"("Id") ON DELETE CASCADE,
+  "CodeHash" bytea NOT NULL,                      -- HMAC-SHA256 con chiave server, mai il codice in chiaro
   "LinkTokenHash" bytea NOT NULL,
-  "DeviceId" uuid NULL REFERENCES "Devices"("Id") ON DELETE SET NULL,   -- valorizzato quando la Tray entra
+  "DeviceId" uuid NULL REFERENCES "Devices"("Id") ON DELETE SET NULL,
   "JoinedAt" timestamptz NULL,
-  "ConsumedAt" timestamptz NULL,      -- il tecnico ha creato la sessione
+  "ConsumedAt" timestamptz NULL,
   "RevokedAt" timestamptz NULL,
   "ExpiresAt" timestamptz NOT NULL,
   "CreatedAt" timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT "CK_RemoteInvitation_Expiry" CHECK ("ExpiresAt" > "CreatedAt"),
-  CONSTRAINT "CK_RemoteInvitation_MaxLifetime" CHECK ("ExpiresAt" <= "CreatedAt" + interval '24 hours'),
-  CONSTRAINT "CK_RemoteInvitation_NameLength" CHECK (length("Name") BETWEEN 1 AND 120)
+  CONSTRAINT "CK_Invitation_Expiry" CHECK ("ExpiresAt" > "CreatedAt"
+                                           AND "ExpiresAt" <= "CreatedAt" + interval '24 hours'),
+  CONSTRAINT "CK_Invitation_Name" CHECK (length("Name") BETWEEN 1 AND 120)
 );
-CREATE UNIQUE INDEX "UX_RemoteInvitation_Code_Open" ON "RemoteSupportInvitations" ("CodeHash")
+CREATE UNIQUE INDEX "UX_Invitation_Code_Open" ON "Invitations" ("CodeHash")
   WHERE "ConsumedAt" IS NULL AND "RevokedAt" IS NULL;
-CREATE UNIQUE INDEX "UX_RemoteInvitation_Link" ON "RemoteSupportInvitations" ("LinkTokenHash");
-CREATE INDEX "IX_RemoteInvitation_CreatedBy" ON "RemoteSupportInvitations" ("CreatedBy", "CreatedAt" DESC);
-CREATE INDEX "IX_RemoteInvitation_Expires" ON "RemoteSupportInvitations" ("ExpiresAt");
-CREATE INDEX "IX_RemoteInvitation_Device" ON "RemoteSupportInvitations" ("DeviceId");
-CREATE INDEX "IX_RemoteInvitation_Group" ON "RemoteSupportInvitations" ("GroupId");
+CREATE UNIQUE INDEX "UX_Invitation_Link" ON "Invitations" ("LinkTokenHash");
+CREATE INDEX "IX_Invitation_CreatedBy" ON "Invitations" ("CreatedBy", "CreatedAt" DESC);
+CREATE INDEX "IX_Invitation_Group" ON "Invitations" ("GroupId");
+CREATE INDEX "IX_Invitation_Device" ON "Invitations" ("DeviceId");
+CREATE INDEX "IX_Invitation_Expires" ON "Invitations" ("ExpiresAt");
 
-ALTER TABLE "RemoteSessions"
-  ADD CONSTRAINT "FK_RemoteSession_Invitation"
-    FOREIGN KEY ("InvitationId") REFERENCES "RemoteSupportInvitations"("Id") ON DELETE SET NULL;
-
--- Backoff esponenziale sui codici errati, per origine.
-CREATE TABLE "RemoteCodeAttempts" (
-  "Id" uuid PRIMARY KEY,
-  "SourceHash" bytea NOT NULL,        -- hash dell'identità dispositivo o dell'IP, mai l'IP in chiaro
+CREATE TABLE "CodeAttempts" (
+  "SourceHash" bytea PRIMARY KEY,                 -- hash dell'identità dispositivo o dell'origine
   "FailedCount" integer NOT NULL DEFAULT 0,
   "LockedUntil" timestamptz NULL,
   "LastFailedAt" timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT "CK_RemoteCodeAttempt_Count" CHECK ("FailedCount" >= 0)
+  CONSTRAINT "CK_CodeAttempt_Count" CHECK ("FailedCount" >= 0)
 );
-CREATE UNIQUE INDEX "UX_RemoteCodeAttempt_Source" ON "RemoteCodeAttempts" ("SourceHash");
-CREATE INDEX "IX_RemoteCodeAttempt_LastFailed" ON "RemoteCodeAttempts" ("LastFailedAt");
+CREATE INDEX "IX_CodeAttempt_LastFailed" ON "CodeAttempts" ("LastFailedAt");
 
--- 4. Partecipanti ------------------------------------------------------------
+-- Sessioni --------------------------------------------------------------------------
 
-CREATE TABLE "RemoteSessionParticipants" (
+CREATE TABLE "Sessions" (
   "Id" uuid PRIMARY KEY,
-  "SessionId" uuid NOT NULL REFERENCES "RemoteSessions"("Id") ON DELETE CASCADE,
+  "DeviceId" uuid NOT NULL REFERENCES "Devices"("Id") ON DELETE RESTRICT, -- lo storico non si perde
+  "OwnerId" text NOT NULL REFERENCES "AspNetUsers"("Id") ON DELETE RESTRICT,
+  "Capability" text NOT NULL,
+  "Mode" text NOT NULL,
+  "State" text NOT NULL DEFAULT 'pending',
+  "ConsentState" text NOT NULL DEFAULT 'not_required',
+  "ConsentWindowsUser" text NULL,
+  "ConsentDecidedAt" timestamptz NULL,
+  "PolicyId" uuid NULL REFERENCES "Policies"("Id") ON DELETE SET NULL,
+  "PolicyVersion" bigint NOT NULL,
+  "InvitationId" uuid NULL REFERENCES "Invitations"("Id") ON DELETE SET NULL,
+  "Recorded" boolean NOT NULL DEFAULT false,
+  "Comment" text NULL,
+  "CreatedAt" timestamptz NOT NULL DEFAULT now(),
+  "StartedAt" timestamptz NULL,
+  "LastHeartbeatAt" timestamptz NULL,
+  "ExpiresAt" timestamptz NOT NULL,
+  "EndedAt" timestamptz NULL,
+  "EndReason" text NULL,
+  "UpdatedAt" timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT "CK_Session_Capability" CHECK ("Capability" IN ('remote.view','remote.control')),
+  CONSTRAINT "CK_Session_Mode" CHECK ("Mode" IN ('unattended','attended','invitation')),
+  CONSTRAINT "CK_Session_State" CHECK ("State" IN (
+    'pending','consent_pending','connecting','active','reboot_pending','ended',
+    'declined','expired','failed','revocation_pending','revoked')),
+  CONSTRAINT "CK_Session_ConsentState" CHECK ("ConsentState" IN ('not_required','pending','granted','declined','expired')),
+  CONSTRAINT "CK_Session_EndReason" CHECK ("EndReason" IS NULL OR "EndReason" IN (
+    'technician','remote_user','host_lost','viewer_lost','timeout','max_duration',
+    'revoked','declined','consent_timeout','error')),
+  CONSTRAINT "CK_Session_EndedHasReason" CHECK (("EndedAt" IS NULL) = ("EndReason" IS NULL)),
+  CONSTRAINT "CK_Session_Times" CHECK ("ExpiresAt" > "CreatedAt" AND ("EndedAt" IS NULL OR "EndedAt" >= "CreatedAt")),
+  CONSTRAINT "CK_Session_InvitationMode" CHECK (("Mode" = 'invitation') = ("InvitationId" IS NOT NULL)),
+  CONSTRAINT "CK_Session_Comment" CHECK ("Comment" IS NULL OR length("Comment") <= 2000)
+);
+CREATE UNIQUE INDEX "UX_Session_OneActiveControl" ON "Sessions" ("DeviceId")
+  WHERE "State" IN ('connecting','active','reboot_pending') AND "Capability" = 'remote.control';
+CREATE INDEX "IX_Session_Device_Created" ON "Sessions" ("DeviceId", "CreatedAt" DESC);
+CREATE INDEX "IX_Session_Owner_Created" ON "Sessions" ("OwnerId", "CreatedAt" DESC);
+CREATE INDEX "IX_Session_Created" ON "Sessions" ("CreatedAt" DESC);
+CREATE INDEX "IX_Session_Open" ON "Sessions" ("State")
+  WHERE "State" IN ('pending','consent_pending','connecting','active','reboot_pending','revocation_pending');
+CREATE INDEX "IX_Session_Policy" ON "Sessions" ("PolicyId");
+CREATE INDEX "IX_Session_Invitation" ON "Sessions" ("InvitationId");
+
+CREATE TABLE "SessionTickets" (
+  "Id" uuid PRIMARY KEY,
+  "SessionId" uuid NOT NULL REFERENCES "Sessions"("Id") ON DELETE CASCADE,
+  "TicketHash" bytea NOT NULL,
+  "Channel" text NOT NULL,
+  "Side" text NOT NULL,
+  "UserId" text NULL REFERENCES "AspNetUsers"("Id") ON DELETE CASCADE,  -- lato viewer
+  "ExpiresAt" timestamptz NOT NULL,
+  "ConsumedAt" timestamptz NULL,
+  "CreatedAt" timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT "CK_SessionTicket_Channel" CHECK ("Channel" IN ('session','files')),
+  CONSTRAINT "CK_SessionTicket_Side" CHECK ("Side" IN ('host','viewer')),
+  CONSTRAINT "CK_SessionTicket_ViewerHasUser" CHECK (("Side" = 'viewer') = ("UserId" IS NOT NULL)),
+  CONSTRAINT "CK_SessionTicket_ShortLived" CHECK ("ExpiresAt" > "CreatedAt"
+                                                  AND "ExpiresAt" <= "CreatedAt" + interval '2 minutes')
+);
+CREATE UNIQUE INDEX "UX_SessionTicket_Hash" ON "SessionTickets" ("TicketHash");
+CREATE INDEX "IX_SessionTicket_Session" ON "SessionTickets" ("SessionId");
+CREATE INDEX "IX_SessionTicket_User" ON "SessionTickets" ("UserId");
+CREATE INDEX "IX_SessionTicket_Expires" ON "SessionTickets" ("ExpiresAt");
+
+CREATE TABLE "SessionParticipants" (
+  "Id" uuid PRIMARY KEY,
+  "SessionId" uuid NOT NULL REFERENCES "Sessions"("Id") ON DELETE CASCADE,
   "UserId" text NOT NULL REFERENCES "AspNetUsers"("Id") ON DELETE CASCADE,
   "Role" text NOT NULL,
-  "Capability" text NOT NULL,         -- remote.view o remote.control, ricontrollato dal guard
+  "Capability" text NOT NULL,
   "InvitedBy" text NULL REFERENCES "AspNetUsers"("Id") ON DELETE SET NULL,
   "JoinedAt" timestamptz NULL,
   "LeftAt" timestamptz NULL,
   "CreatedAt" timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT "CK_RemoteParticipant_Role" CHECK ("Role" IN ('owner','invited')),
-  CONSTRAINT "CK_RemoteParticipant_Capability" CHECK ("Capability" IN ('remote.view','remote.control'))
+  CONSTRAINT "CK_Participant_Role" CHECK ("Role" IN ('owner','invited')),
+  CONSTRAINT "CK_Participant_Capability" CHECK ("Capability" IN ('remote.view','remote.control'))
 );
-CREATE UNIQUE INDEX "UX_RemoteParticipant_SessionUser" ON "RemoteSessionParticipants" ("SessionId", "UserId");
-CREATE INDEX "IX_RemoteParticipant_User" ON "RemoteSessionParticipants" ("UserId");
-CREATE INDEX "IX_RemoteParticipant_InvitedBy" ON "RemoteSessionParticipants" ("InvitedBy");
+CREATE UNIQUE INDEX "UX_Participant_SessionUser" ON "SessionParticipants" ("SessionId", "UserId");
+CREATE UNIQUE INDEX "UX_Participant_OneOwner" ON "SessionParticipants" ("SessionId") WHERE "Role" = 'owner';
+CREATE INDEX "IX_Participant_User" ON "SessionParticipants" ("UserId");
+CREATE INDEX "IX_Participant_InvitedBy" ON "SessionParticipants" ("InvitedBy");
 
--- 5. Eventi in sessione (metadati, mai contenuti) --------------------------
-
-CREATE TABLE "RemoteSessionEvents" (
+CREATE TABLE "SessionEvents" (
   "Id" bigint GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
-  "SessionId" uuid NOT NULL REFERENCES "RemoteSessions"("Id") ON DELETE CASCADE,
-  "ClientEventId" uuid NULL,          -- idempotenza per eventi ripetuti dall'Agent
+  "SessionId" uuid NOT NULL REFERENCES "Sessions"("Id") ON DELETE CASCADE,
+  "ClientEventId" uuid NULL,                      -- idempotenza per messaggi ripetuti dal PC
   "ActorId" text NULL REFERENCES "AspNetUsers"("Id") ON DELETE SET NULL,
   "Source" text NOT NULL,
   "Type" text NOT NULL,
-  "Meta" jsonb NOT NULL DEFAULT '{}', -- es. {"monitor":2}; vietati testi appunti/chat/tasti
+  "Meta" jsonb NOT NULL DEFAULT '{}',             -- mai testo di appunti, chat o tasti
   "At" timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT "CK_RemoteEvent_Source" CHECK ("Source" IN ('technician','host','tray','server')),
-  CONSTRAINT "CK_RemoteEvent_Type" CHECK ("Type" IN (
+  CONSTRAINT "CK_SessionEvent_Source" CHECK ("Source" IN ('technician','host','assist','server')),
+  CONSTRAINT "CK_SessionEvent_Type" CHECK ("Type" IN (
     'consent_requested','consent_granted','consent_declined','connected','disconnected',
     'desktop_changed','monitor_switched','reboot','reboot_safe','reconnected','lock','logoff',
     'ctrl_alt_del','black_screen_on','black_screen_off','input_disabled','input_enabled',
     'clipboard_used','chat_used','file_transfer','screenshot','recording_started','recording_stopped',
-    'participant_joined','participant_left','note_left','policy_violation','ended','revoked')),
-  CONSTRAINT "CK_RemoteEvent_MetaSize" CHECK (pg_column_size("Meta") <= 2048)
+    'participant_joined','participant_left','note_left','policy_denied','ended','revoked')),
+  CONSTRAINT "CK_SessionEvent_MetaSize" CHECK (pg_column_size("Meta") <= 2048)
 );
-CREATE UNIQUE INDEX "UX_RemoteEvent_Client" ON "RemoteSessionEvents" ("SessionId", "ClientEventId")
-  WHERE "ClientEventId" IS NOT NULL;
-CREATE INDEX "IX_RemoteEvent_Session_At" ON "RemoteSessionEvents" ("SessionId", "At");
-CREATE INDEX "IX_RemoteEvent_Actor" ON "RemoteSessionEvents" ("ActorId");
+CREATE UNIQUE INDEX "UX_SessionEvent_Client" ON "SessionEvents" ("SessionId", "ClientEventId") WHERE "ClientEventId" IS NOT NULL;
+CREATE INDEX "IX_SessionEvent_Session_At" ON "SessionEvents" ("SessionId", "At");
+CREATE INDEX "IX_SessionEvent_Actor" ON "SessionEvents" ("ActorId");
 
--- 6. Trasferimenti file (solo audit: il contenuto va diretto browser<->host) --
-
-CREATE TABLE "RemoteFileTransfers" (
+CREATE TABLE "FileTransfers" (
   "Id" uuid PRIMARY KEY,
-  "SessionId" uuid NOT NULL REFERENCES "RemoteSessions"("Id") ON DELETE CASCADE,
+  "SessionId" uuid NOT NULL REFERENCES "Sessions"("Id") ON DELETE CASCADE,
   "ActorId" text NOT NULL REFERENCES "AspNetUsers"("Id") ON DELETE CASCADE,
   "Direction" text NOT NULL,
   "FileName" text NOT NULL,
@@ -205,55 +302,65 @@ CREATE TABLE "RemoteFileTransfers" (
   "State" text NOT NULL DEFAULT 'authorized',
   "CreatedAt" timestamptz NOT NULL DEFAULT now(),
   "CompletedAt" timestamptz NULL,
-  CONSTRAINT "CK_RemoteFile_Direction" CHECK ("Direction" IN ('to_remote','from_remote')),
-  CONSTRAINT "CK_RemoteFile_State" CHECK ("State" IN ('authorized','completed','failed','cancelled')),
-  CONSTRAINT "CK_RemoteFile_Size" CHECK ("SizeBytes" >= 0),
-  CONSTRAINT "CK_RemoteFile_NameLength" CHECK (length("FileName") BETWEEN 1 AND 260)
+  CONSTRAINT "CK_FileTransfer_Direction" CHECK ("Direction" IN ('to_remote','from_remote')),
+  CONSTRAINT "CK_FileTransfer_State" CHECK ("State" IN ('authorized','in_progress','completed','failed','cancelled')),
+  CONSTRAINT "CK_FileTransfer_Size" CHECK ("SizeBytes" >= 0),
+  CONSTRAINT "CK_FileTransfer_Name" CHECK (length("FileName") BETWEEN 1 AND 260)
 );
-CREATE INDEX "IX_RemoteFile_Session" ON "RemoteFileTransfers" ("SessionId", "CreatedAt");
-CREATE INDEX "IX_RemoteFile_Actor" ON "RemoteFileTransfers" ("ActorId");
+CREATE INDEX "IX_FileTransfer_Session" ON "FileTransfers" ("SessionId", "CreatedAt");
+CREATE INDEX "IX_FileTransfer_Actor" ON "FileTransfers" ("ActorId");
 
--- 7. Registrazioni -------------------------------------------------------------
-
-CREATE TABLE "RemoteRecordings" (
+CREATE TABLE "Recordings" (
   "Id" uuid PRIMARY KEY,
-  "SessionId" uuid NOT NULL REFERENCES "RemoteSessions"("Id") ON DELETE RESTRICT, -- non perdere prove cancellando sessioni
-  "StartedBy" text NULL REFERENCES "AspNetUsers"("Id") ON DELETE SET NULL,
-  "Automatic" boolean NOT NULL,
-  "StoragePath" text NOT NULL,        -- relativo al volume registrazioni, mai fornito dal client
-  "ContentType" text NOT NULL DEFAULT 'video/webm',
+  "SessionId" uuid NOT NULL REFERENCES "Sessions"("Id") ON DELETE RESTRICT,
+  "Forced" boolean NOT NULL,
+  "StoragePath" text NOT NULL,                    -- relativo al volume registrazioni, generato dal server
+  "Format" text NOT NULL DEFAULT 'odrec-1',
   "SizeBytes" bigint NOT NULL DEFAULT 0,
   "Sha256" bytea NULL,
-  "State" text NOT NULL DEFAULT 'uploading',
+  "State" text NOT NULL DEFAULT 'writing',
   "StartedAt" timestamptz NOT NULL DEFAULT now(),
   "EndedAt" timestamptz NULL,
-  "DeleteAfter" timestamptz NULL,     -- da retention; NULL = conservare
-  CONSTRAINT "CK_RemoteRecording_State" CHECK ("State" IN ('uploading','complete','incomplete','deleted')),
-  CONSTRAINT "CK_RemoteRecording_Size" CHECK ("SizeBytes" >= 0)
+  "DeleteAfter" timestamptz NULL,
+  CONSTRAINT "CK_Recording_State" CHECK ("State" IN ('writing','complete','incomplete','deleted')),
+  CONSTRAINT "CK_Recording_Size" CHECK ("SizeBytes" >= 0),
+  CONSTRAINT "CK_Recording_CompleteHasHash" CHECK ("State" <> 'complete' OR "Sha256" IS NOT NULL)
 );
-CREATE INDEX "IX_RemoteRecording_Session" ON "RemoteRecordings" ("SessionId");
-CREATE INDEX "IX_RemoteRecording_StartedBy" ON "RemoteRecordings" ("StartedBy");
-CREATE INDEX "IX_RemoteRecording_DeleteAfter" ON "RemoteRecordings" ("DeleteAfter") WHERE "DeleteAfter" IS NOT NULL;
+CREATE UNIQUE INDEX "UX_Recording_Path" ON "Recordings" ("StoragePath");
+CREATE INDEX "IX_Recording_Session" ON "Recordings" ("SessionId");
+CREATE INDEX "IX_Recording_DeleteAfter" ON "Recordings" ("DeleteAfter") WHERE "DeleteAfter" IS NOT NULL;
 
--- 8. Wake-on-LAN (fase should) ---------------------------------------------------
+-- Wake-on-LAN e audit ------------------------------------------------------------------
 
-CREATE TABLE "RemoteWakeRequests" (
+CREATE TABLE "WakeRequests" (
   "Id" uuid PRIMARY KEY,
   "TargetDeviceId" uuid NOT NULL REFERENCES "Devices"("Id") ON DELETE CASCADE,
-  "RelayDeviceId" uuid NULL REFERENCES "Devices"("Id") ON DELETE SET NULL, -- Agent online nella stessa sede
+  "RelayDeviceId" uuid NULL REFERENCES "Devices"("Id") ON DELETE SET NULL,
   "RequestedBy" text NOT NULL REFERENCES "AspNetUsers"("Id") ON DELETE CASCADE,
   "State" text NOT NULL DEFAULT 'queued',
   "CreatedAt" timestamptz NOT NULL DEFAULT now(),
   "SentAt" timestamptz NULL,
   "TargetOnlineAt" timestamptz NULL,
-  CONSTRAINT "CK_RemoteWake_State" CHECK ("State" IN ('queued','sent','online','timeout','no_relay')),
-  CONSTRAINT "CK_RemoteWake_NotSelf" CHECK ("RelayDeviceId" IS NULL OR "RelayDeviceId" <> "TargetDeviceId")
+  CONSTRAINT "CK_Wake_State" CHECK ("State" IN ('queued','sent','online','timeout','no_relay')),
+  CONSTRAINT "CK_Wake_NotSelf" CHECK ("RelayDeviceId" IS NULL OR "RelayDeviceId" <> "TargetDeviceId")
 );
-CREATE INDEX "IX_RemoteWake_Target" ON "RemoteWakeRequests" ("TargetDeviceId", "CreatedAt" DESC);
-CREATE INDEX "IX_RemoteWake_Relay_State" ON "RemoteWakeRequests" ("RelayDeviceId", "State");
-CREATE INDEX "IX_RemoteWake_RequestedBy" ON "RemoteWakeRequests" ("RequestedBy");
+CREATE INDEX "IX_Wake_Target" ON "WakeRequests" ("TargetDeviceId", "CreatedAt" DESC);
+CREATE INDEX "IX_Wake_Relay_State" ON "WakeRequests" ("RelayDeviceId", "State");
+CREATE INDEX "IX_Wake_RequestedBy" ON "WakeRequests" ("RequestedBy");
 
--- 9. Permessi nuovi (seed) ----------------------------------------------------------
--- Da aggiungere a Permissions.All e a ForRole("Operator") nel codice, più seed
--- in "RolePermissions" per i ruoli esistenti:
---   remote.view, remote.unattended, remote.recordings.view (quest'ultimo solo Administrator)
+CREATE TABLE "AuditEvents" (
+  "Id" bigint GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+  "At" timestamptz NOT NULL DEFAULT now(),
+  "ActorId" text NULL REFERENCES "AspNetUsers"("Id") ON DELETE SET NULL,
+  "ActorDeviceId" uuid NULL REFERENCES "Devices"("Id") ON DELETE SET NULL,
+  "Action" text NOT NULL,                         -- es. session.create, policy.update, device.revoke
+  "Target" text NOT NULL,
+  "Outcome" text NOT NULL,
+  "Detail" jsonb NOT NULL DEFAULT '{}',           -- mai segreti, token, codici o password
+  CONSTRAINT "CK_Audit_Outcome" CHECK ("Outcome" IN ('success','denied','failed')),
+  CONSTRAINT "CK_Audit_DetailSize" CHECK (pg_column_size("Detail") <= 4096)
+);
+CREATE INDEX "IX_Audit_At" ON "AuditEvents" ("At" DESC);
+CREATE INDEX "IX_Audit_Actor" ON "AuditEvents" ("ActorId", "At" DESC);
+CREATE INDEX "IX_Audit_ActorDevice" ON "AuditEvents" ("ActorDeviceId");
+CREATE INDEX "IX_Audit_Action" ON "AuditEvents" ("Action", "At" DESC);

@@ -6,9 +6,9 @@ consenso, toolbar in sessione, trasferimento file, chiusura, sicurezza di
 accesso, registrazione e report connessioni. Esclusi Tensor, Frontline, IoT,
 Assist AR, DEX, Remote Management (patch/asset/monitoraggio: già coperti da
 OmniDesk), meeting.
-For: uso interno (IT cricatania). Obiettivo: sostituire in OmniDesk l'attuale
-remoto via client RustDesk esterno / adapter MeshCentral con una funzione di
-controllo remoto integrata, di livello TeamViewer, gestita da OmniDesk.
+For: uso interno (IT cricatania). Decisione del 2026-11-15: OmniDesk viene
+rifatto da zero in un repository nuovo e diventa **solo** questo prodotto di
+connessione remota, con trasporto proprio. Vedi [architecture.md](architecture.md).
 Date: 2026-11-15
 
 Metodo: solo fonti pubbliche (knowledge base e pagine marketing TeamViewer).
@@ -224,9 +224,7 @@ Screens 20, flows 8, entities 11. Hard parts:
 3. **Riavvio con riconnessione e sicurezza**: consenso, schermo nero, revoca a
    sessione aperta, registrazione.
 
-Size: **XL** se si riscrive il trasporto da zero. Proposta di riscoping:
-mantenere un motore open source come trasporto (RustDesk server self-hosted o
-MeshCentral, già integrati) e portare in OmniDesk tutto il resto
-(orchestrazione sessioni, consenso, policy, toolbar/azioni via Agent, report,
-registrazione, WoL). Così diventa **L**. Nessuna promessa di parità con
-TeamViewer sulla qualità dello stream.
+Size: **XL**. Con la decisione di rifare anche il trasporto e l'intero
+prodotto in un repository nuovo, il riscoping a L (motore open source come
+trasporto) non si applica più. Nessuna promessa di parità con TeamViewer sulla
+qualità dello stream: la fetta verticale M2 la misura.
